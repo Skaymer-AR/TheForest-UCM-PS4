@@ -1,0 +1,12 @@
+output/
+build/
+*.o
+*.elf
+*.oelf
+*.prx
+*.pkg
+*.self
+.DS_Store
+__pycache__/
+*.pyc
+*.zip
