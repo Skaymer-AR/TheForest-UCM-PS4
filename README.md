@@ -1,78 +1,80 @@
 # The Forest UCM PS4
 
-Native GoldHEN PRX overlay work for **The Forest PS4 CUSA12398 v1.15**. The
-active branch is `feature/visual-menu-foundation`; PR #2 carries the visual
-menu foundation and this branch adds the GNM display-buffer renderer and
-passive DualShock 4 adapter. Testing is for offline, single-player sessions.
+Diagnostic work for **The Forest PS4 CUSA12398 v1.15**, on PS4 firmware
+12.02 and GoldHEN 2.4B18.9. The user confirmed that the earlier no-hook probe
+loaded and allowed a session to run. Version v0.5 displayed its notification,
+then left the game black after the title screen; the PS4 shell remained
+responsive. This branch now prepares a v0.6 diagnostic PRX to isolate the
+startup hooks.
 
-## Current implementation
+## v0.6 diagnostic build
 
-- The PRX hooks the runtime VideoOut registration and GNM submit/flip APIs. It
-  appends a plugin-owned GNM command buffer to the game's submission and draws
-  the panel into the registered output buffer.
-- It reads the game's successful `scePadReadState` / `scePadRead` results
-  without consuming or changing controller input.
-- Menu title: **THE FOREST — ULTIMATE CHEATMENU**. L1+R1 opens/closes; D-pad
-  navigates; X confirms; Circle closes; L1/R1 changes categories.
-- The renderer supports a validated 32-bit VideoOut format in linear or tiled
-  mode and skips unsupported layouts. It is opaque, so panel opacity is
-  unavailable.
-- Gameplay rows remain disabled until each action has a real implementation
-  and has been checked in game. God Mode, stamina, hunger/thirst, inventory,
-  free building, teleport, spawning, time and weather are not implemented.
+The diagnostic PRX has no GNM hook or GNM library dependency. Rendering,
+framebuffer access/writes, Unity calls, game-state changes, and cheat actions
+are compiled out. It installs only the profile's pass-through observers and
+records bounded counters and the latest API sample with atomics. It does not
+print from a game or graphics callback.
 
-The old probe was confirmed by the user to load and leave the game stable. That
-does not verify the new in-game image or input route. The user supplied the
-target environment as PS4 firmware **12.02** and GoldHEN **2.4B18.9**; hardware
-confirmation of this implementation is still pending.
+The first profile to try is `theforest_ucm_passive_all.prx`: GNM is disabled;
+VideoOut, `scePadReadState`, and `scePadRead` are observed. The artifact also
+contains single-hook profiles and a no-hook control:
 
-## Test and build
+| PRX | Hooks active |
+| --- | --- |
+| `theforest_ucm_passive_all.prx` | VideoOut, PadReadState, PadRead |
+| `theforest_ucm_videoout_only.prx` | VideoOut |
+| `theforest_ucm_pad_read_state_only.prx` | PadReadState |
+| `theforest_ucm_pad_read_only.prx` | PadRead |
+| `theforest_ucm_no_hooks.prx` | None |
 
-Run the portable suite on a host with a C compiler:
+All five have **GNM=OFF, rendering=OFF, framebuffer writes=OFF**. No menu is
+expected to appear in this diagnostic build. The single-hook profiles let the
+hardware test distinguish VideoOut from each ScePad hook if the first profile
+still causes a black screen.
 
-```sh
-SANITIZE=1 sh scripts/test.sh
-```
+## Build and artifact
 
-GitHub Actions runs these tests and cross-builds the PRX with OpenOrbis, the
-GoldHEN plugin template, and [OpenGNM](https://github.com/PS4-OpenGNM/opengnm)
-pinned to commit
-`4b295ca54c82c83acf308d1c646a2dfa9ae57350`. Download the
-`theforest-ucm-prx` artifact from the successful workflow run. It contains:
-
-- `theforest_ucm.prx`
-- `sha256.txt`
-
-The SVG host preview is a development aid, not a PS4 screenshot.
+GitHub Actions runs the portable C tests, cross-compiles each profile with the
+OpenOrbis 0.5.4 toolchain and pinned GoldHEN SDK/template, and uploads the
+`theforest-ucm-diagnostic-prx` artifact. It contains the five PRXs and
+`sha256.txt`. Use the artifact from the latest successful Actions run on PR
+#2. The host SVG preview is not a PS4 screenshot.
 
 ## Install and test on PS4
 
-1. Download `theforest-ucm-prx` from the successful GitHub Actions run and run
-   `shasum -a 256 -c sha256.txt` in the extracted artifact folder.
-2. Copy `theforest_ucm.prx` to `/data/GoldHEN/plugins/theforest_ucm.prx`.
-3. In `/data/GoldHEN/plugins.ini`, replace the old probe PRX entry in the
-   `[CUSA12398]` section with `/data/GoldHEN/plugins/theforest_ucm.prx`. Keep
-   the existing file's syntax and other plugin entries.
-4. Restart the console or reload the plugin with GoldHEN. Use The Forest
-   CUSA12398 v1.15, enter an **offline single-player** game, and press **L1 +
-   R1**. Use the D-pad, X, Circle, and L1/R1 to navigate.
-5. Confirm whether the panel appears at 1080p, whether selection moves with the
-   controller, and whether the game remains responsive while opening/closing.
-   Gameplay cheat rows are intentionally disabled.
+1. Download and extract `theforest-ucm-diagnostic-prx`; verify it from that
+   directory with `shasum -a 256 -c sha256.txt`.
+2. Unload the v0.5 plugin in GoldHEN if it is still loaded. In
+   `/data/GoldHEN/plugins.ini`, replace its `[CUSA12398]` entry so it points to
+   exactly one diagnostic PRX at a time.
+3. Copy `theforest_ucm_passive_all.prx` to
+   `/data/GoldHEN/plugins/theforest_ucm_diag.prx`, and set the plugin entry to
+   `/data/GoldHEN/plugins/theforest_ucm_diag.prx`. Preserve the existing file
+   syntax and other plugin entries.
+4. Start The Forest CUSA12398 v1.15 in **offline single-player** and note
+   whether it passes the title screen. This profile should show the
+   notification `The Forest: UCM diagnostic (GNM/render OFF)`; it will not
+   draw a menu.
+5. If it still turns black, close the game and test `videoout_only`,
+   `pad_read_state_only`, and `pad_read_only`, one PRX per launch. Test
+   `no_hooks` as the control if needed. Do not load more than one profile at a
+   time. Unload the plugin through GoldHEN before replacing its file.
+6. After each run, unload the PRX and save the `[TF-UCM-DIAG]` lines from the
+   GoldHEN log. The load line lists the exact active hooks; the unload line
+   reports how many times each observer ran and the last result/sample.
 
-If no panel appears, leave the game state untouched and report whether the
-plugin notification appeared, output resolution, and any `[TF-UCM]` lines in
-the GoldHEN plugin log.
+The black-screen regression is not considered resolved until the user
+confirms in hardware that the relevant profile passes the title screen. This
+diagnostic does not claim the game overlay or controller navigation works.
 
 ## Rollback
 
 Unload the PRX through GoldHEN, remove its line from `[CUSA12398]` in
-`/data/GoldHEN/plugins.ini`, delete
-`/data/GoldHEN/plugins/theforest_ucm.prx`, and restart the console. The PRX
-restores its detours when unloaded. It does not modify eboot, PKG, saves, or
-persistent game state.
+`/data/GoldHEN/plugins.ini`, delete `/data/GoldHEN/plugins/theforest_ucm_diag.prx`,
+and restart the console. Each profile restores its installed detours during
+unload. No PKG, eboot, save, persistent game data, or unknown console flags
+are modified.
 
-See [docs/OVERLAY.md](docs/OVERLAY.md) for the API path, runtime guards, feature
-status, and hardware-validation boundary. Historical `DebugConsole` findings
-remain in [docs/RESULTADO.md](docs/RESULTADO.md); the renderer does not depend
-on them.
+See [docs/OVERLAY.md](docs/OVERLAY.md) for the API and detour checks, and
+[docs/RESULTADO.md](docs/RESULTADO.md) for prior `DebugConsole` observations
+and the v0.5 regression report.

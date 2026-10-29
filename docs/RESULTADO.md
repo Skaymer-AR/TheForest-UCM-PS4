@@ -24,8 +24,8 @@ Do not change guard B or call `ToggleConsole` when the instance pointer is NULL.
 
 The user confirmed that the non-hooking probe loads, The Forest enters a session,
 and gameplay continues without freezes or crashes. The load milestone is complete.
-The active task is a native menu render/input adapter that does not depend on
-`DebugConsole`; no invocation hook or guard patch is needed for that path.
+The current task is diagnosing v0.5's startup hooks; no invocation hook or guard
+patch is needed for that work.
 
 No original game data, binary or raw memory dump is committed.
 
@@ -46,22 +46,31 @@ without freezes or crashes. This confirms the probe load and basic game
 stability only; it does not confirm that the menu is drawn or controlled by the
 DualShock 4.
 
-## Native overlay adapter implementation (2026-10-29)
+## v0.5 black-screen regression report (2026-10-29)
 
-The active branch now adds a GoldHEN detour adapter for VideoOut buffer
-registration, GNM submit/flip, and passive ScePad read results. It builds an
-opaque panel into a plugin-owned GNM command buffer using runtime framebuffer
-attributes and a completion label. Tiled surfaces are accepted only for the
-known 32-bit format and matching GNM-computed pitch; unsupported formats and
-layouts skip drawing. The visible menu uses a 1280x720 logical layout and
-normalized DualShock controls.
+On v0.5 the notification appeared, but after the title screen the game stayed
+black. The PS4 shell remained responsive; PS4Debug still saw `eboot.bin` and
+memory maps, and the game could be closed normally. This is a game startup/render
+regression, not a whole-console freeze. The earlier no-hook probe remained
+playable.
 
-The backend does not call Unity or `DebugConsole`, use the recorded IL2CPP base,
-or change gameplay state. God Mode, stamina, hunger/thirst, inventory, free
-building, teleport, spawn, time, and weather remain disabled. See
-[OVERLAY.md](OVERLAY.md) for runtime checks and exact feature status.
+Source review found that v0.5 installed the GNM submit/flip detour during
+`plugin_load`, even while its menu was hidden, allocated a direct-memory command
+buffer during load, and could append GPU work to the game's frame submission.
+This is the first path being removed, but source review alone cannot confirm it
+caused the black screen.
 
-Portable C tests and a host syntax check have passed locally. The pinned OpenGNM
-cross-build and final PRX artifact run through GitHub Actions for this branch.
-The actual in-game panel and DualShock behavior still require the user's
-offline PS4 test; no hardware success is claimed here.
+## v0.6 startup-hook diagnostic (2026-10-29)
+
+The diagnostic build removes all GNM code/imports, rendering, framebuffer
+access/writes, Unity calls and gameplay changes. Its first profile leaves
+VideoOut, `scePadReadState` and `scePadRead` as passive observers. Additional
+profiles enable each hook individually and provide a no-hook control. Callback
+logs are replaced with atomic counters; the plugin logs the profile and
+summary only from load/unload handling.
+
+Portable tests passed locally. The v0.6 PRX profiles still need a successful
+GitHub Actions build and the user's hardware tests. The black-screen regression
+is unresolved until a profile passes the title screen on PS4. No rendering or
+controller integration is claimed functional. See [OVERLAY.md](OVERLAY.md) for
+the profiles, ABI references, and exact feature boundary.

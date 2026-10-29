@@ -1,94 +1,100 @@
-# Native PS4 overlay
+# Startup-hook diagnostic (v0.6)
 
-## Implementation
+## Hardware report and safety scope
 
-The PRX now connects the existing menu core to two public PS4 paths:
+The user reported that v0.5's PRX notification appeared but The Forest stayed
+black after its title screen. The PS4 shell remained responsive, and the
+previous no-hook probe had entered a playable session. Because v0.5 installed
+the GNM submit hook on every load, allocated a direct-memory command buffer,
+and could append GPU work at frame submission, GNM is the first path removed
+for diagnosis. That source finding makes GNM a leading suspect; only the
+hardware profile tests can establish causation.
 
-- `sceVideoOutRegisterBuffers` is detoured to capture the game's registered
-  framebuffer pointers and `OrbisVideoOutBufferAttribute` at runtime.
-- `sceGnmSubmitAndFlipCommandBuffers` is detoured using the same signature and
-  frame-boundary pattern used by GoldHEN's official `frame_logger` plugin. The
-  plugin appends its own GNM draw command buffer to the game's submission,
-  before the requested flip.
-- The added command buffer uses GNM `DMA_DATA` fill packets and an EOP label to
-  paint the UI into the selected registered display buffer. It does not call
-  Unity or touch gameplay state. The label prevents reuse while the GPU still
-  owns the command buffer.
-- For tiled output, the adapter uses OpenGNM's GPU-address surface functions to
-  select a 32-bit display mode and map coordinates. It accepts the surface only
-  when the runtime format is `0x80002200`, dimensions are within the 720p–1080p
-  range, and the calculated pitch equals the registered `pixelPitch`. Linear
-  output uses the reported pitch directly. Unknown formats, modes, dimensions,
-  and inconsistent pitches skip drawing.
-- The current renderer is opaque. GNM fill packets do not alpha blend, so
-  `Panel opacity` is shown as unavailable. The panel, selection, text, and
-  control hints are rasterized at the registered output size from a 1280×720
-  logical layout.
+This v0.6 diagnostic has no GNM include, import, hook, command buffer, or
+rendering path. It does not capture or dereference the registered framebuffer
+addresses. It makes no Unity calls or gameplay changes. The build has five
+compile-time profiles:
 
-The ABI sources are the OpenOrbis headers for `sceGnmSubmitAndFlipCommandBuffers`,
-`sceVideoOutRegisterBuffers`, `scePadReadState`, `scePadRead`, `OrbisPadData`,
-and `OrbisVideoOutBufferAttribute`, plus GoldHEN's official frame logger and
-Detour SDK. OpenGNM is built from pinned commit
-`4b295ca54c82c83acf308d1c646a2dfa9ae57350` from
-[PS4-OpenGNM/opengnm](https://github.com/PS4-OpenGNM/opengnm). Runtime targets
-come from linked exports and registered buffers; no saved absolute game
-address is used.
+| Profile | VideoOut | PadReadState | PadRead | GNM / render / framebuffer |
+| --- | --- | --- | --- | --- |
+| `passive_all` | On | On | On | Off |
+| `videoout_only` | On | Off | Off | Off |
+| `pad_read_state_only` | Off | On | Off | Off |
+| `pad_read_only` | Off | Off | On | Off |
+| `no_hooks` | Off | Off | Off | Off |
 
-## DualShock 4 input
+The `passive_all` profile is the first test. If the black screen remains, the
+single-hook builds separate VideoOut, `scePadReadState`, and `scePadRead`.
+The `no_hooks` profile is an additional control. None of these PRXs is meant
+to display the menu.
 
-The plugin hooks the game's `scePadReadState` and `scePadRead` calls and copies
-the returned button sample after the original function returns. It does not
-open a second pad handle, consume buttons, or alter the game's pad data. The
-menu core receives normalized buttons at the GNM frame boundary. With the menu
-closed, input is passed through unchanged.
+## ABI and detour checks
 
-| Input | Action |
-| --- | --- |
-| L1 + R1 | Open or close |
-| D-pad up/down | Select an item |
-| D-pad left/right | Change an available value |
-| X | Confirm |
-| Circle | Close / back |
-| L1/R1 while open | Change category |
+The observer signatures match the public OpenOrbis declarations:
+
+- `sceVideoOutRegisterBuffers(int32_t, int32_t, void *const *, int32_t,
+  const OrbisVideoOutBufferAttribute *)` from
+  `include/orbis/VideoOut.h`.
+- `scePadReadState(int32_t, OrbisPadData *)` and
+  `scePadRead(int32_t, OrbisPadData *, int32_t)` from
+  `include/orbis/Pad.h`.
+- `OrbisPadData.buttons` and `.connected` from
+  `include/orbis/_types/pad.h`.
+- VideoOut attribute field order and types from
+  `include/orbis/_types/video.h`. Because the OpenOrbis header includes a
+  C++-only fixed-underlying-type enum, the C backend mirrors this struct and
+  statically asserts its 0x28-byte size and key offsets.
+
+The function addresses are the linked `libSceVideoOut` and `libScePad` imports;
+there are no hard-coded game addresses. GoldHEN SDK `Detour_DetourFunction`
+returns `Detour.StubPtr`, the copied original instructions plus a jump back;
+`Detour.TrampolinePtr` is the entrypoint's jump relay, not the call-through.
+The backend checks that the returned pointer, target, hook, mode and allocated
+detour fields agree before accepting installation.
+
+There is a small publication race inherent in the GoldHEN API: the detour
+patches the target before returning its original-call stub. The hook callbacks
+atomically wait for that stub to be published before calling the original, so
+they cannot call a null pointer if another game thread reaches the new entry
+immediately. If a later hook fails to install, earlier entrypoints are
+restored in reverse order. On unload, entrypoints are restored first, the
+callback count drains, and then the stub and jump-relay mappings are released.
+
+## Callback and logging behavior
+
+Every observer calls the original API with the same arguments and returns its
+result unchanged. Afterward it updates only atomic counters and the latest
+result/sample fields. It never logs from a VideoOut or pad callback, allocates,
+waits on a lock, stores output-buffer addresses, or blocks on graphics work.
+The PRX prints one bounded profile line at load and one callback summary at
+unload through the plugin-management path.
 
 ## Feature status
 
-Only UI-local behavior is enabled. Gameplay entries stay locked and display
-`[UNVERIFIED]`; they do not write memory or dispatch placeholder commands.
-
-| Feature | Status |
+| Capability | v0.6 diagnostic status |
 | --- | --- |
-| Menu panel, categories, selection highlight, text and hints | Implemented in PRX; pending user's PS4 visual test |
-| DualShock 4 navigation | Implemented as passive read hooks; pending user's PS4 input test |
-| Show/hide control hints | Available |
-| Close menu | Available |
-| Panel opacity | Unavailable; renderer is opaque |
-| God Mode | Disabled, no implementation |
-| Infinite Stamina | Disabled, no implementation |
-| Hunger and Thirst | Disabled, no implementation |
-| Add Inventory Item | Disabled, no implementation |
-| Build without materials | Disabled, no implementation |
-| Teleport | Disabled, no implementation |
-| Spawn enemy/object | Disabled, no implementation |
-| Time and weather | Disabled, no implementation |
+| Show in-game UCM panel | Disabled; no renderer in the diagnostic build |
+| GNM submit/flip hook | Disabled in every profile |
+| Framebuffer reads/writes | Disabled in every profile |
+| VideoOut observation | Enabled only by profiles above |
+| ScePad observation | Enabled only by profiles above |
+| Menu input/control | Disabled; this build is not an in-game menu |
+| God Mode, stamina, hunger/thirst, inventory, free building, teleport, spawn, time/weather | Not implemented; no gameplay writes |
 
-## Unload and rollback
+Portable tests and cross-compilation check the source/build only. The PS4
+black-screen regression remains unverified until the user reports the result
+of each required profile on firmware 12.02 / GoldHEN 2.4B18.9. No renderer is
+claimed functional at this stage.
 
-Unload restores the original function entries before releasing the GoldHEN
-trampolines, waits for entered callbacks, and checks the GPU EOP label before
-releasing the plugin-owned command buffer. If the GPU does not signal completion
-within five seconds, its 2 MiB direct-memory block is intentionally retained so
-the GPU cannot access freed memory. This timeout is logged.
+## Install and remove
 
-To remove the plugin, unload it through GoldHEN or remove
-`/data/GoldHEN/plugins/theforest_ucm.prx` from the existing
-`[CUSA12398]` section of `/data/GoldHEN/plugins.ini`, then restart the console.
-The plugin does not modify eboot, PKG, save files, or persistent game data.
+Download the `theforest-ucm-diagnostic-prx` Actions artifact, check
+`sha256.txt`, and install one PRX at a time under
+`/data/GoldHEN/plugins/theforest_ucm_diag.prx`. The `[CUSA12398]` entry in
+`/data/GoldHEN/plugins.ini` must point to that path. Start with
+`passive_all`, then use each isolated profile if needed. Use an offline
+single-player session.
 
-## Validation boundary
-
-Portable menu, input-state, draw-list, sanitizer, and PRX cross-build checks run
-in GitHub Actions. The code is ready for the user's firmware 12.02 / GoldHEN
-2.4B18.9 offline test, but the in-game panel and controller response are not
-claimed as hardware-verified until the user confirms them. The earlier probe
-load confirmation only established that the old no-hook PRX loaded safely.
+Unload from GoldHEN, remove the entry from `plugins.ini`, delete the installed
+PRX, and restart to roll back. The PRX does not modify eboot, PKG, saves, game
+memory, or unknown `DebugConsole` flags.

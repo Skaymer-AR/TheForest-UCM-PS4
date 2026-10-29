@@ -1,39 +1,44 @@
 # Codex implementation instructions — TheForest-UCM-PS4
 
 Target: **The Forest PS4 CUSA12398 v1.15**, PS4 firmware 12.02 and GoldHEN
-2.4B18.9. The user has already confirmed that the earlier no-hook probe loaded
-and left a game session stable; do not make loader validation the milestone.
+2.4B18.9. The user confirmed the previous no-hook probe loaded and left the game
+stable. They also reported that v0.5 showed its notification but left the game
+black after the title screen; the PS4 shell stayed responsive.
 
-## Scope
+## Current task
 
-- Continue the existing `feature/visual-menu-foundation` branch and PR #2.
-- The current priority is a real PS4 framebuffer overlay and passive DualShock 4
-  input. The UI model or host SVG preview is not evidence of an in-game menu.
-- Use runtime-linked PS4 APIs and registered output buffers. Validate reported
-  formats, dimensions, modes and pitches before drawing. Do not invent
-  addresses, signatures, render contexts, or `DebugConsole` flags.
-- Keep gameplay options disabled until an action has a version-checked,
-  implemented path and has been confirmed on hardware. Do not show placeholders
-  as working features.
-- Preserve input when the menu is closed. Prefer offline, single-player use.
-- Implement detour rollback and wait for plugin-owned GPU buffers before free.
+- Continue `feature/visual-menu-foundation` and PR #2.
+- Diagnose startup hooks before attempting another renderer. The v0.6
+  diagnostic must have GNM/rendering/framebuffer access fully disabled.
+- Build a passive-all profile first, plus single-hook VideoOut,
+  `scePadReadState`, `scePadRead` and no-hook control profiles so the user can
+  isolate startup behavior on hardware.
+- Call through to the original APIs with the same ABI and arguments. Verify
+  GoldHEN detour state before accepting install; restore installed hooks on
+  failure/unload and drain callbacks before freeing stubs.
+- Keep callback work bounded and free of logging, allocation and blocking
+  graphics operations. Report counters from the plugin management path.
+- Do not claim the menu or graphics integration works until the user confirms
+  the game passes the title screen and the display is tested on PS4.
 
 ## Restrictions
 
-- Do not modify eboot.bin, PKG/update files, save files, or game binaries.
+- Do not modify eboot.bin, PKG/update files, save files, game binaries, or
+  unknown `DebugConsole` flags.
 - Do not commit `eboot.bin`, `Il2CppUserAssemblies.prx`,
   `global-metadata.dat`, game memory dumps, or game assets.
-- Do not use old absolute addresses across sessions. The recorded IL2CPP base
+- Do not reuse historical absolute addresses; the recorded IL2CPP base
   `0x8029C000` is historical only.
 - Do not depend on the observed NULL `DebugConsole` instance.
-- Keep README installation and feature status exact. Never claim PS4 rendering
-  or controls are verified until the user confirms the hardware test.
+- Keep feature status exact. God Mode, stamina, hunger/thirst, inventory, free
+  building, teleport, spawning, time and weather remain unavailable until each
+  has a real version-checked implementation and hardware validation.
+- Prefer offline, single-player testing.
 
 ## Validation and deliverables
 
 - Run portable tests and the PRX cross-build when changing the adapter.
-- GitHub Actions must upload `theforest_ucm.prx` and `sha256.txt` as the
-  `theforest-ucm-prx` artifact.
-- Report exact test/build results and distinguish source/API validation from a
-  test on the user's PS4.
-- Give the user exact install, control, offline test and rollback steps.
+- GitHub Actions must publish five diagnostic PRXs and `sha256.txt` as
+  `theforest-ucm-diagnostic-prx`.
+- Report test/build results separately from hardware results.
+- Give exact install, profile selection, offline test and rollback steps.
