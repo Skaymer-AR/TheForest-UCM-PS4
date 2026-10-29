@@ -1,4 +1,4 @@
-// The Forest CUSA12398 1.15 -- v0.6 startup-hook diagnostic PRX.
+// The Forest CUSA12398 1.15 -- v0.7 safety rollback (NO HOOKS; no GUI).
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -10,9 +10,9 @@ static int loaded;
 
 attr_public const char *g_pluginName = "theforest_ucm_diag";
 attr_public const char *g_pluginDesc =
-    "The Forest UCM hook diagnostic; GNM and rendering disabled";
+    "The Forest safe no-hook baseline after v0.6 PS4 lockup";
 attr_public const char *g_pluginAuth = "The Forest UCM PS4 research";
-attr_public uint32_t g_pluginVersion = 0x00000600;
+attr_public uint32_t g_pluginVersion = 0x00000700;
 
 static int is_expected_version(const char *version) {
     if (!version) return 0;
@@ -82,7 +82,7 @@ int32_t attr_public plugin_load(int32_t argc, const char *argv[]) {
     ps4_backend_get_status(&status);
     log_hook_profile("loaded", &status);
     NotifyStatic(TEX_ICON_SYSTEM,
-                 "The Forest: UCM diagnostic (GNM/render OFF)");
+                 "The Forest UCM safe baseline (NO HOOKS)");
     return 0;
 }
 

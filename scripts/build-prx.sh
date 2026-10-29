@@ -5,15 +5,16 @@ cd "$(dirname "$0")/.."
 : "${GOLDHEN_SDK:?Set GoldHEN SDK path}"
 : "${GOLDHEN_TEMPLATE:?Set official GoldHEN Plugins Repository path}"
 
+python3 scripts/assert-safe-build.py
 sh scripts/test.sh
 make -C "$GOLDHEN_SDK" PRINTF=1
 build_dir=$(mktemp -d)
-mkdir -p output/diagnostics
+mkdir -p output/safe
 
 # Each profile has GNM submission, rendering, framebuffer writes and game
 # memory changes compiled out. These artifacts isolate the remaining API
 # observers after the combined passive profile is tried first on hardware.
-for profile in passive_all:0 videoout_only:1 pad_read_state_only:2 pad_read_only:3 no_hooks:4; do
+for profile in no_hooks:4; do
   profile_name=${profile%%:*}
   profile_id=${profile#*:}
   profile_root="$build_dir/$profile_name"
@@ -53,9 +54,9 @@ PY
     "$profile_root/bin/plugins/elf_final"
   make -C "$template" DEBUG=0
   install -m644 "$profile_root/bin/plugins/prx_final/plugin_template.prx" \
-    "output/diagnostics/theforest_ucm_${profile_name}.prx"
+    "output/safe/theforest_ucm_safe_baseline.prx"
 done
 
-(cd output/diagnostics && sha256sum theforest_ucm_*.prx > sha256.txt)
-file output/diagnostics/*.prx
-cat output/diagnostics/sha256.txt
+(cd output/safe && sha256sum theforest_ucm_safe_baseline.prx > sha256.txt)
+file output/safe/*.prx
+cat output/safe/sha256.txt

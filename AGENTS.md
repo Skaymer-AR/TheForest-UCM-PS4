@@ -1,44 +1,43 @@
-# Codex implementation instructions — TheForest-UCM-PS4
+# Codex instructions — The Forest UCM PS4 (SAFETY HOLD)
 
-Target: **The Forest PS4 CUSA12398 v1.15**, PS4 firmware 12.02 and GoldHEN
-2.4B18.9. The user confirmed the previous no-hook probe loaded and left the game
-stable. They also reported that v0.5 showed its notification but left the game
-black after the title screen; the PS4 shell stayed responsive.
+Target: **The Forest CUSA12398 v1.15**, PS4 GoldHEN.
 
-## Current task
+## CRITICAL 2026-10-29 hardware incident
 
-- Continue `feature/visual-menu-foundation` and PR #2.
-- Diagnose startup hooks before attempting another renderer. The v0.6
-  diagnostic must have GNM/rendering/framebuffer access fully disabled.
-- Build a passive-all profile first, plus single-hook VideoOut,
-  `scePadReadState`, `scePadRead` and no-hook control profiles so the user can
-  isolate startup behavior on hardware.
-- Call through to the original APIs with the same ABI and arguments. Verify
-  GoldHEN detour state before accepting install; restore installed hooks on
-  failure/unload and drain callbacks before freeing stubs.
-- Keep callback work bounded and free of logging, allocation and blocking
-  graphics operations. Report counters from the plugin management path.
-- Do not claim the menu or graphics integration works until the user confirms
-  the game passes the title screen and the display is tested on PS4.
+- v0.5 native GNM overlay PRX: black screen after splash, PS4 shell still
+  responsive.
+- v0.6 `passive_all` PRX: **full console lockup**. The game could not close
+  and Rest Mode attempt also hung. This is worse than a normal game crash.
+- Earlier v0.3 NO-HOOK probe: normal gameplay and notification confirmed.
 
-## Restrictions
+**STOP** requesting any additional user hardware tests involving old v0.5/v0.6
+inline API detours. See issue #4 and README.md.
 
-- Do not modify eboot.bin, PKG/update files, save files, game binaries, or
-  unknown `DebugConsole` flags.
-- Do not commit `eboot.bin`, `Il2CppUserAssemblies.prx`,
-  `global-metadata.dat`, game memory dumps, or game assets.
-- Do not reuse historical absolute addresses; the recorded IL2CPP base
-  `0x8029C000` is historical only.
-- Do not depend on the observed NULL `DebugConsole` instance.
-- Keep feature status exact. God Mode, stamina, hunger/thirst, inventory, free
-  building, teleport, spawning, time and weather remain unavailable until each
-  has a real version-checked implementation and hardware validation.
-- Prefer offline, single-player testing.
+## Required engineering approach
 
-## Validation and deliverables
+- Start from this v0.7 no-hook hotfix. It compiles a single no-hook baseline.
+- Audit the upstream GoldHEN Detour implementation:
+  `Detour_DetourFunction64` copies x86-64 instructions to a stub without
+  general RIP-relative relocation handling. Validate ABI and code
+  relocation before reusing any hook.
+- Resolve the v0.6 unbounded `wait_for_original` spin and unbounded
+  `ps4_backend_stop` callback-drain design. Simply adding a timeout while
+  freeing an active trampoline is unsafe. No blocking waits on graphics,
+  input or plugin teardown thread.
+- Investigate an alternative overlay route that does NOT patch the
+  entrypoints of shared system libraries; establish safe startup and teardown
+  behavior, and prove it through offline tests before requesting hardware.
+- Do not change PKG, save files, unknown IL2CPP flags, or make calls using
+  the observed NULL DebugConsole instance.
+- No copyrighted game executable, metadata or assets in this repo.
+- `src/menu.*`, `src/overlay.*`, `src/drawlist.*` are host-only menu
+  logic/prototypes, **not** working in-game drawing.
+- Status reporting must separate **CI builds** from **verified hardware**.
 
-- Run portable tests and the PRX cross-build when changing the adapter.
-- GitHub Actions must publish five diagnostic PRXs and `sha256.txt` as
-  `theforest-ucm-diagnostic-prx`.
-- Report test/build results separately from hardware results.
-- Give exact install, profile selection, offline test and rollback steps.
+## Next deliverable
+
+A documented fault tree / root-cause investigation and a redesigned
+render/input integration, with demonstrable bounds, safe unload, and
+tests of the error paths. Keep any future invasive experiment behind a
+compile-time opt-in; do not publish default artifacts that hook game
+or system libraries.

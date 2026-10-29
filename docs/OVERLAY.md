@@ -1,101 +1,43 @@
-# Startup-hook diagnostic (v0.6)
+# Overlay status — critical safety hold
 
-## Hardware report and safety scope
+**Do not load the original v0.5 or any hook-enabled v0.6 PRX on PS4.**
 
-The user reported that v0.5's PRX notification appeared but The Forest stayed
-black after its title screen. The PS4 shell remained responsive, and the
-previous no-hook probe had entered a playable session. Because v0.5 installed
-the GNM submit hook on every load, allocated a direct-memory command buffer,
-and could append GPU work at frame submission, GNM is the first path removed
-for diagnosis. That source finding makes GNM a leading suspect; only the
-hardware profile tests can establish causation.
+The user confirmed a full console lockup on October 29, 2026 using
+`theforest_ucm_passive_all.prx` from v0.6. Earlier v0.5 showed a black
+screen after startup but kept the shell responsive. See
+[Critical Incident #4](https://github.com/Skaymer-AR/TheForest-UCM-PS4/issues/4).
 
-This v0.6 diagnostic has no GNM include, import, hook, command buffer, or
-rendering path. It does not capture or dereference the registered framebuffer
-addresses. It makes no Unity calls or gameplay changes. The build has five
-compile-time profiles:
+## Source findings (not yet definitive causation)
 
-| Profile | VideoOut | PadReadState | PadRead | GNM / render / framebuffer |
-| --- | --- | --- | --- | --- |
-| `passive_all` | On | On | On | Off |
-| `videoout_only` | On | Off | Off | Off |
-| `pad_read_state_only` | Off | On | Off | Off |
-| `pad_read_only` | Off | Off | On | Off |
-| `no_hooks` | Off | Off | Off | Off |
+- v0.6 `wait_for_original()` used an unbounded spin waiting for a
+  trampoline pointer; in an unsuccessful publication race this never returns.
+- v0.6 `ps4_backend_stop()` waited without deadline for callback count to
+  reach zero, potentially blocking teardown and game closure.
+- The upstream GoldHEN SDK `Detour_DetourFunction64()` copies prologue
+  instructions into a stub. Its code does not implement a general relocation
+  pass for RIP-relative instructions; concurrent rewriting of system APIs is
+  a further risk.
+- The exact function/phase causing the lockup cannot be established without
+  logs, traces and careful offline binary/disassembly validation.
 
-The `passive_all` profile is the first test. If the black screen remains, the
-single-hook builds separate VideoOut, `scePadReadState`, and `scePadRead`.
-The `no_hooks` profile is an additional control. None of these PRXs is meant
-to display the menu.
+## Mitigation in source v0.7
 
-## ABI and detour checks
+- Removed all detours from compiled backend. `source/ps4_backend.c` is a
+  pure no-op interface and explicitly rejects the old nonzero hooks profiles.
+- Only the `no_hooks` baseline is built. Artifact:
+  `theforest-ucm-safe-baseline-only`.
+- No GNM, VideoOut, ScePad hook, framebuffer access, overlays, or game writes.
+- The menu/overlay state machine and host tests are preserved separately.
 
-The observer signatures match the public OpenOrbis declarations:
+This is a **build safety mitigation**, not an implementation of the menu.
+Do not claim rendering or input is verified. Reintroducing in-process
+interception requires a review of memory protection, relocation, concurrent
+installation and teardown safety with nonblocking callbacks.
 
-- `sceVideoOutRegisterBuffers(int32_t, int32_t, void *const *, int32_t,
-  const OrbisVideoOutBufferAttribute *)` from
-  `include/orbis/VideoOut.h`.
-- `scePadReadState(int32_t, OrbisPadData *)` and
-  `scePadRead(int32_t, OrbisPadData *, int32_t)` from
-  `include/orbis/Pad.h`.
-- `OrbisPadData.buttons` and `.connected` from
-  `include/orbis/_types/pad.h`.
-- VideoOut attribute field order and types from
-  `include/orbis/_types/video.h`. Because the OpenOrbis header includes a
-  C++-only fixed-underlying-type enum, the C backend mirrors this struct and
-  statically asserts its 0x28-byte size and key offsets.
+## Next implementation milestone
 
-The function addresses are the linked `libSceVideoOut` and `libScePad` imports;
-there are no hard-coded game addresses. GoldHEN SDK `Detour_DetourFunction`
-returns `Detour.StubPtr`, the copied original instructions plus a jump back;
-`Detour.TrampolinePtr` is the entrypoint's jump relay, not the call-through.
-The backend checks that the returned pointer, target, hook, mode and allocated
-detour fields agree before accepting installation.
-
-There is a small publication race inherent in the GoldHEN API: the detour
-patches the target before returning its original-call stub. The hook callbacks
-atomically wait for that stub to be published before calling the original, so
-they cannot call a null pointer if another game thread reaches the new entry
-immediately. If a later hook fails to install, earlier entrypoints are
-restored in reverse order. On unload, entrypoints are restored first, the
-callback count drains, and then the stub and jump-relay mappings are released.
-
-## Callback and logging behavior
-
-Every observer calls the original API with the same arguments and returns its
-result unchanged. Afterward it updates only atomic counters and the latest
-result/sample fields. It never logs from a VideoOut or pad callback, allocates,
-waits on a lock, stores output-buffer addresses, or blocks on graphics work.
-The PRX prints one bounded profile line at load and one callback summary at
-unload through the plugin-management path. A failed install line names the API
-whose detour setup failed before rollback.
-
-## Feature status
-
-| Capability | v0.6 diagnostic status |
-| --- | --- |
-| Show in-game UCM panel | Disabled; no renderer in the diagnostic build |
-| GNM submit/flip hook | Disabled in every profile |
-| Framebuffer reads/writes | Disabled in every profile |
-| VideoOut observation | Enabled only by profiles above |
-| ScePad observation | Enabled only by profiles above |
-| Menu input/control | Disabled; this build is not an in-game menu |
-| God Mode, stamina, hunger/thirst, inventory, free building, teleport, spawn, time/weather | Not implemented; no gameplay writes |
-
-Portable tests and cross-compilation check the source/build only. The PS4
-black-screen regression remains unverified until the user reports the result
-of each required profile on firmware 12.02 / GoldHEN 2.4B18.9. No renderer is
-claimed functional at this stage.
-
-## Install and remove
-
-Download the `theforest-ucm-diagnostic-prx` Actions artifact, check
-`sha256.txt`, and install one PRX at a time under
-`/data/GoldHEN/plugins/theforest_ucm_diag.prx`. The `[CUSA12398]` entry in
-`/data/GoldHEN/plugins.ini` must point to that path. Start with
-`passive_all`, then use each isolated profile if needed. Use an offline
-single-player session.
-
-Unload from GoldHEN, remove the entry from `plugins.ini`, delete the installed
-PRX, and restart to roll back. The PRX does not modify eboot, PKG, saves, game
-memory, or unknown `DebugConsole` flags.
+Codex should design a rendering/input path that avoids patching shared
+system API code at startup, establish a tested lifecycle, and separate an
+observable non-hook smoke test from any experimental hooks. No further PS4
+trials are requested until this review is complete and the user explicitly
+agrees to a new narrowly scoped test.

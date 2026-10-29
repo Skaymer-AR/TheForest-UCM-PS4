@@ -31,7 +31,7 @@ jobs:
           if-no-files-found: error
 
   compile-prx:
-    name: Cross-compile GoldHEN diagnostic PRX profiles
+    name: Cross-compile safe NO-HOOK baseline only
     runs-on: ubuntu-24.04
     needs: tests
     steps:
@@ -58,15 +58,15 @@ jobs:
           git -C "$RUNNER_TEMP/GoldHEN_Plugins_SDK" checkout --detach bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7
           git -C "$RUNNER_TEMP/GoldHEN_Plugins_Repository" checkout --detach 998fe03fe0275b59310511187ba8550ed475a003
           echo "GOLDHEN_SDK=$RUNNER_TEMP/GoldHEN_Plugins_SDK" >> "$GITHUB_ENV"
-      - name: Build GNM-off hook isolation profiles
+      - name: Build no-hook baseline ONLY (unsafe detours quarantined)
         env:
           GOLDHEN_TEMPLATE: ${{ runner.temp }}/GoldHEN_Plugins_Repository
         run: sh scripts/build-prx.sh
-      - name: Upload The Forest UCM diagnostic PRXs and checksums
+      - name: Upload safe no-hook baseline and checksum
         uses: actions/upload-artifact@v4
         with:
-          name: theforest-ucm-diagnostic-prx
+          name: theforest-ucm-safe-baseline-only
           path: |
-            output/diagnostics/*.prx
-            output/diagnostics/sha256.txt
+            output/safe/*.prx
+            output/safe/sha256.txt
           if-no-files-found: error

@@ -1,80 +1,71 @@
 # The Forest UCM PS4
 
-Diagnostic work for **The Forest PS4 CUSA12398 v1.15**, on PS4 firmware
-12.02 and GoldHEN 2.4B18.9. The user confirmed that the earlier no-hook probe
-loaded and allowed a session to run. Version v0.5 displayed its notification,
-then left the game black after the title screen; the PS4 shell remained
-responsive. This branch now contains v0.6 diagnostic PRX profiles to isolate
-the startup hooks; the hardware check is still pending.
+## CRITICAL HARDWARE REGRESSION — v0.5 and v0.6 are quarantined
 
-## v0.6 diagnostic build
+On October 29, 2026, the user confirmed a **full PS4 lockup** after installing
+v0.6 `theforest_ucm_passive_all.prx`, with VideoOut and Pad API inline detours
+enabled. The game could not close, and the system became unresponsive when trying
+Rest Mode. The previous v0.5 GNM overlay had left the game on a black screen
+while the PS4 shell stayed responsive.
 
-The diagnostic PRX has no GNM hook or GNM library dependency. Rendering,
-framebuffer access/writes, Unity calls, game-state changes, and cheat actions
-are compiled out. It installs only the profile's pass-through observers and
-records bounded counters and the latest API sample with atomics. It does not
-print from a game or graphics callback.
+**DO NOT INSTALL OR RECOMMEND** v0.5 `theforest_ucm.prx` or any of the four
+v0.6 profiles using inline hooks: `passive_all`, `videoout_only`,
+`pad_read_state_only`, or `pad_read_only`. A passing CI build does not make
+these safe on PS4.
 
-The first profile to try is `theforest_ucm_passive_all.prx`: GNM is disabled;
-VideoOut, `scePadReadState`, and `scePadRead` are observed. The artifact also
-contains single-hook profiles and a no-hook control:
+**Immediate rollback on the user's console:** after restarting, remove all
+experimental UCM lines from the existing `[CUSA12398]` section of
+`/data/GoldHEN/plugins.ini`. Restore the previous backup of that INI if
+necessary. Restart once more before launching The Forest. Leave all game PKG,
+updates and saves unchanged. The earlier v0.3 no-hook `theforest_ucm_probe.prx`
+was physically demonstrated to load successfully; it is an optional known-good
+reference, not required for playing normally.
 
-| PRX | Hooks active |
-| --- | --- |
-| `theforest_ucm_passive_all.prx` | VideoOut, PadReadState, PadRead |
-| `theforest_ucm_videoout_only.prx` | VideoOut |
-| `theforest_ucm_pad_read_state_only.prx` | PadReadState |
-| `theforest_ucm_pad_read_only.prx` | PadRead |
-| `theforest_ucm_no_hooks.prx` | None |
+**Issue:** [#4 — Critical PS4 lockup](https://github.com/Skaymer-AR/TheForest-UCM-PS4/issues/4).
+**Project context:** [#3 — visual overlay](https://github.com/Skaymer-AR/TheForest-UCM-PS4/issues/3).
 
-All five have **GNM=OFF, rendering=OFF, framebuffer writes=OFF**. No menu is
-expected to appear in this diagnostic build. The single-hook profiles let the
-hardware test distinguish VideoOut from each ScePad hook if the first profile
-still causes a black screen.
+## v0.7 fail-closed source hotfix
 
-## Build and artifact
+The previous inline detours and their unbounded waits have been **removed from
+the active compiled backend**. Unsafe code remains recoverable from Git history
+for offline analysis; it is not built into the new artifact. The current
+`source/ps4_backend.c` is a no-op, with a compile-time error if any former
+hook-enabled profile is requested.
 
-GitHub Actions runs the portable C tests, cross-compiles each profile with the
-OpenOrbis 0.5.4 toolchain and pinned GoldHEN SDK/template, and uploads the
-`theforest-ucm-diagnostic-prx` artifact. It contains the five PRXs and
-`sha256.txt`. Use the artifact from the latest successful Actions run on PR
-#2. The host SVG preview is not a PS4 screenshot.
+GitHub Actions now builds **one no-hook baseline**:
+`theforest_ucm_safe_baseline.prx` in artifact
+`theforest-ucm-safe-baseline-only`. It only loads and prints a notification.
+It does **not** display a menu, monitor input or change gameplay. It is an
+engineering fallback, **not a proven hardware fix** and no further PS4 trial is
+needed until the architecture is reviewed.
 
-## Install and test on PS4
+## Investigation
 
-1. Download and extract `theforest-ucm-diagnostic-prx`; verify it from that
-   directory with `shasum -a 256 -c sha256.txt`.
-2. Unload the v0.5 plugin in GoldHEN if it is still loaded. In
-   `/data/GoldHEN/plugins.ini`, replace its `[CUSA12398]` entry so it points to
-   exactly one diagnostic PRX at a time.
-3. Copy `theforest_ucm_passive_all.prx` to
-   `/data/GoldHEN/plugins/theforest_ucm_diag.prx`, and set the plugin entry to
-   `/data/GoldHEN/plugins/theforest_ucm_diag.prx`. Preserve the existing file
-   syntax and other plugin entries.
-4. Start The Forest CUSA12398 v1.15 in **offline single-player** and note
-   whether it passes the title screen. This profile should show the
-   notification `The Forest: UCM diagnostic (GNM/render OFF)`; it will not
-   draw a menu.
-5. If it still turns black, close the game and test `videoout_only`,
-   `pad_read_state_only`, and `pad_read_only`, one PRX per launch. Test
-   `no_hooks` as the control if needed. Do not load more than one profile at a
-   time. Unload the plugin through GoldHEN before replacing its file.
-6. After each run, unload the PRX and save the `[TF-UCM-DIAG]` lines from the
-   GoldHEN log. The load line lists the exact active hooks; the unload line
-   reports how many times each observer ran and the last result/sample.
+Source review identified:
+1. `wait_for_original` in v0.6 could spin **forever** on an unset trampoline.
+2. `ps4_backend_stop` could wait **forever** for an active callback during
+   unload, matching the reported inability to close the game.
+3. The GoldHEN SDK's trampoline copies machine instructions. For arbitrary
+   system library entries, RIP-relative instructions and concurrent patching
+   may cause invalid control flow. This is a plausible risk, **not a confirmed
+   root cause**.
 
-The black-screen regression is not considered resolved until the user
-confirms in hardware that the relevant profile passes the title screen. This
-diagnostic does not claim the game overlay or controller navigation works.
+A timer alone would not safely fix these paths; releasing trampolines while
+threads are still executing them is also dangerous. Avoid intercepting shared
+system libraries inline until a formally validated lifecycle and
+relocation-safe strategy exists. Prefer an alternative overlay architecture
+that does not patch system API entrypoints. Test offline with static analysis,
+host simulations and CI before suggesting new PS4 experiments.
 
-## Rollback
+## Host test and CI
 
-Unload the PRX through GoldHEN, remove its line from `[CUSA12398]` in
-`/data/GoldHEN/plugins.ini`, delete `/data/GoldHEN/plugins/theforest_ucm_diag.prx`,
-and restart the console. Each profile restores its installed detours during
-unload. No PKG, eboot, save, persistent game data, or unknown console flags
-are modified.
+```sh
+python3 scripts/assert-safe-build.py
+sh scripts/test.sh
+```
 
-See [docs/OVERLAY.md](docs/OVERLAY.md) for the API and detour checks, and
-[docs/RESULTADO.md](docs/RESULTADO.md) for prior `DebugConsole` observations
-and the v0.5 regression report.
+The portable overlay/menu code remains host-testable, but it is **not** wired
+to a game renderer or real DS4 input in v0.7.
+
+Target game: **The Forest PS4 CUSA12398 v1.15**, offline only.
+Firmware from prior session: **12.02**, GoldHEN **2.4B18.9**.
