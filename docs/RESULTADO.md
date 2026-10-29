@@ -69,8 +69,10 @@ profiles enable each hook individually and provide a no-hook control. Callback
 logs are replaced with atomic counters; the plugin logs the profile and
 summary only from load/unload handling.
 
-Portable tests passed locally. The v0.6 PRX profiles still need a successful
-GitHub Actions build and the user's hardware tests. The black-screen regression
-is unresolved until a profile passes the title screen on PS4. No rendering or
+Portable tests and the v0.6 PRX profiles passed in GitHub Actions run
+[40971740647](https://github.com/Skaymer-AR/TheForest-UCM-PS4/actions/runs/40971740647);
+the `theforest-ucm-diagnostic-prx` artifact is available from that run. The
+user's hardware tests are still pending, so the black-screen regression is
+unresolved until a profile passes the title screen on PS4. No rendering or
 controller integration is claimed functional. See [OVERLAY.md](OVERLAY.md) for
 the profiles, ABI references, and exact feature boundary.

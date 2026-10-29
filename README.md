@@ -4,8 +4,8 @@ Diagnostic work for **The Forest PS4 CUSA12398 v1.15**, on PS4 firmware
 12.02 and GoldHEN 2.4B18.9. The user confirmed that the earlier no-hook probe
 loaded and allowed a session to run. Version v0.5 displayed its notification,
 then left the game black after the title screen; the PS4 shell remained
-responsive. This branch now prepares a v0.6 diagnostic PRX to isolate the
-startup hooks.
+responsive. This branch now contains v0.6 diagnostic PRX profiles to isolate
+the startup hooks; the hardware check is still pending.
 
 ## v0.6 diagnostic build
 
