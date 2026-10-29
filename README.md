@@ -1,17 +1,18 @@
-# The Forest UCM PS4 — research and build
+# The Forest UCM PS4 — in-game menu work
 
 **Target:** The Forest PS4 **CUSA12398 v1.15**, GoldHEN, offline testing.
 
-The first milestone is a **GoldHEN PRX load probe**, not a finished menu. Its purpose is to verify that a game-specific plugin loads and shows a notification. It installs **no hooks**, writes **no game RAM**, invokes **no Unity functions**, and changes **no PKG or saves**.
+The PRX load probe has been tested on the user's PS4. The current milestone is the first real render and controller adapter. Offline/single-player testing comes first.
 
 ## Current state
 
-- Verified on user's PS4: `Il2CppUserAssemblies.prx` was readable, and the code bytes at `DebugConsole.ToggleConsole` and `DebugConsole.OnGUI` matched the offline analysis.
+- User confirmed on PS4: the PRX displayed `The Forest: UCM probe loaded (NO HOOKS)`, The Forest entered a session, and gameplay continued without freezes or crashes. The load probe is complete and will not be repeated as the main milestone.
 - Read-only pointer chain ended in a **NULL DebugConsole instance** in both the world and main menu.
 - The two observed `Awake` guard values were `00`, but they were read **after** initialization; this does not prove their values at entry.
-- Portable menu navigation core passes a local C99 test.
-- First diagnostic PRX CI build: **passed**, [run 40957399526](https://github.com/Skaymer-AR/TheForest-UCM-PS4/actions/runs/40957399526), commit `68150e5`. Real-console plugin loading remains unverified. Never call `ToggleConsole` on NULL or flip unknown guard bytes blindly.
-- A visual UI core now implements panel/text drawing, UI settings and normalized DS4 navigation with lifecycle tests. It is compiled into the PRX but **detached from the game** until the renderer/input adapter is verified. No gameplay actions are connected. See [overlay architecture and integration checklist](docs/OVERLAY.md).
+- PR #2 contains a portable menu/render model with normalized DualShock buttons. The PRX still does **not** attach that model to a game frame or PS4 renderer, so no panel appears in-game yet.
+- Gameplay entries display as `[UNVERIFIED]` and cannot mutate state or dispatch commands.
+- The upstream GNM flip signature and ScePad APIs have been checked. They establish available APIs, not a verified The Forest rendering backend. See [adapter findings](docs/OVERLAY.md).
+- Never call `ToggleConsole` through the observed NULL instance or change unknown guard bytes.
 
 ## Local test on macOS Catalina
 
@@ -19,33 +20,31 @@ The first milestone is a **GoldHEN PRX load probe**, not a finished menu. Its pu
 sh scripts/test.sh
 ```
 
-The code is ordinary C99 and uses no third-party dependencies for these tests. Tests also generate `output/overlay-preview.svg`, a host rendering of the menu (not a console screenshot).
+The code is ordinary C99 and uses no third-party dependencies for these tests. `SANITIZE=1 sh scripts/test.sh` also runs AddressSanitizer and UndefinedBehaviorSanitizer builds. Tests generate `output/overlay-preview.svg`, a host rendering of the menu (not a console screenshot).
 
 ## Build a PRX on GitHub Actions
 
-Open **Actions** → **Test and build The Forest PS4 diagnostic PRX** → **Run workflow** on `main`. A push to code/workflow files also triggers the build. On success, download the artifact named `theforest-ucm-probe-prx`. It is expected to contain `theforest_ucm_probe.prx`.
+Every pull request runs the portable tests and OpenOrbis cross-build. On success, download `theforest-ucm-probe-prx`, containing `theforest_ucm_probe.prx` and its SHA-256 file. The current PRX includes the visual model but has no attached render/input adapter, so installing it will not show a menu yet.
 
 The workflow uses OpenOrbis, LLVM and the official GoldHEN plugin template in Linux. The first diagnostic build succeeded in the run linked above. Updated branches and pull requests run the portable suites and build the UI core into the same probe artifact using `scripts/build-prx.sh`. The new overlay adapter is not active on PS4.
 
-## Install the probe on your PS4 (only after successful build)
+## Current PS4 test and rollback
 
-1. Back up `/data/GoldHEN/plugins.ini` with FTP.
-2. Copy the built `theforest_ucm_probe.prx` to `/data/GoldHEN/plugins/`.
-3. Under the **existing** `[CUSA12398]` section in `plugins.ini`, append:
-   `/data/GoldHEN/plugins/theforest_ucm_probe.prx`
-4. Ensure GoldHEN plugin loading is enabled. Launch The Forest **offline**.
-5. Look for the single startup notification. If the game does not load, remove the added INI line and restart; keep the original INI backup.
-
-Do not install another experimental plugin simultaneously.
+The user has already installed and tested the load probe. The current branch
+artifact has no render/input adapter, so installing it again will not show a
+menu. To roll back the existing install, back up
+`/data/GoldHEN/plugins.ini`, remove
+`/data/GoldHEN/plugins/theforest_ucm_probe.prx` from the existing
+`[CUSA12398]` section, and restart the console. Keep tests offline/single-player.
 
 ## Roadmap
 
-1. Verify safe PRX loading (no hooks).
-2. Instrument `DebugConsole.Awake` **read-only** at invocation time, after validating module base and method ABI.
-3. Add an in-game overlay and DualShock 4 navigation.
+1. Implement a reproducible GNM path that resolves the active output target and can detach safely.
+2. Add a verified read-only DualShock sample source and connect it to the render frame.
+3. Draw and test the menu on the target PS4 while keeping game actions disabled.
 4. Integrate independently verified game actions one by one.
 
-The visual menu core is implemented; renderer, input sampling, Unity ABI/thread/lifetime validation and safe callback detach are pending console verification. See [OVERLAY.md](docs/OVERLAY.md).
+The old PRX load has already been verified on hardware. A new installation is not needed to repeat that check. The visible renderer/input bridge is still pending; the current artifact is useful for build verification only. See [OVERLAY.md](docs/OVERLAY.md).
 
 ## References
 

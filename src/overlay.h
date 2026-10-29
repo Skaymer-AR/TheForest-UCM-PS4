@@ -3,6 +3,8 @@
 #include "menu.h"
 #include <stdint.h>
 
+#define OVERLAY_ITEM_COUNT 13
+
 /* Normalized buttons, NOT ScePad bit values. The platform adapter maps them. */
 enum {
     PAD_L1 = 1u << 0, PAD_R1 = 1u << 1, PAD_UP = 1u << 2,
@@ -19,7 +21,7 @@ typedef struct {
 
 typedef struct {
     MenuState menu;
-    MenuItem items[3]; /* UI-only settings; no gameplay command dispatcher. */
+    MenuItem items[OVERLAY_ITEM_COUNT];
     OverlayRenderer renderer;
     uint32_t previous_buttons;
     bool initialized, attached, input_ready;

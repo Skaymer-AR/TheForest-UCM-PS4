@@ -6,8 +6,9 @@ Target: **The Forest on PS4 CUSA12398, update v1.15**, GoldHEN. Local user hardw
 
 - Build and validate a **game-specific GoldHEN PRX**, with game title/update validation, and start with a **no-hook, no-memory-write** smoke test.
 - A working notification does **not** mean the Ultimate Cheatmenu is implemented.
-- Next: read-only instrumentation of `TheForest.DebugConsole.Awake` at invocation (observe guards and registration) with bounded logs, safe exit/unload, and confirmed ASLR module base.
-- Then implement an **in-game controller-friendly menu** and only wire verified actions. The 10 categories in `src/menu.h` are a UI prototype, not proof of gameplay functionality.
+- The user has confirmed that the probe PRX loads and The Forest remains playable in a session without freezes or crashes. Do not repeat that as the main milestone.
+- Current priority: attach the visual menu to a verified PS4 render path and read DualShock input safely. This work must not depend on the observed NULL `DebugConsole` singleton.
+- The categories in `src/menu.h` and host renderer callbacks are a UI model, not proof of an in-game menu. Keep gameplay actions disabled until each is implemented and verified.
 - Do **not** modify the game PKG/update/saves or embed game binaries. Never commit uploaded `eboot.bin`, `Il2CppUserAssemblies.prx`, `global-metadata.dat`, full memory dumps or third-party game assets.
 - Avoid hard-coded absolute runtime addresses across sessions; validate module base and signed binaries before any hook.
 - A `NULL` `DebugConsole` instance has been observed; do not call its methods on that NULL pointer. The guard values were captured *after* Awake and must not be treated as confirmed values at invocation.

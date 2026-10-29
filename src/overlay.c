@@ -4,11 +4,20 @@
 
 void overlay_init(Overlay *o) {
     memset(o, 0, sizeof(*o));
-    o->items[0] = (MenuItem){"hints", "Show controls", CAT_DEV, MENU_TOGGLE, 1, 0, 1, 1};
-    o->items[1] = (MenuItem){"opacity", "Panel opacity", CAT_DEV, MENU_SLIDER, 90, 40, 100, 10};
-    o->items[2] = (MenuItem){"close", "Close menu", CAT_DEV, MENU_ACTION, 0, 0, 0, 0};
-    menu_init(&o->menu, o->items, 3);
-    o->menu.category = CAT_DEV;
+    o->items[0] = (MenuItem){"god_mode", "God Mode", CAT_CHEATS, MENU_TOGGLE, 0, 0, 1, 1, false};
+    o->items[1] = (MenuItem){"infinite_stamina", "Infinite Stamina", CAT_CHEATS, MENU_TOGGLE, 0, 0, 1, 1, false};
+    o->items[2] = (MenuItem){"hunger_thirst", "Hunger and Thirst", CAT_PLAYER, MENU_TOGGLE, 0, 0, 1, 1, false};
+    o->items[3] = (MenuItem){"free_building", "Build without materials", CAT_GAME, MENU_TOGGLE, 0, 0, 1, 1, false};
+    o->items[4] = (MenuItem){"add_inventory", "Add inventory item", CAT_INVENTORY, MENU_ACTION, 0, 0, 0, 0, false};
+    o->items[5] = (MenuItem){"teleport", "Teleport player", CAT_PLAYER, MENU_ACTION, 0, 0, 0, 0, false};
+    o->items[6] = (MenuItem){"spawn_enemy", "Spawn enemy", CAT_MUTANTS, MENU_ACTION, 0, 0, 0, 0, false};
+    o->items[7] = (MenuItem){"spawn_object", "Spawn object", CAT_SPAWN, MENU_ACTION, 0, 0, 0, 0, false};
+    o->items[8] = (MenuItem){"time_of_day", "Time of day", CAT_ENVIRONMENT, MENU_ACTION, 0, 0, 0, 0, false};
+    o->items[9] = (MenuItem){"weather", "Weather", CAT_ENVIRONMENT, MENU_ACTION, 0, 0, 0, 0, false};
+    o->items[10] = (MenuItem){"hints", "Show controls", CAT_DEV, MENU_TOGGLE, 1, 0, 1, 1, true};
+    o->items[11] = (MenuItem){"opacity", "Panel opacity", CAT_DEV, MENU_SLIDER, 90, 40, 100, 10, true};
+    o->items[12] = (MenuItem){"close", "Close menu", CAT_DEV, MENU_ACTION, 0, 0, 0, 0, true};
+    menu_init(&o->menu, o->items, OVERLAY_ITEM_COUNT);
     o->initialized = true;
 }
 
@@ -25,28 +34,31 @@ static void draw(Overlay *o) {
     char value[96];
     size_t i;
     int row = 0;
-    uint32_t alpha = (uint32_t)o->items[1].value * 255u / 100u;
-    r->rect(r->context, 64, 64, 520, 540, 0x12202000u | alpha);
-    r->text(r->context, 88, 100, "THE FOREST / UCM", 0xffffffffu);
-    r->text(r->context, 88, 134, "UI prototype - gameplay unavailable", 0xffd080ffu);
-    r->text(r->context, 88, 180, menu_category_name((MenuCategory)o->menu.category), 0x80e0c0ffu);
+    uint32_t alpha = (uint32_t)o->items[11].value * 255u / 100u;
+    r->rect(r->context, 48, 48, 650, 630, 0x12202000u | alpha);
+    r->text(r->context, 80, 108, "THE FOREST — ULTIMATE CHEATMENU", 0xffffffffu);
+    r->text(r->context, 80, 150, "Game actions stay locked until verified", 0xffd080ffu);
+    r->text(r->context, 80, 202, menu_category_name((MenuCategory)o->menu.category), 0x80e0c0ffu);
     for (i = 0; i < o->menu.count; ++i) {
         MenuItem *item = &o->items[i];
         if (item->category != (MenuCategory)o->menu.category) continue;
         if (row == o->menu.selected[o->menu.category])
-            r->rect(r->context, 80, 200 + row * 44, 488, 40, 0x346050ffu);
-        if (item->kind == MENU_TOGGLE)
+            r->rect(r->context, 64, 236 + row * 48, 618, 44, 0x346050ffu);
+        if (!item->available)
+            snprintf(value, sizeof(value), "%s  [UNVERIFIED]", item->label);
+        else if (item->kind == MENU_TOGGLE)
             snprintf(value, sizeof(value), "%s: %s", item->label, item->value ? "ON" : "OFF");
         else if (item->kind == MENU_SLIDER)
             snprintf(value, sizeof(value), "%s: %d%%", item->label, item->value);
         else snprintf(value, sizeof(value), "%s", item->label);
-        r->text(r->context, 96, 226 + row * 44, value, 0xffffffffu);
+        r->text(r->context, 84, 266 + row * 48, value,
+                item->available ? 0xffffffffu : 0x909090ffu);
         ++row;
     }
-    if (!row) r->text(r->context, 96, 240, "No verified gameplay actions", 0xb0b0b0ffu);
-    if (o->items[0].value) {
-        r->text(r->context, 88, 514, "L1+R1 open/close | D-pad navigate", 0xb0b0b0ffu);
-        r->text(r->context, 88, 548, "L1/R1 tabs | Cross select | Circle close", 0xb0b0b0ffu);
+    if (!row) r->text(r->context, 84, 266, "No entries in this category", 0xb0b0b0ffu);
+    if (o->items[10].value) {
+        r->text(r->context, 80, 590, "L1+R1 open/close | D-pad select / change", 0xb0b0b0ffu);
+        r->text(r->context, 80, 622, "L1/R1 categories | Cross select | Circle back", 0xb0b0b0ffu);
     }
 }
 

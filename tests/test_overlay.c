@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
-static int rects, texts, saw_title, saw_empty;
+static int rects, texts, saw_title, saw_unverified;
 static void rect(void *ctx, int x, int y, int w, int h, uint32_t color) {
     (void)ctx; (void)color;
     assert(x >= 0 && y >= 0 && x + w <= 1280 && y + h <= 720);
@@ -12,8 +12,8 @@ static void rect(void *ctx, int x, int y, int w, int h, uint32_t color) {
 static void text(void *ctx, int x, int y, const char *s, uint32_t color) {
     (void)ctx; (void)color;
     assert(x >= 0 && y >= 0 && x < 1280 && y < 720 && s && *s);
-    if (strstr(s, "THE FOREST")) saw_title = 1;
-    if (strstr(s, "No verified")) saw_empty = 1;
+    if (strstr(s, "THE FOREST — ULTIMATE CHEATMENU")) saw_title = 1;
+    if (strstr(s, "[UNVERIFIED]")) saw_unverified = 1;
     ++texts;
 }
 static void press(Overlay *o, uint32_t b) {
@@ -34,24 +34,43 @@ int main(void) {
     overlay_frame(&o, true, PAD_L1 | PAD_R1);
     assert(!o.menu.visible); /* Held at attachment. */
     press(&o, PAD_L1 | PAD_R1);
-    assert(o.menu.visible && saw_title && rects == 2 && texts > 0);
+    assert(o.menu.visible && saw_title && saw_unverified && rects == 2 && texts > 0);
     overlay_frame(&o, true, PAD_L1 | PAD_R1);
     assert(o.menu.visible); /* Holding does not toggle repeatedly. */
     press(&o, PAD_CROSS);
-    assert(o.items[0].value == 0);
+    assert(o.items[0].value == 0); /* Locked gameplay actions cannot mutate state. */
     overlay_frame(&o, true, PAD_CROSS);
     assert(o.items[0].value == 0);
     press(&o, PAD_DOWN);
+    assert(o.menu.selected[CAT_CHEATS] == 1);
+    press(&o, PAD_R1);
+    assert(o.menu.category == CAT_ENVIRONMENT);
+    press(&o, PAD_CROSS);
+    assert(o.items[8].value == 0 && o.items[9].value == 0);
+    press(&o, PAD_R1);
+    assert(o.menu.category == CAT_PLAYER);
+    press(&o, PAD_R1);
+    assert(o.menu.category == CAT_ANIMALS);
+    press(&o, PAD_R1);
+    assert(o.menu.category == CAT_MUTANTS);
+    press(&o, PAD_R1);
+    assert(o.menu.category == CAT_SPAWN);
+    press(&o, PAD_R1);
+    assert(o.menu.category == CAT_INVENTORY);
+    press(&o, PAD_CROSS);
+    assert(o.items[4].value == 0);
+    press(&o, PAD_R1);
+    assert(o.menu.category == CAT_COOP);
+    press(&o, PAD_R1);
+    assert(o.menu.category == CAT_DEV);
+    press(&o, PAD_DOWN);
     assert(o.menu.selected[CAT_DEV] == 1);
     for (int i = 0; i < 12; ++i) press(&o, PAD_RIGHT);
-    assert(o.items[1].value == 100);
+    assert(o.items[11].value == 100);
     for (int i = 0; i < 12; ++i) press(&o, PAD_LEFT);
-    assert(o.items[1].value == 40);
+    assert(o.items[11].value == 40);
     press(&o, PAD_R1);
-    assert(o.menu.category == CAT_GAME && saw_empty);
-    press(&o, PAD_R1);
-    assert(o.menu.category == CAT_CHEATS);
-    press(&o, PAD_L1);
+    assert(o.menu.category == CAT_GAME);
     press(&o, PAD_L1);
     assert(o.menu.category == CAT_DEV);
     press(&o, PAD_DOWN);

@@ -22,7 +22,10 @@
 
 Do not change guard B or call `ToggleConsole` when the instance pointer is NULL.
 
-First establish that a non-hooking diagnostic PRX loads on the actual game. Only then study a bounded read-only hook for `Awake`, with module-base/ABI verification. A standalone DualShock 4 menu avoids depending entirely on an inactive debug console.
+The user confirmed that the non-hooking probe loads, The Forest enters a session,
+and gameplay continues without freezes or crashes. The load milestone is complete.
+The active task is a native menu render/input adapter that does not depend on
+`DebugConsole`; no invocation hook or guard patch is needed for that path.
 
 No original game data, binary or raw memory dump is committed.
 
@@ -33,4 +36,13 @@ The first diagnostic PRX compiled successfully in GitHub Actions run
 for commit `68150e5`. This does not verify loading on hardware. The new visual
 menu core has a host renderer and input/lifecycle tests, with an intentionally
 detached PS4 adapter. See [OVERLAY.md](OVERLAY.md) for boundaries and pending
-IL2CPP integration checks. The observations above remain unchanged.
+render/input integration. The observations above remain unchanged.
+
+## PS4 load confirmation (2026-10-29)
+
+The user confirmed that the PRX displayed `The Forest: UCM probe loaded (NO
+HOOKS)` on their PS4, then The Forest entered a session and remained playable
+without freezes or crashes. This confirms the probe load and basic game
+stability only; it does not confirm that the menu is drawn or controlled by the
+DualShock 4. The active work is the GNM renderer and input adapter described in
+[OVERLAY.md](OVERLAY.md).

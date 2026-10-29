@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Compile and run portable C tests
-        run: sh scripts/test.sh
+        run: SANITIZE=1 sh scripts/test.sh
       - name: Upload host UI preview (not a PS4 screenshot)
         uses: actions/upload-artifact@v4
         with:

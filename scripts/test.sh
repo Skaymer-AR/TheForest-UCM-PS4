@@ -8,3 +8,9 @@ ${CC:-cc} -std=c99 -Wall -Wextra -Werror ${TEST_CFLAGS:-} -Isrc src/menu.c src/o
 output/test_overlay
 ${CC:-cc} -std=c99 -Wall -Wextra -Werror ${TEST_CFLAGS:-} -Isrc src/menu.c src/overlay.c tests/preview_overlay.c -o output/preview_overlay
 output/preview_overlay > output/overlay-preview.svg
+if [ "${SANITIZE:-0}" = "1" ]; then
+  ${CC:-cc} -std=c99 -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc src/menu.c tests/test_menu.c -o output/test_menu_sanitized
+  output/test_menu_sanitized
+  ${CC:-cc} -std=c99 -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc src/menu.c src/overlay.c tests/test_overlay.c -o output/test_overlay_sanitized
+  output/test_overlay_sanitized
+fi

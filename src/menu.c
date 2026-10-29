@@ -47,6 +47,8 @@ void menu_key(MenuState *state, MenuKey key, MenuCommand callback, void *context
   if (key == KEY_UP) { state->selected[state->category] = (state->selected[state->category] + (int)n - 1) % (int)n; return; }
   item = menu_selected(state);
   if (!item) return;
+  /* Selection is allowed for locked entries; dispatch and value changes are not. */
+  if (!item->available) return;
   if (item->kind == MENU_TOGGLE && key == KEY_CONFIRM) item->value = !item->value;
   else if (item->kind == MENU_SLIDER && (key == KEY_LEFT || key == KEY_RIGHT)) {
     int v = item->value + (key == KEY_RIGHT ? item->step : -item->step);
