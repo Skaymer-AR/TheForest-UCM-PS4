@@ -26,9 +26,10 @@ static const char *enabled(bool value) {
 static void log_hook_profile(const char *event,
                              const Ps4BackendStatus *status) {
     final_printf(
-        "[TF-UCM-DIAG] %s profile=%s GNM=OFF render=OFF framebuffer=OFF "
-        "VideoOut=%s PadReadState=%s PadRead=%s\n",
-        event, status->profile, enabled(status->videoout_hooked),
+        "[TF-UCM-DIAG] %s profile=%s failure=%s GNM=OFF render=OFF "
+        "framebuffer=OFF VideoOut=%s PadReadState=%s PadRead=%s\n",
+        event, status->profile, status->failed_hook,
+        enabled(status->videoout_hooked),
         enabled(status->pad_read_state_hooked),
         enabled(status->pad_read_hooked));
 }

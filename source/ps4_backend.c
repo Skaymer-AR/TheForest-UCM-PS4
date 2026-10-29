@@ -102,6 +102,7 @@ static bool g_videoout_hooked;
 static bool g_pad_state_hooked;
 static bool g_pad_read_hooked;
 static bool g_started;
+static const char *g_failed_hook;
 static volatile uint32_t g_active_callbacks;
 
 static volatile uint64_t g_videoout_calls;
@@ -119,6 +120,7 @@ static volatile uint32_t g_last_pad_buttons;
 static volatile uint32_t g_last_pad_connected;
 
 static void reset_diagnostics(void) {
+    g_failed_hook = NULL;
     __atomic_store_n(&g_active_callbacks, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&g_videoout_calls, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&g_pad_state_calls, 0u, __ATOMIC_RELEASE);
@@ -295,7 +297,10 @@ bool ps4_backend_start(void) {
     if (!install_detour(&g_videoout_detour,
                         (uint64_t)(uintptr_t)sceVideoOutRegisterBuffers,
                         (void *)videoout_register_hook,
-                        &g_videoout_original)) goto fail;
+                        &g_videoout_original)) {
+        g_failed_hook = "sceVideoOutRegisterBuffers";
+        goto fail;
+    }
     g_videoout_hooked = true;
 #endif
 
@@ -303,7 +308,10 @@ bool ps4_backend_start(void) {
     if (!install_detour(&g_pad_state_detour,
                         (uint64_t)(uintptr_t)scePadReadState,
                         (void *)pad_read_state_hook,
-                        &g_pad_state_original)) goto fail;
+                        &g_pad_state_original)) {
+        g_failed_hook = "scePadReadState";
+        goto fail;
+    }
     g_pad_state_hooked = true;
 #endif
 
@@ -311,7 +319,10 @@ bool ps4_backend_start(void) {
     if (!install_detour(&g_pad_read_detour,
                         (uint64_t)(uintptr_t)scePadRead,
                         (void *)pad_read_hook,
-                        &g_pad_read_original)) goto fail;
+                        &g_pad_read_original)) {
+        g_failed_hook = "scePadRead";
+        goto fail;
+    }
     g_pad_read_hooked = true;
 #endif
 
@@ -358,6 +369,7 @@ void ps4_backend_stop(void) {
 void ps4_backend_get_status(Ps4BackendStatus *status) {
     if (!status) return;
     status->profile = UCM_PROFILE_NAME;
+    status->failed_hook = g_failed_hook ? g_failed_hook : "none";
     status->videoout_hooked = g_videoout_hooked;
     status->pad_read_state_hooked = g_pad_state_hooked;
     status->pad_read_hooked = g_pad_read_hooked;

@@ -6,6 +6,7 @@
 
 typedef struct {
     const char *profile;
+    const char *failed_hook;
     bool videoout_hooked;
     bool pad_read_state_hooked;
     bool pad_read_hooked;

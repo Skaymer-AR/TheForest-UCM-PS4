@@ -67,7 +67,8 @@ result unchanged. Afterward it updates only atomic counters and the latest
 result/sample fields. It never logs from a VideoOut or pad callback, allocates,
 waits on a lock, stores output-buffer addresses, or blocks on graphics work.
 The PRX prints one bounded profile line at load and one callback summary at
-unload through the plugin-management path.
+unload through the plugin-management path. A failed install line names the API
+whose detour setup failed before rollback.
 
 ## Feature status
 
