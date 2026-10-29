@@ -1,4 +1,4 @@
-name: Test and build The Forest PS4 diagnostic PRX
+name: Test and build The Forest PS4 UCM PRX
 
 on:
   workflow_dispatch:
@@ -31,7 +31,7 @@ jobs:
           if-no-files-found: error
 
   compile-prx:
-    name: Cross-compile GoldHEN diagnostic PRX
+    name: Cross-compile GoldHEN UCM PRX
     runs-on: ubuntu-24.04
     needs: tests
     steps:
@@ -56,15 +56,15 @@ jobs:
           git clone --depth 1 https://github.com/GoldHEN/GoldHEN_Plugins_SDK.git "$RUNNER_TEMP/GoldHEN_Plugins_SDK"
           git clone --depth 1 https://github.com/GoldHEN/GoldHEN_Plugins_Repository.git "$RUNNER_TEMP/GoldHEN_Plugins_Repository"
           echo "GOLDHEN_SDK=$RUNNER_TEMP/GoldHEN_Plugins_SDK" >> "$GITHUB_ENV"
-      - name: Build plugin with visual menu core (platform adapter detached)
+      - name: Build native GNM overlay, DS4 adapter and PRX
         env:
           GOLDHEN_TEMPLATE: ${{ runner.temp }}/GoldHEN_Plugins_Repository
         run: sh scripts/build-prx.sh
-      - name: Upload diagnostic PRX (not a menu)
+      - name: Upload The Forest UCM PRX and checksum
         uses: actions/upload-artifact@v4
         with:
-          name: theforest-ucm-probe-prx
+          name: theforest-ucm-prx
           path: |
-            output/theforest_ucm_probe.prx
+            output/theforest_ucm.prx
             output/sha256.txt
           if-no-files-found: error

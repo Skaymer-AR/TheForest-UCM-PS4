@@ -44,5 +44,24 @@ The user confirmed that the PRX displayed `The Forest: UCM probe loaded (NO
 HOOKS)` on their PS4, then The Forest entered a session and remained playable
 without freezes or crashes. This confirms the probe load and basic game
 stability only; it does not confirm that the menu is drawn or controlled by the
-DualShock 4. The active work is the GNM renderer and input adapter described in
-[OVERLAY.md](OVERLAY.md).
+DualShock 4.
+
+## Native overlay adapter implementation (2026-10-29)
+
+The active branch now adds a GoldHEN detour adapter for VideoOut buffer
+registration, GNM submit/flip, and passive ScePad read results. It builds an
+opaque panel into a plugin-owned GNM command buffer using runtime framebuffer
+attributes and a completion label. Tiled surfaces are accepted only for the
+known 32-bit format and matching GNM-computed pitch; unsupported formats and
+layouts skip drawing. The visible menu uses a 1280x720 logical layout and
+normalized DualShock controls.
+
+The backend does not call Unity or `DebugConsole`, use the recorded IL2CPP base,
+or change gameplay state. God Mode, stamina, hunger/thirst, inventory, free
+building, teleport, spawn, time, and weather remain disabled. See
+[OVERLAY.md](OVERLAY.md) for runtime checks and exact feature status.
+
+Portable C tests and a host syntax check have passed locally. The pinned OpenGNM
+cross-build and final PRX artifact run through GitHub Actions for this branch.
+The actual in-game panel and DualShock behavior still require the user's
+offline PS4 test; no hardware success is claimed here.

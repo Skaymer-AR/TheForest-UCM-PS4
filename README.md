@@ -1,55 +1,77 @@
-# The Forest UCM PS4 — in-game menu work
+# The Forest UCM PS4
 
-**Target:** The Forest PS4 **CUSA12398 v1.15**, GoldHEN, offline testing.
+Native GoldHEN PRX overlay work for **The Forest PS4 CUSA12398 v1.15**. The
+active branch is `feature/visual-menu-foundation`; PR #2 carries the visual
+menu foundation and this branch adds the GNM display-buffer renderer and
+passive DualShock 4 adapter. Testing is for offline, single-player sessions.
 
-The PRX load probe has been tested on the user's PS4. The current milestone is the first real render and controller adapter. Offline/single-player testing comes first.
+## Current implementation
 
-## Current state
+- The PRX hooks the runtime VideoOut registration and GNM submit/flip APIs. It
+  appends a plugin-owned GNM command buffer to the game's submission and draws
+  the panel into the registered output buffer.
+- It reads the game's successful `scePadReadState` / `scePadRead` results
+  without consuming or changing controller input.
+- Menu title: **THE FOREST — ULTIMATE CHEATMENU**. L1+R1 opens/closes; D-pad
+  navigates; X confirms; Circle closes; L1/R1 changes categories.
+- The renderer supports a validated 32-bit VideoOut format in linear or tiled
+  mode and skips unsupported layouts. It is opaque, so panel opacity is
+  unavailable.
+- Gameplay rows remain disabled until each action has a real implementation
+  and has been checked in game. God Mode, stamina, hunger/thirst, inventory,
+  free building, teleport, spawning, time and weather are not implemented.
 
-- User confirmed on PS4: the PRX displayed `The Forest: UCM probe loaded (NO HOOKS)`, The Forest entered a session, and gameplay continued without freezes or crashes. The load probe is complete and will not be repeated as the main milestone.
-- Read-only pointer chain ended in a **NULL DebugConsole instance** in both the world and main menu.
-- The two observed `Awake` guard values were `00`, but they were read **after** initialization; this does not prove their values at entry.
-- PR #2 contains a portable menu/render model with normalized DualShock buttons. The PRX still does **not** attach that model to a game frame or PS4 renderer, so no panel appears in-game yet.
-- Gameplay entries display as `[UNVERIFIED]` and cannot mutate state or dispatch commands.
-- The upstream GNM flip signature and ScePad APIs have been checked. They establish available APIs, not a verified The Forest rendering backend. See [adapter findings](docs/OVERLAY.md).
-- Never call `ToggleConsole` through the observed NULL instance or change unknown guard bytes.
+The old probe was confirmed by the user to load and leave the game stable. That
+does not verify the new in-game image or input route. The user supplied the
+target environment as PS4 firmware **12.02** and GoldHEN **2.4B18.9**; hardware
+confirmation of this implementation is still pending.
 
-## Local test on macOS Catalina
+## Test and build
+
+Run the portable suite on a host with a C compiler:
 
 ```sh
-sh scripts/test.sh
+SANITIZE=1 sh scripts/test.sh
 ```
 
-The code is ordinary C99 and uses no third-party dependencies for these tests. `SANITIZE=1 sh scripts/test.sh` also runs AddressSanitizer and UndefinedBehaviorSanitizer builds. Tests generate `output/overlay-preview.svg`, a host rendering of the menu (not a console screenshot).
+GitHub Actions runs these tests and cross-builds the PRX with OpenOrbis, the
+GoldHEN plugin template, and OpenGNM pinned to commit
+`4b295ca54c82c83acf308d1c646a2dfa9ae57350`. Download the
+`theforest-ucm-prx` artifact from the successful workflow run. It contains:
 
-## Build a PRX on GitHub Actions
+- `theforest_ucm.prx`
+- `sha256.txt`
 
-Every pull request runs the portable tests and OpenOrbis cross-build. On success, download `theforest-ucm-probe-prx`, containing `theforest_ucm_probe.prx` and its SHA-256 file. The current PRX includes the visual model but has no attached render/input adapter, so installing it will not show a menu yet.
+The SVG host preview is a development aid, not a PS4 screenshot.
 
-The workflow uses OpenOrbis, LLVM and the official GoldHEN plugin template in Linux. The first diagnostic build succeeded in the run linked above. Updated branches and pull requests run the portable suites and build the UI core into the same probe artifact using `scripts/build-prx.sh`. The new overlay adapter is not active on PS4.
+## Install and test on PS4
 
-## Current PS4 test and rollback
+1. Download `theforest-ucm-prx` from the successful GitHub Actions run and run
+   `shasum -a 256 -c sha256.txt` in the extracted artifact folder.
+2. Copy `theforest_ucm.prx` to `/data/GoldHEN/plugins/theforest_ucm.prx`.
+3. In `/data/GoldHEN/plugins.ini`, replace the old probe PRX entry in the
+   `[CUSA12398]` section with `/data/GoldHEN/plugins/theforest_ucm.prx`. Keep
+   the existing file's syntax and other plugin entries.
+4. Restart the console or reload the plugin with GoldHEN. Use The Forest
+   CUSA12398 v1.15, enter an **offline single-player** game, and press **L1 +
+   R1**. Use the D-pad, X, Circle, and L1/R1 to navigate.
+5. Confirm whether the panel appears at 1080p, whether selection moves with the
+   controller, and whether the game remains responsive while opening/closing.
+   Gameplay cheat rows are intentionally disabled.
 
-The user has already installed and tested the load probe. The current branch
-artifact has no render/input adapter, so installing it again will not show a
-menu. To roll back the existing install, back up
-`/data/GoldHEN/plugins.ini`, remove
-`/data/GoldHEN/plugins/theforest_ucm_probe.prx` from the existing
-`[CUSA12398]` section, and restart the console. Keep tests offline/single-player.
+If no panel appears, leave the game state untouched and report whether the
+plugin notification appeared, output resolution, and any `[TF-UCM]` lines in
+the GoldHEN plugin log.
 
-## Roadmap
+## Rollback
 
-1. Implement a reproducible GNM path that resolves the active output target and can detach safely.
-2. Add a verified read-only DualShock sample source and connect it to the render frame.
-3. Draw and test the menu on the target PS4 while keeping game actions disabled.
-4. Integrate independently verified game actions one by one.
+Unload the PRX through GoldHEN, remove its line from `[CUSA12398]` in
+`/data/GoldHEN/plugins.ini`, delete
+`/data/GoldHEN/plugins/theforest_ucm.prx`, and restart the console. The PRX
+restores its detours when unloaded. It does not modify eboot, PKG, saves, or
+persistent game state.
 
-The old PRX load has already been verified on hardware. A new installation is not needed to repeat that check. The visible renderer/input bridge is still pending; the current artifact is useful for build verification only. See [OVERLAY.md](docs/OVERLAY.md).
-
-## References
-
-- [GoldHEN Plugins SDK](https://github.com/GoldHEN/GoldHEN_Plugins_SDK)
-- [GoldHEN official plugins and templates](https://github.com/GoldHEN/GoldHEN_Plugins_Repository)
-- [OpenOrbis PS4 toolchain](https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain)
-
-Do not commit game binaries, copyrighted game assets or third-party mod payloads. The source project is separate from private game files and research data.
+See [docs/OVERLAY.md](docs/OVERLAY.md) for the API path, runtime guards, feature
+status, and hardware-validation boundary. Historical `DebugConsole` findings
+remain in [docs/RESULTADO.md](docs/RESULTADO.md); the renderer does not depend
+on them.

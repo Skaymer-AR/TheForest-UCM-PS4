@@ -15,7 +15,7 @@ void overlay_init(Overlay *o) {
     o->items[8] = (MenuItem){"time_of_day", "Time of day", CAT_ENVIRONMENT, MENU_ACTION, 0, 0, 0, 0, false};
     o->items[9] = (MenuItem){"weather", "Weather", CAT_ENVIRONMENT, MENU_ACTION, 0, 0, 0, 0, false};
     o->items[10] = (MenuItem){"hints", "Show controls", CAT_DEV, MENU_TOGGLE, 1, 0, 1, 1, true};
-    o->items[11] = (MenuItem){"opacity", "Panel opacity", CAT_DEV, MENU_SLIDER, 90, 40, 100, 10, true};
+    o->items[11] = (MenuItem){"opacity", "Panel opacity (opaque renderer)", CAT_DEV, MENU_SLIDER, 100, 100, 100, 0, false};
     o->items[12] = (MenuItem){"close", "Close menu", CAT_DEV, MENU_ACTION, 0, 0, 0, 0, true};
     menu_init(&o->menu, o->items, OVERLAY_ITEM_COUNT);
     o->initialized = true;
@@ -34,8 +34,7 @@ static void draw(Overlay *o) {
     char value[96];
     size_t i;
     int row = 0;
-    uint32_t alpha = (uint32_t)o->items[11].value * 255u / 100u;
-    r->rect(r->context, 48, 48, 650, 630, 0x12202000u | alpha);
+    r->rect(r->context, 48, 48, 650, 630, 0x122020ffu);
     r->text(r->context, 80, 108, "THE FOREST — ULTIMATE CHEATMENU", 0xffffffffu);
     r->text(r->context, 80, 150, "Game actions stay locked until verified", 0xffd080ffu);
     r->text(r->context, 80, 202, menu_category_name((MenuCategory)o->menu.category), 0x80e0c0ffu);
@@ -44,7 +43,9 @@ static void draw(Overlay *o) {
         if (item->category != (MenuCategory)o->menu.category) continue;
         if (row == o->menu.selected[o->menu.category])
             r->rect(r->context, 64, 236 + row * 48, 618, 44, 0x346050ffu);
-        if (!item->available)
+        if (!item->available && strcmp(item->id, "opacity") == 0)
+            snprintf(value, sizeof(value), "%s  [UNAVAILABLE]", item->label);
+        else if (!item->available)
             snprintf(value, sizeof(value), "%s  [UNVERIFIED]", item->label);
         else if (item->kind == MENU_TOGGLE)
             snprintf(value, sizeof(value), "%s: %s", item->label, item->value ? "ON" : "OFF");

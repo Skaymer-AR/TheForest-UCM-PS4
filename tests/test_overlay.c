@@ -68,7 +68,7 @@ int main(void) {
     for (int i = 0; i < 12; ++i) press(&o, PAD_RIGHT);
     assert(o.items[11].value == 100);
     for (int i = 0; i < 12; ++i) press(&o, PAD_LEFT);
-    assert(o.items[11].value == 40);
+    assert(o.items[11].value == 100 && !o.items[11].available);
     press(&o, PAD_R1);
     assert(o.menu.category == CAT_GAME);
     press(&o, PAD_L1);

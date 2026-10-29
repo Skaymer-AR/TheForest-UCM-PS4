@@ -27,7 +27,8 @@ typedef struct {
     bool initialized, attached, input_ready;
 } Overlay;
 
-/* All operations belong to one verified frame thread, including stop.
+/* Frame operations run on the adapter's serialized GNM submit path. Stop is
+   called only after that adapter has detached and drained its callbacks.
    No allocation, worker threads, game addresses or Unity calls in this core. */
 void overlay_init(Overlay *overlay);
 /* Caller must first verify the platform renderer/input adapter and thread. */

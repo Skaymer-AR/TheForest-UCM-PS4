@@ -1,28 +1,39 @@
 # Codex implementation instructions — TheForest-UCM-PS4
 
-Target: **The Forest on PS4 CUSA12398, update v1.15**, GoldHEN. Local user hardware is an Intel Mac running **macOS Catalina 10.15.7**; do not assume Windows or modern macOS tooling.
+Target: **The Forest PS4 CUSA12398 v1.15**, PS4 firmware 12.02 and GoldHEN
+2.4B18.9. The user has already confirmed that the earlier no-hook probe loaded
+and left a game session stable; do not make loader validation the milestone.
 
-## Scope and priorities
+## Scope
 
-- Build and validate a **game-specific GoldHEN PRX**, with game title/update validation, and start with a **no-hook, no-memory-write** smoke test.
-- A working notification does **not** mean the Ultimate Cheatmenu is implemented.
-- The user has confirmed that the probe PRX loads and The Forest remains playable in a session without freezes or crashes. Do not repeat that as the main milestone.
-- Current priority: attach the visual menu to a verified PS4 render path and read DualShock input safely. This work must not depend on the observed NULL `DebugConsole` singleton.
-- The categories in `src/menu.h` and host renderer callbacks are a UI model, not proof of an in-game menu. Keep gameplay actions disabled until each is implemented and verified.
-- Do **not** modify the game PKG/update/saves or embed game binaries. Never commit uploaded `eboot.bin`, `Il2CppUserAssemblies.prx`, `global-metadata.dat`, full memory dumps or third-party game assets.
-- Avoid hard-coded absolute runtime addresses across sessions; validate module base and signed binaries before any hook.
-- A `NULL` `DebugConsole` instance has been observed; do not call its methods on that NULL pointer. The guard values were captured *after* Awake and must not be treated as confirmed values at invocation.
-- Implement and run tests, report PRX build outcome truthfully. Do not claim PS4 hardware behavior without user's confirmation.
-- GitHub Actions uses the official GoldHEN plugin template plus OpenOrbis on Linux. If the first CI build fails, debug the exact job logs, fix the workflow, and re-run.
-- Keep README status and installation instructions accurate. Offline/single-player testing first.
+- Continue the existing `feature/visual-menu-foundation` branch and PR #2.
+- The current priority is a real PS4 framebuffer overlay and passive DualShock 4
+  input. The UI model or host SVG preview is not evidence of an in-game menu.
+- Use runtime-linked PS4 APIs and registered output buffers. Validate reported
+  formats, dimensions, modes and pitches before drawing. Do not invent
+  addresses, signatures, render contexts, or `DebugConsole` flags.
+- Keep gameplay options disabled until an action has a version-checked,
+  implemented path and has been confirmed on hardware. Do not show placeholders
+  as working features.
+- Preserve input when the menu is closed. Prefer offline, single-player use.
+- Implement detour rollback and wait for plugin-owned GPU buffers before free.
 
-## Known observations
+## Restrictions
 
-Read `docs/RESULTADO.md` for exact 1.15 addresses/offsets and limitations. The observed in-session IL2CPP base was `0x8029C000`; **this is not a universal fixed address**.
+- Do not modify eboot.bin, PKG/update files, save files, or game binaries.
+- Do not commit `eboot.bin`, `Il2CppUserAssemblies.prx`,
+  `global-metadata.dat`, game memory dumps, or game assets.
+- Do not use old absolute addresses across sessions. The recorded IL2CPP base
+  `0x8029C000` is historical only.
+- Do not depend on the observed NULL `DebugConsole` instance.
+- Keep README installation and feature status exact. Never claim PS4 rendering
+  or controls are verified until the user confirms the hardware test.
 
-## Deliverables
+## Validation and deliverables
 
-- Reproducible CI that builds `theforest_ucm_probe.prx`.
-- Separate tests for the platform-independent menu state machine.
-- A clearly documented rollback path.
-- An incremental plan to convert the smoke test into a real Unity/IL2CPP overlay and controller menu, not a rebranding of GoldHEN cheats.
+- Run portable tests and the PRX cross-build when changing the adapter.
+- GitHub Actions must upload `theforest_ucm.prx` and `sha256.txt` as the
+  `theforest-ucm-prx` artifact.
+- Report exact test/build results and distinguish source/API validation from a
+  test on the user's PS4.
+- Give the user exact install, control, offline test and rollback steps.
