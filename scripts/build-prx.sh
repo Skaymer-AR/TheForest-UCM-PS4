@@ -13,7 +13,7 @@ opengnm_dir="$build_dir/opengnm"
 if [ -n "${OPENGNM_SOURCE:-}" ]; then
   cp -R "$OPENGNM_SOURCE" "$opengnm_dir"
 else
-  git clone --no-checkout https://github.com/OpenOrbis/OpenGNM.git "$opengnm_dir"
+  git clone --no-checkout https://github.com/PS4-OpenGNM/opengnm.git "$opengnm_dir"
   git -C "$opengnm_dir" checkout --detach "$opengnm_revision"
 fi
 actual_revision=$(git -C "$opengnm_dir" rev-parse HEAD)

@@ -35,7 +35,8 @@ SANITIZE=1 sh scripts/test.sh
 ```
 
 GitHub Actions runs these tests and cross-builds the PRX with OpenOrbis, the
-GoldHEN plugin template, and OpenGNM pinned to commit
+GoldHEN plugin template, and [OpenGNM](https://github.com/PS4-OpenGNM/opengnm)
+pinned to commit
 `4b295ca54c82c83acf308d1c646a2dfa9ae57350`. Download the
 `theforest-ucm-prx` artifact from the successful workflow run. It contains:
 

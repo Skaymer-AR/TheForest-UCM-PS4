@@ -29,8 +29,10 @@ The ABI sources are the OpenOrbis headers for `sceGnmSubmitAndFlipCommandBuffers
 `sceVideoOutRegisterBuffers`, `scePadReadState`, `scePadRead`, `OrbisPadData`,
 and `OrbisVideoOutBufferAttribute`, plus GoldHEN's official frame logger and
 Detour SDK. OpenGNM is built from pinned commit
-`4b295ca54c82c83acf308d1c646a2dfa9ae57350`. Runtime targets come from linked
-exports and registered buffers; no saved absolute game address is used.
+`4b295ca54c82c83acf308d1c646a2dfa9ae57350` from
+[PS4-OpenGNM/opengnm](https://github.com/PS4-OpenGNM/opengnm). Runtime targets
+come from linked exports and registered buffers; no saved absolute game
+address is used.
 
 ## DualShock 4 input
 
