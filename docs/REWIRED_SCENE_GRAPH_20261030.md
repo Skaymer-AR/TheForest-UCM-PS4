@@ -76,6 +76,24 @@ The two InputManager objects contain length-prefixed records comprising an actio
 
 Object `133` in `sharedassets0.assets` is a `Rewired.Data.Mapping.HardwareJoystickMap` and contains the profile `SonyDualShock4`. That establishes the presence of a general hardware description; it does **not** establish the selected PS4 runtime controller map.
 
+### Enlace GUID entre perfil Sony DualShock 4 y ambos InputManager
+
+El objeto de perfil `HardwareJoystickMap` ID `133` contiene exactamente dos
+identificadores de hardware en texto UUID:
+
+- `83b427e4-086f-47f3-bb06-be266abd1ca5`
+- `cd9718bf-a87a-44bc-8716-60a0def28a9f`
+
+Ambas cadenas aparecen también en los datos serializados de **cada uno**
+de los gestores `InputManager` (objetos `192` y `193`). El analizador
+ahora calcula esas intersecciones y las registra de forma reproducible.
+
+Es una **correspondencia entre datos de configuración**, no una prueba
+de que el mando DS4 esté asignado al jugador o de que determinada acción
+corresponda a un botón físico. En Rewired, las asignaciones específicas
+dependen de `ControllerMap` / `ActionElementMap` realmente cargados y
+habilitados en cada `Player`.
+
 ## 4. Native IL2CPP corroboration: two different prefab fields
 
 The private ELF comparison against the previously retained IL2CPP reference is exact: SHA-256 `0159ff61c99d25c8f0a821070e3d8b24aff58dbbe5429b8f29561f9960d02969`. The metadata is version 23; `TheForest.Utils.RewiredSpawner` (`TypeDefinition` index `11900`) has three successive fields:
