@@ -40,7 +40,7 @@ además físicamente con PS4Debug.
 | Clase referida desde `0x33EC070` | `Cheats` corroborada por el campo y el uso de `CheatsBridge.SetGodMode` | Confirmación del tipo de esa referencia según el análisis del PR; no convierte su RVA en dirección RAM reutilizable. |
 | Referencia `0x33EB300`, byte `static_fields+0x01` | Candidata `CoopPeerStarter.DedicatedHost` por comparación con PC | **No identificada de forma independiente en el registro de tipos PS4**. La rama `je 0x005C1D2B` evita la ruta de destrucción cuando el byte es cero; su significado de juego sigue siendo candidato. |
 | Singleton `Instance` NULL | Observación anterior de PS4Debug, en menú y partida | Hecho de esas lecturas; no mide el valor de los flags en entrada a `Awake` ni demuestra que `Awake` se ejecutó en esas escenas. |
-| `DebugConsole.OnDestroy` | No hay RVA/cuerpo nativo en la evidencia acotada disponible aquí | No se puede afirmar si limpia, conserva o compara `Instance`. No se infiere el comportamiento estándar de Unity como comportamiento de esta clase. |
+| `DebugConsole.OnDestroy`, `0x005C3340` | **Resuelto del PRX original**, `methodIndex=75393`; análisis completo en [PS4_ONDESTROY_NATIVE_RESOLVED.md](PS4_ONDESTROY_NATIVE_RESOLVED.md) | Compara `Instance` con `this` y, en la rama de limpieza, vuelve a almacenar `this` en `Instance` (`0x005C356C`), **no NULL**. Limpia `Counters` por separado cuando corresponde. No prueba ejecución en hardware. |
 
 El manifiesto [`PS4_STATIC_FIELD_EXPECTATIONS.json`](PS4_STATIC_FIELD_EXPECTATIONS.json)
 fija versión y hash de metadata reportados, junto con los dos nombres de campo
@@ -91,30 +91,38 @@ analista. No infiere semántica de un campo desde un registro. Las pruebas usan
 ventanas sintéticas y validan el algoritmo, no sustituyen la ventana privada
 completa de `Awake`.
 
-## `OnDestroy`: RVA y limpieza pendientes de los originales
+## `OnDestroy`: resuelto directamente del PRX y metadata originales
 
-El desensamblado adjunto contiene ventanas selectivas de doce métodos, pero no
-incluye `DebugConsole.OnDestroy`. Los archivos originales
-`Il2CppUserAssemblies.prx` y `global-metadata.dat` tampoco están montados en
-este workspace. Por eso aquí no hay evidencia para publicar el índice
-`MethodDefinition`, el `methodIndex`, el RVA exacto, el cuerpo o una escritura a
-`Instance` de `OnDestroy`. La respuesta verificable sigue siendo **no resuelto**;
-no se infiere que Unity limpie el singleton por comportamiento usual.
+La primera investigación en Codex carecía de los binarios privados y por eso
+había clasificado `OnDestroy` como pendiente. **Ahora el análisis offline real
+recuperó `TheForest.DebugConsole.OnDestroy`: índice de definición `82470`,
+`methodIndex=75393`, RVA `0x005C3340`, token `0x0600777D`.**
+Ver el desglose reproducible y las instrucciones de máquina en
+[PS4_ONDESTROY_NATIVE_RESOLVED.md](PS4_ONDESTROY_NATIVE_RESOLVED.md).
 
-El nuevo comando único
+El método primero puede escribir cero en `DebugConsole.Counters`
+(`static_fields+0x08`, RVA `0x005C3384`) si coincide la colección esperada.
+En otra condición comprueba que `Instance` corresponda al `this` actual,
+realiza limpieza de callbacks y, en `0x005C356C`, ejecuta:
+
+```asm
+mov qword ptr [rax + 0x10], r14
+```
+
+`R14` conserva `this` desde `0x005C3351`. Por tanto **escribe `this`,
+no NULL, de nuevo en `DebugConsole.Instance`**. La ruta normal no demuestra
+que el singleton se limpie cuando se destruye el componente; puede incluso
+conservar un puntero a un objeto Unity destruido. Esto no explica por sí mismo
+el `NULL` físico observado anteriormente, y hay que diferenciar referencias
+NULL, Unity fake-null y referencias obsoletas.
+
+La evidencia fue obtenida con una copia privada del módulo y metadatos
+originales; **no** implica que ese flujo concreto se haya observado en consola.
+El analizador
 [`analyze_ps4_il2cpp_pipeline.py`](../scripts/analyze_ps4_il2cpp_pipeline.py)
-lee el método directamente de metadata v23, selecciona el puntero nativo con
-`methodIndex`, valida que el RVA caiga en un `PT_LOAD` file-backed y puede
-desensamblar una ventana local acotada. El análisis solo reporta una limpieza
-directa si una anotación basada en la instrucción exacta identifica el campo y
-el `MOV` tiene fuente inmediata cero. Registros, alias, helpers o ventanas con
-saltos externos quedan sin resolver. Una ventana CFG cerrada tampoco prueba por
-sí sola el tamaño exacto del método ni que Unity invoque `OnDestroy`.
-
-No se ha vuelto a buscar el cuerpo de `Awake` o `GetInstance`; sus hechos
-siguen separados en el manifiesto estático: `Cheats.DebugConsole` se lee en la
-guarda cerca de `0x005C1E13`, mientras `this` se escribe a
-`DebugConsole.Instance` en `0x005C1EA2`.
+puede validar métodos offline; necesita pruebas sobre este caso real que
+comprueben tanto el clear de `Counters` como el write-back de `Instance`.
+El safety hold y la decisión NO-GO permanecen.
 
 ## DualShock 4: ruta Rewired
 
