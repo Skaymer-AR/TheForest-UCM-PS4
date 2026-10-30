@@ -77,6 +77,23 @@ The 5 input files and original game binaries are never committed; the CI
 uses synthetic serialized fixtures. No gameplay controls, hook or PKG
 build has been enabled.
 
+## Visual PS4 browser trial (zero game modification)
+
+For a **first look on physical PS4 hardware**, there is a self-contained
+[browser-only graphical demo](prototype/ps4-browser/index.html) with
+[Mac LAN-server instructions](prototype/ps4-browser/README.md).
+It mirrors all **10 categories / 13 existing C menu items**; only local
+UI-only commands work. Sony's PS4 browser supports cursor, click and D-pad
+keyboard events but **does not expose individual DualShock 4 buttons** to
+web pages. Consequently it cannot test L1+R1, true Rewired input, or actual
+in-game drawing. The browser demo is **not** an alternative architecture for
+the retail game: Unity IL2CPP AOT code registration is still blocked without
+the original or reproducible title build pipeline.
+
+No PKG, PRX or source-level hooks are built or installed by this demo.
+GitHub Actions runs the passive ES5 menu tests and enforces matching item
+IDs with the current C menu core.
+
 ## Pruebas host
 
 ```sh
