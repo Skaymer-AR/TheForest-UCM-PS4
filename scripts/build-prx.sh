@@ -7,9 +7,11 @@ cd "$(dirname "$0")/.."
 
 python3 scripts/assert-safe-build.py
 sh scripts/test.sh
-# GoldHEN's build produces the CRT object required by the official template.
-# The no-hook PRX does not link libGoldHEN_Hook.
-make -C "$GOLDHEN_SDK" PRINTF=1
+# Build only the CRT object required by the official template. Do not build or
+# link the GoldHEN hook library for this no-hook baseline.
+if [ ! -f "$GOLDHEN_SDK/build/crtprx.o" ]; then
+  make -C "$GOLDHEN_SDK" crt
+fi
 build_dir=$(mktemp -d)
 mkdir -p output/safe
 
@@ -46,6 +48,11 @@ PY
 mkdir -p "$profile_root/bin/plugins/prx_final" \
   "$profile_root/bin/plugins/elf_final"
 make -C "$template" DEBUG=0
+elf="$profile_root/bin/plugins/elf_final/plugin_template.elf"
+if nm "$elf" | grep -E '(^|[[:space:]])(Detour_|sceKernelMprotect)' >/dev/null; then
+  echo "Unsafe detour/patch symbol reached the no-hook PRX ELF" >&2
+  exit 1
+fi
 install -m644 "$profile_root/bin/plugins/prx_final/plugin_template.prx" \
   "output/safe/theforest_ucm_safe_baseline.prx"
 

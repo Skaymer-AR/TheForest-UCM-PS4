@@ -2,8 +2,10 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "plugin_common.h"
+#include <orbis/libkernel.h>
 #include "ps4_backend.h"
 
 static int loaded;
@@ -14,11 +16,6 @@ attr_public const char *g_pluginDesc =
 attr_public const char *g_pluginAuth = "The Forest UCM PS4 research";
 attr_public uint32_t g_pluginVersion = 0x00000800;
 
-static int is_expected_version(const char *version) {
-    if (!version) return 0;
-    return strcmp(version, "01.15") == 0 || strcmp(version, "1.15") == 0;
-}
-
 static void log_safe_status(const char *event,
                             const Ps4BackendStatus *status) {
     final_printf(
@@ -28,22 +25,21 @@ static void log_safe_status(const char *event,
 }
 
 int32_t attr_public plugin_load(int32_t argc, const char *argv[]) {
-    struct proc_info procInfo;
+    OrbisAppInfo appInfo;
     Ps4BackendStatus status;
+    pid_t pid;
     (void)argc;
     (void)argv;
 
     if (loaded) return -1;
-    if (sys_sdk_proc_info(&procInfo) != 0) {
-        final_printf("[TF-UCM-DIAG] proc_info unavailable; load refused.\n");
+    pid = getpid();
+    if (pid < 0 || sceKernelGetAppInfo(pid, &appInfo) != 0) {
+        final_printf("[TF-UCM] app info unavailable; load refused.\n");
         return -1;
     }
-    if (!memchr(procInfo.titleid, 0, sizeof(procInfo.titleid)) ||
-        !memchr(procInfo.version, 0, sizeof(procInfo.version))) return -1;
-    if (strcmp(procInfo.titleid, "CUSA12398") != 0 ||
-        !is_expected_version(procInfo.version)) {
-        final_printf("[TF-UCM-DIAG] target mismatch: title=%s, version=%s\n",
-                     procInfo.titleid, procInfo.version);
+    if (!memchr(appInfo.TitleId, 0, sizeof(appInfo.TitleId))) return -1;
+    if (strcmp(appInfo.TitleId, "CUSA12398") != 0) {
+        final_printf("[TF-UCM] target mismatch: title=%s\n", appInfo.TitleId);
         return -1;
     }
 

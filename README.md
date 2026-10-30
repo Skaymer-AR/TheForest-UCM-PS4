@@ -6,7 +6,7 @@ The user removed the experimental PRX and confirmed that The Forest CUSA12398 v1
 
 Do not install or recommend historical v0.5/v0.6 PRXs or their hook-enabled profiles. Passing CI did not make them safe. The hardware incident and no-hook recovery are tracked in [Issue #4](https://github.com/Skaymer-AR/TheForest-UCM-PS4/issues/4).
 
-This branch keeps the active PS4 backend hook-free. The no-hook PRX checks the target and shows a notification; it does not display the menu, read the controller, render, or modify gameplay. It is not an in-game menu build and has not been asked for a new PS4 trial.
+This branch keeps the active PS4 backend hook-free. The no-hook PRX checks the title ID with sceKernelGetAppInfo and shows a notification; it does not validate v1.15, display the menu, read the controller, render, or modify gameplay. It is not an in-game menu build and has not been asked for a new PS4 trial.
 
 ## Architecture work in this branch
 

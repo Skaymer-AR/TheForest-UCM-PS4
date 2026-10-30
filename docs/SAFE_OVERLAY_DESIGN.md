@@ -185,11 +185,15 @@ required platform proof exists. ASan/UBSan are not target-hardware evidence.
 - GitHub Actions builds and uploads only one PRX artifact: the no-hook
   theforest_ucm_safe_baseline.prx with UCM_DIAG_PROFILE=4, in artifact
   theforest-ucm-safe-baseline-only. A separate host UI preview is not a PRX.
+- The plugin checks only the title ID through OpenOrbis sceKernelGetAppInfo;
+  the baseline does not validate game version. Its build compiles the GoldHEN
+  CRT object only and does not link the GoldHEN hook library.
 - No hook library, GNM, VideoOut, ScePad, renderer, or lifecycle test code is
   linked into that PRX.
 - Historical v0.5/v0.6 artifacts and archived source are quarantined; do not
-  install or recommend them. The built no-hook PRX only checks title/version
-  and shows a notification. It does not show a menu or modify gameplay.
+  install or recommend them. The built no-hook PRX checks the title ID via
+  sceKernelGetAppInfo and shows a notification. It does not validate the game
+  version, show a menu, or modify gameplay.
 - No PKG, save data, framebuffer, unknown flags, or hard-coded session
   addresses are changed.
 
