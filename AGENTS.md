@@ -17,8 +17,9 @@ review. Do not install or publish hook-enabled v0.5/v0.6 PRXs.
 
 ## Required engineering approach
 
-- Default CI may build only the no-hook PRX baseline. Do not add a hook-enabled
-  artifact or a profile that can be installed by default.
+- This integration-research branch runs offline checks only. Do not build or
+  publish another notification-only PRX here. Any future hook-enabled PRX is
+  prohibited until the callback and teardown contract are independently proven.
 - The current GoldHEN Detour SDK copies x64 instructions without general
   RIP-relative relocation, patches executable code without thread quiescence,
   and exposes the patched entry before v0.6 publishes its original-call
@@ -33,6 +34,10 @@ review. Do not install or publish hook-enabled v0.5/v0.6 PRXs.
 - Keep src/menu.*, src/overlay.*, and src/drawlist.* unchanged unless the user
   asks for UI work. They are host-side menu and renderer logic, not a working
   in-game overlay.
+- Keep src/unity_host_adapter.* and src/pad_input_map.* host-only. They define
+  and test an adapter boundary but do not implement a Unity or ScePad provider.
+- Keep original game binaries, metadata, and generated decompiler output
+  outside the repository. The offline analyzer must never upload those files.
 - src/bridge_lifecycle.* is host-test-only and must not be included in the
   PRX build. The archived unsafe backends are for source review only.
 - Do not modify the PKG, save files, unknown game flags, or commit game
@@ -43,4 +48,4 @@ review. Do not install or publish hook-enabled v0.5/v0.6 PRXs.
 Run python3 scripts/assert-safe-build.py and SANITIZE=1 sh scripts/test.sh.
 The tests simulate lifecycle errors and concurrency; they do not prove the
 PS4/GoldHEN platform supplies the quiescence primitive required for safe
-unload.
+unload or an in-game Unity callback.

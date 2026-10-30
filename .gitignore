@@ -10,3 +10,9 @@ build/
 __pycache__/
 *.pyc
 *.zip
+global-metadata.dat
+eboot.bin
+dump.cs
+/private-game-dumps/
+/private-analysis/
+/il2cpp-output/

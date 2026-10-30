@@ -1,0 +1,28 @@
+name: Offline Unity integration research and host adapter tests
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "source/**"
+      - "src/**"
+      - "tests/**"
+      - "scripts/**"
+      - "docs/**"
+      - "AGENTS.md"
+      - ".github/workflows/offline-integration.yml"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Offline checks only (no PRX artifact)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify the hook-free build boundary and offline-only workflow
+        run: python3 scripts/assert-safe-build.py
+      - name: Run host C tests, adapter fault cases and Python analyzer tests
+        run: SANITIZE=1 sh scripts/test.sh

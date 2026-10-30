@@ -12,6 +12,9 @@ ${CC:-cc} -std=c11 -Wall -Wextra -Werror ${TEST_CFLAGS:-} -Isrc src/drawlist.c t
 output/test_drawlist
 ${CC:-cc} -std=c11 -Wall -Wextra -Werror ${TEST_CFLAGS:-} -pthread -Isrc src/bridge_lifecycle.c tests/test_bridge_lifecycle.c -o output/test_bridge_lifecycle
 output/test_bridge_lifecycle
+${CC:-cc} -std=c11 -Wall -Wextra -Werror ${TEST_CFLAGS:-} -pthread -Isrc src/menu.c src/overlay.c src/pad_input_map.c src/unity_host_adapter.c tests/test_unity_host_adapter.c -o output/test_unity_host_adapter
+output/test_unity_host_adapter
+python3 -m unittest discover -s tests -p 'test_*.py'
 if [ "${SANITIZE:-0}" = "1" ]; then
   ${CC:-cc} -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc src/menu.c tests/test_menu.c -o output/test_menu_sanitized
   output/test_menu_sanitized
@@ -21,4 +24,6 @@ if [ "${SANITIZE:-0}" = "1" ]; then
   output/test_drawlist_sanitized
   ${CC:-cc} -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer -pthread -Isrc src/bridge_lifecycle.c tests/test_bridge_lifecycle.c -o output/test_bridge_lifecycle_sanitized
   output/test_bridge_lifecycle_sanitized
+  ${CC:-cc} -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer -pthread -Isrc src/menu.c src/overlay.c src/pad_input_map.c src/unity_host_adapter.c tests/test_unity_host_adapter.c -o output/test_unity_host_adapter_sanitized
+  output/test_unity_host_adapter_sanitized
 fi

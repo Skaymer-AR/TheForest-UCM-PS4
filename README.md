@@ -1,33 +1,48 @@
 # The Forest UCM PS4
 
-## Current status: safety review, no hooks
+## Estado
 
-The user removed the experimental PRX and confirmed that The Forest CUSA12398 v1.15 launches normally again. Earlier results remain: v0.5 left the game black while the PS4 shell remained responsive; v0.6 passive_all caused a full console lockup.
+Objetivo: The Forest CUSA12398 v1.15, PS4 con firmware 12.02 y GoldHEN 2.4B18.9.
+La consola vuelve a iniciar el juego normalmente después de retirar el PRX
+experimental. No se solicita instalar ni probar otro PRX en esta etapa.
 
-Do not install or recommend historical v0.5/v0.6 PRXs or their hook-enabled profiles. Passing CI did not make them safe. The hardware incident and no-hook recovery are tracked in [Issue #4](https://github.com/Skaymer-AR/TheForest-UCM-PS4/issues/4).
+Los hooks de v0.5/v0.6 causaron una pantalla negra y un bloqueo completo,
+respectivamente. El disparador exacto no quedó identificado. No instales ni
+recomiendes esos artifacts históricos.
 
-This branch keeps the active PS4 backend hook-free. The no-hook PRX checks the title ID with sceKernelGetAppInfo and shows a notification; it does not validate v1.15, display the menu, read the controller, render, or modify gameplay. It is not an in-game menu build and has not been asked for a new PS4 trial.
+El código de menú, categorías, navegación y draw-list continúa en `src/`.
+`src/unity_host_adapter.*` y `src/pad_input_map.*` son prototipos host-only: no
+llaman a Unity ni a ScePad y no están incluidos en el PRX. Aún no hay un
+callback de Unity verificado y accesible desde GoldHEN, ni un handle DS4 cuya
+coexistencia con el juego esté validada. Las acciones de gameplay siguen sin
+implementación comprobada.
 
-## Architecture work in this branch
+## Investigación IL2CPP offline
 
-- The menu categories, normalized DualShock navigation, overlay state machine, and draw-list renderer remain in src/ and are exercised on the host.
-- The v0.5 PS4 render/input backend and v0.6 diagnostic detours are preserved as source-only quarantines under archive/; the PRX build does not compile them.
-- src/bridge_lifecycle.c is a host-only model for bounded callback leases, detach outcomes, and fail-closed resource retention. It is not linked into the PRX and does not claim that GoldHEN supplies a safe unload barrier.
-- docs/SAFE_OVERLAY_DESIGN.md records the source audit, ABI notes, risk matrix, alternatives, lifecycle contract, tests, and unresolved integration questions.
+La evidencia pública consultada corresponde a decompilados y mods de PC. No
+confirma firmas ni direcciones de CUSA12398 PS4. La investigación de
+`DllModLoader`, `ModList`, `CheatsBridge`, `VirtualCursor` y `DebugConsole`, el
+candidato `DebugConsole.OnGUI`, y las herramientas para generar un informe de
+RVA desde archivos locales está en
+[`docs/IL2CPP_INTEGRATION_RESEARCH.md`](docs/IL2CPP_INTEGRATION_RESEARCH.md).
 
-The exact instruction/thread that caused the v0.5/v0.6 symptoms is not known. The GoldHEN trampoline copies instructions without general relative-address relocation and exposes the patched entry before v0.6 publishes the call-through pointer. Both versions also lack a trustworthy platform quiescence barrier for teardown. These are evidenced hazards, not a proven root cause.
+Los binarios originales, metadatos y dumps generados deben permanecer fuera del
+repositorio. `scripts/analyze_il2cpp.py` los procesa localmente y no los sube.
 
-## Host checks
+## Pruebas host
 
-Run the portable tests:
+```sh
+python3 scripts/assert-safe-build.py
+SANITIZE=1 sh scripts/test.sh
+```
 
-    python3 scripts/assert-safe-build.py
-    sh scripts/test.sh
+Las pruebas cubren el menú, el mapper DS4, el contrato del adaptador host,
+fallos de registro/desregistro, concurrencia, y el parser con datos sintéticos.
+No prueban el juego ni el runtime PS4.
 
-Run UI and lifecycle tests with AddressSanitizer and UndefinedBehaviorSanitizer:
+GitHub Actions ejecuta únicamente verificaciones y pruebas offline. Esta rama
+no compila ni publica un PRX de notificación. El source v0.8 y su script de
+build se conservan para revisión, pero no son el objetivo del flujo actual.
 
-    SANITIZE=1 sh scripts/test.sh
-
-GitHub Actions builds and uploads only one PRX artifact: the no-hook baseline, named theforest-ucm-safe-baseline-only. It also uploads a separate host UI preview. It does not publish an enabled-hook PRX. A CI artifact is not evidence that a menu is visible or that a hook is safe on PS4.
-
-Target context: The Forest CUSA12398 v1.15, PS4 firmware 12.02, GoldHEN 2.4B18.9. No PKG, save data, unknown flags, or hard-coded runtime addresses are modified.
+No se modifican PKG, partidas, framebuffer, flags desconocidos ni direcciones
+absolutas de sesiones anteriores.

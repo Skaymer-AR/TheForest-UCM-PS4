@@ -100,20 +100,22 @@ plugin traces are unavailable in this repository.
 | --- | --- | --- |
 | Unity native rendering extension callback (UnityRenderingExtEvent) | Unity invokes native extension work at an explicit render event, on the render thread. | Preferred documented Unity route when a game-owned native plugin is loaded and managed code schedules the event. This GoldHEN PRX is not a Unity plugin; IssuePluginEvent needs a Unity-side caller. No PKG changes are allowed, and no existing The Forest callback/plugin was demonstrated. Not currently reachable. |
 | Public GoldHEN arbitrary-overlay callback | A supported compositor could draw without detouring game APIs. | No public arbitrary drawing/compositor callback was found in the pinned GoldHEN plugin SDK or plugin template. GoldHEN's main source is not public. Do not bind to private overlay internals. |
-| Title-scoped IL2CPP/PlayerLoop callback | Could run menu state and drawing at a title-owned lifecycle point. | Still requires a proven way to register or patch the callback, exact IL2CPP ABI, valid object lifetime, render-thread affinity, and safe removal. No addresses or method signatures are committed, and the observed DebugConsole instance was NULL. Research lead only. |
+| Existing Unity lifecycle methods (`DebugConsole.OnGUI`, `VirtualCursor.LateUpdate`, `ModList.OnEnable`, `DllModLoader.Awake`) | Could provide an existing title-owned callback if a live component or mod loader were reachable. | Public evidence found is from PC decompilations only. The user's `DebugConsole` instance was NULL. No PS4 RVAs/signatures or safe registration path are available. `OnGUI` is the closest rendering candidate; see [IL2CPP integration research](IL2CPP_INTEGRATION_RESEARCH.md). |
 | Per-title import/GOT slot replacement | Narrows the patch to one module's call site instead of rewriting a shared function prologue. | Still races import resolution and concurrent calls, needs a stable callback and unload proof, and does not create a Unity render callback by itself. Not approved as a shortcut. |
-| Open a separate DS4 handle and poll it | Could avoid intercepting the game's scePadRead* calls. | Potentially useful for input only, subject to scePadInit/handle ownership and lifecycle validation. It does not provide a renderer or solve unload safety. No handle is opened in this build. |
+| Open a separately owned DS4 handle and poll it | Could avoid intercepting the game's scePadRead* calls. | OpenOrbis signatures and button masks are verified from public headers; whether the game's open handle can coexist and how an already-open handle is owned remain unverified. The host adapter consumes snapshots only; no handle is opened in this build. |
 | External HDMI compositor | Would avoid in-process code patching. | Requires separate hardware/capture/latency work and is outside this GoldHEN PRX architecture. |
 
 The practical architecture boundary is: keep menu input/state and draw-list
-generation independent; add a target adapter only after a supported render
-callback or equivalent is proven. Feed it input from a separately owned pad
-handle if that path is validated. Do not use sceVideoOut*, scePadRead*, or GNM
+generation independent; the new host-only adapter requires an explicit provider
+for a Unity callback, render context, renderer, and atomic input snapshot. No
+provider is implemented for the game. Validate ownership of a separately opened
+pad handle before using it. Do not use sceVideoOut*, scePadRead*, or GNM
 entrypoint detours as generic startup hooks.
 
 Official references:
 
 - [Unity low-level native plug-in rendering extensions](https://docs.unity.com/en-us/engine/6000.0/manual/programming-environment/plug-ins/native-plugin-interface/low-level-native-plugin-rendering-extensions)
+- [Offline Unity/IL2CPP method research and local analyzer](IL2CPP_INTEGRATION_RESEARCH.md)
 - [GoldHEN Plugins SDK](https://github.com/GoldHEN/GoldHEN_Plugins_SDK)
 - [GoldHEN Plugins Repository](https://github.com/GoldHEN/GoldHEN_Plugins_Repository)
 - [GoldHEN issue #130: VideoOut hook conflict with Game Overlay FPS counter](https://github.com/GoldHEN/GoldHEN/issues/130) (evidence of a real hook interaction, not evidence for this incident's root cause)
@@ -153,15 +155,18 @@ QUIESCING → DETACHED → RELEASED
   needed proof or a normal unload veto. Therefore this contract cannot be
   satisfied by the present inline detours, and the PRX remains hook-free.
 
-The current v0.8 source calls a no-op backend. plugin_unload owns no callbacks
-or trampolines and returns immediately. The lifecycle model is compiled only
-into host tests; scripts/assert-safe-build.py and the PRX build script guard
-this separation.
+The v0.8 PRX source calls a no-op backend. `plugin_unload` owns no callbacks or
+trampolines and returns immediately. The bridge lifecycle model, Unity host
+adapter, and pad mapper are compiled only into host tests; the PRX build script
+excludes them. The branch's GitHub Actions workflow runs offline tests only and
+does not build or publish a notification-only PRX artifact.
 
 ## Host fault-injection coverage
 
 sh scripts/test.sh runs the portable UI and lifecycle tests.
-SANITIZE=1 sh scripts/test.sh also runs ASan and UBSan builds.
+It also runs the host Unity adapter/DS4 mapper tests and synthetic metadata/dump
+parser tests. `SANITIZE=1 sh scripts/test.sh` runs the C tests with ASan and
+UBSan.
 
 | Scenario | Expected result |
 | --- | --- |
@@ -174,6 +179,11 @@ SANITIZE=1 sh scripts/test.sh also runs ASan and UBSan builds.
 | Missing quiescence proof | Release returns NO_QUIESCENCE_PROOF; original pointer remains. |
 | Duplicate/stale lease | Second leave cannot decrement another callback's lease or release resources. |
 | Entry after release | Rejected; no original pointer is returned. |
+| Unity host registration fails | Adapter returns to EMPTY; no callback state is exposed. |
+| Callback is invoked during registration | It sees REGISTERING and performs no input read or draw. |
+| Frame arrives outside the provider's render context | No input read or draw occurs. |
+| Adapter stop during a callback | Stop returns PENDING immediately and retains adapter state. |
+| Host detach reports failure | Adapter enters RETAINED and keeps callback state. |
 
 These tests establish behavior of this host-side state model under the tested
 schedules. They do **not** test GoldHEN, PS4 scheduling, executable page
@@ -182,30 +192,29 @@ required platform proof exists. ASan/UBSan are not target-hardware evidence.
 
 ## Build and release guardrails
 
-- GitHub Actions builds and uploads only one PRX artifact: the no-hook
-  theforest_ucm_safe_baseline.prx with UCM_DIAG_PROFILE=4, in artifact
-  theforest-ucm-safe-baseline-only. A separate host UI preview is not a PRX.
-- The plugin checks only the title ID through OpenOrbis sceKernelGetAppInfo;
-  the baseline does not validate game version. Its build compiles the GoldHEN
-  CRT object only and does not link the GoldHEN hook library.
-- No hook library, GNM, VideoOut, ScePad, renderer, or lifecycle test code is
-  linked into that PRX.
-- Historical v0.5/v0.6 artifacts and archived source are quarantined; do not
-  install or recommend them. The built no-hook PRX checks the title ID via
-  sceKernelGetAppInfo and shows a notification. It does not validate the game
-  version, show a menu, or modify gameplay.
+- GitHub Actions runs static guards, host C tests, and Python analyzer tests.
+  It does not compile or upload a PRX artifact.
+- The no-hook v0.8 PRX source and build script remain available for source
+  review, but this research workflow does not invoke them. That source only
+  shows a notification; it is not an in-game menu.
+- No hook library, GNM, VideoOut, ScePad, Unity provider, or host-only adapter
+  code is linked into a PRX by this workflow.
+- Historical v0.5/v0.6 artifacts and archived source remain quarantined; do
+  not install or recommend them.
+- Original game binaries, metadata, and generated dumps are ignored and must
+  stay outside the public repository.
 - No PKG, save data, framebuffer, unknown flags, or hard-coded session
   addresses are changed.
 
 ## Remaining questions before any future console experiment
 
-1. Is a Unity render callback already present and reachable from this running
-   title without modifying its PKG? What module owns it and what is its exact
-   ABI/thread context?
+1. Can any identified Unity callback, especially `DebugConsole.OnGUI`, be
+   reached in this PS4 build without patching shared system entrypoints? The
+   local IL2CPP dump must first establish exact PS4 methods/RVAs.
 2. Can GoldHEN or the loader keep a PRX resident until a real callback and GPU
    quiescence proof is available, or is unloading unsupported for this use?
-3. If a title-scoped method is explored, what verified runtime metadata and
-   non-patching registration mechanism expose it? No guessed addresses or
+3. Can a verified non-patching registration mechanism expose a title-scoped
+   callback with correct IL2CPP ABI/thread context? No guessed addresses or
    DebugConsole flags are acceptable.
 4. Can a separately opened DS4 handle coexist with the game's handle without
    stealing input or requiring interception?
