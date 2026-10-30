@@ -51,6 +51,29 @@ copy avoids console access entirely. Never commit commercial assets into
 GitHub or put FTP on the public internet. Anonymous FTP traffic is not
 encrypted; use only a trusted local LAN.
 
+## Uploaded ZIP audit — 2026-10-30
+
+The read-only archive verifier was run against the uploaded `Archivo 2.zip`
+(50,600,772 bytes; SHA-256
+`aa1ae3c04d4d402452410b121e5f621bf3c20b0ab94f91d25497c138159fd86b`).
+It scanned 41 ZIP entries without `--extract-dir` and verified four expected
+files against the pinned hashes:
+
+| Asset | SHA-256 | Result |
+| --- | --- | --- |
+| `globalgamemanagers.assets` | `2518dad0f38f6357276d1e33b4653a907df82dc8b0eb56450b49cb3eb86af2a8` | verified |
+| `level0` | `d2d1b170cb1494ecaba4616b1d46e9467fac007c60fe0ba18fa8924a0e0ee8aa` | verified |
+| `level1` | `cbfff68d57c3cadd304cead6c5486f9eb427c368b443bf4bfedff9d16172e790` | verified |
+| `level2` | `99fce056f65647f62ba52d9957317b4ed876e600f854f12e65a20897d37c396d` | verified |
+
+The archive does not contain `sharedassets0.assets` or
+`sharedassets1.assets`; the verifier returned exit code `2` and
+`all_six_verified: false`. **No files were extracted.** `sharedassets0.assets`
+is needed to resolve the Rewired managers and DS4 hardware profile, while
+`sharedassets1.assets` contains additional UI action data. A further private
+ZIP with those two files—or a ZIP containing all six—will unblock the
+complete offline asset analysis. No PKG, console, or PRX operation was used.
+
 **Safety and evidence boundaries:** Transfer has not been performed,
 runtime Rewired Player/ControllerMap and OnGUI registration remain unproven,
 and this tooling is not a prerequisite to installing a PRX. No hardware
