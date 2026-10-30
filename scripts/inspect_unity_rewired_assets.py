@@ -222,7 +222,7 @@ def action_catalog(blob: bytes) -> dict[str, int]:
 
 def analyze(root: Path) -> dict:
     names = ("globalgamemanagers.assets", "sharedassets0.assets",
-             "level0", "level1", "level2")
+             "sharedassets1.assets", "level0", "level1", "level2")
     files = {name: Asset(root / name) for name in names}
     script_file = files["globalgamemanagers.assets"]
     scripts = {pid: monoscript(script_file.obj(pid))
@@ -319,6 +319,29 @@ def analyze(root: Path) -> dict:
         for name in sorted(set(action_maps[0]) | set(action_maps[1]))
         if len({prefab["actions"].get(name) for prefab in prefabs.values()}) > 1
     }
+    controls = files["sharedassets1.assets"]
+    ui_actions = []
+    for pid in controls.ids(114):
+        mb = controls.mono(pid)
+        if controls.external(mb["script_file"]) != "globalgamemanagers.assets":
+            continue
+        sc = scripts.get(mb["script_id"])
+        if not sc or sc["namespace"] != "TheForest.Utils" or sc["class_name"] != "InputMappingButton":
+            continue
+        if mb["game_file"] != 0:
+            raise ValueError("external InputMappingButton GameObject")
+        go = controls.gameobject(mb["game_id"])
+        action, _ = aligned_string(controls.obj(pid), 32)
+        if not action or action not in action_maps[0] or action not in action_maps[1]:
+            raise ValueError("InputMappingButton action not present in both Rewired managers")
+        ui_actions.append(dict(component_id=pid, gameobject=go["name"],
+                               action=action, enabled=mb["enabled"],
+                               gameobject_active=go["active"],
+                               vr_action_id=action_maps[0][action],
+                               xinput_action_id=action_maps[1][action]))
+    if not ui_actions:
+        raise ValueError("no verified InputMappingButton components found")
+    ui_actions.sort(key=lambda item: item["component_id"])
     return dict(
         unity_version=shared.version,
         sources=[dict(file=name, sha256=hashlib.sha256(files[name].data).hexdigest(),
@@ -329,6 +352,7 @@ def analyze(root: Path) -> dict:
         shared_action_name_id_pairs=shared_pairs,
         varying_action_name_ids=variations,
         generic_hardware_profiles=hardware,
+        serialized_input_mapping_buttons=ui_actions,
         limitations=[
             "static Unity object links; active instantiated prefab not proven",
             "action ID is not a physical DualShock 4 button assignment",
