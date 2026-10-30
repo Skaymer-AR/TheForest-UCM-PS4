@@ -7,6 +7,9 @@ cd "$(dirname "$0")/.."
 
 python3 scripts/assert-safe-build.py
 sh scripts/test.sh
+# GoldHEN's build produces the CRT object required by the official template.
+# The no-hook PRX does not link libGoldHEN_Hook.
+make -C "$GOLDHEN_SDK" PRINTF=1
 build_dir=$(mktemp -d)
 mkdir -p output/safe
 

@@ -21,8 +21,8 @@ assert "-lSceVideoOut" not in build and "-lScePad" not in build
 assert "src/bridge_lifecycle" not in build and "tests/" not in build, \
     "Host lifecycle model/tests must never enter PRX build"
 assert "archive/" not in build, "Archived unsafe code must never enter PRX build"
-assert '"$GOLDHEN_SDK" PRINTF=1' not in build, \
-    "Safe PRX build must not build GoldHEN detour helpers"
+assert 'make -C "$GOLDHEN_SDK" PRINTF=1' in build, \
+    "Official GoldHEN SDK build must provide the template CRT object"
 assert "theforest_ucm_safe_baseline.prx" in build
 assert "theforest-ucm-safe-baseline-only" in workflow
 assert "output/safe/" in workflow
