@@ -40,6 +40,24 @@ El ELF original, metadatos y dumps generados deben permanecer fuera del
 repositorio. Las herramientas no escriben en el juego ni habilitan hooks. Nunca
 usan direcciones RAM de una sesión previa.
 
+## Unity AOT prototype and asset inventory (offline)
+
+The repository now includes a **separate Unity 5.6-oriented C# prototype** under
+[`prototype/Unity56/`](prototype/Unity56/README.md). It implements a
+`MonoBehaviour` bootstrap, `Update` input snapshot boundary and Unity IMGUI
+`OnGUI` panel with the same 13 menu entries as the original C core. The
+C# model is tested with Mono and synthetic Unity API stubs in GitHub Actions.
+**It has not been compiled inside The Forest or against the PS4 runtime.**
+Gameplay-changing entries remain disabled until their game API integration is
+proved, and no Rewired/DS4 action IDs have been guessed.
+
+The read-only [Unity asset inventory](docs/UNITY_ASSET_TRIAGE.md) and
+[`scripts/inventory_unity_assets.py`](scripts/inventory_unity_assets.py)
+select likely Player/scene/bundle paths from a saved private PKG file listing.
+The full 170-file listing has not yet been supplied to this repository, so
+real scenes, Player version and Rewired mapping **remain unverified**.
+Neither workflow modifies the PKG or publishes proprietary game assets.
+
 ## Pruebas host
 
 ```sh
