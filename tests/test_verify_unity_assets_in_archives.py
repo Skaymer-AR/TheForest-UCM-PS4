@@ -37,7 +37,7 @@ class ArchiveAssetScannerTests(unittest.TestCase):
         name = "level1"
         sha = hashlib.sha256(fake).hexdigest()
         with tempfile.TemporaryDirectory() as folder, patch.dict(scan.EXPECTED,
-                                                                   {name: sha}):
+                                                                   {name: sha}, clear=True):
             archive = Path(folder) / "source.zip"
             dest = Path(folder) / "private"
             with zipfile.ZipFile(archive, "w") as z:
