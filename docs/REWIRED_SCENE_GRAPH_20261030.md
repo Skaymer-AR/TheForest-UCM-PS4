@@ -35,6 +35,23 @@ Both targets resolve to actual Unity GameObjects in `sharedassets0.assets`:
 
 The asset component graph was checked against the external `MonoScript` library by path ID and class/namespace; a matching name alone was not treated as proof. **An active flag stored in a serialized prefab does not establish that the GameObject was instantiated or active at runtime.**
 
+### Componentes adjuntos a cada gestor (referencias verificadas)
+
+Además del `InputManager`, resolví todas las referencias `GameObject → MonoBehaviour → MonoScript` en ambos prefabs, incluidos los bits `enabled` serializados:
+
+| Componente | Prefab VR (objeto) | Prefab XInput (objeto) | Estado en asset |
+| --- | ---: | ---: | --- |
+| `Rewired.InputManager` | 192 | 193 | Ambos habilitados |
+| `TheForest.Utils.Input` | 187 | 188 | Ambos habilitados |
+| `TheForest.Utils.InputMapping` | 190 | 191 | Ambos habilitados |
+| `TheForest.UI.VirtualCursor` | 184 | 185 | Ambos habilitados |
+| `TheForest.Utils.Mood` | 189 | 186 | Ambos habilitados |
+| `TheForest.VR.VRCustomRewiredController` | 194 | — | Deshabilitado en prefab VR |
+
+**Implicación:** el mismo gestor elegido por `RewiredSpawner` agrupa entrada, mapeo de acciones y el cursor virtual. Son candidatos reales para entender el ciclo de entrada y foco del futuro menú, pero **no son un bootstrap para registrar código AOT nuevo**. Tampoco sabemos si el objeto se instancia en una sesión PS4 determinada.
+
+El objeto de escena llamado `PS4ControllerFeatures` no constituye por sí solo una prueba del método `PS4Controller.Update`. Su conjunto de componentes serializados incluye dos scripts de iluminación (`PS4Light` y `TheForestPS4Light`), por lo que sería incorrecto inferir de su nombre el origen del input de gameplay.
+
 ## 3. Rewired action catalog from both actual InputManager objects
 
 The two InputManager objects contain length-prefixed records comprising an action integer and a string. The bounded parser validates `MenuToggle` (ID 2), finds the action-category boundary, and checks each candidate before using it.
