@@ -39,7 +39,7 @@ class PrecompiledGuiAotTests(unittest.TestCase):
         self.assertEqual(REWIRED_ACTION_FIELDS['GetButtonDown'],
                          {'buttonName':0x40,'sendEvent':0x48,'storeResult':0x50})
         real_call_site, destination=next(iter(REWIRED_EDGE.items()))
-        code=b'\\xe8'+struct.pack('<i',destination-real_call_site-5)
+        code=bytes([0xE8])+struct.pack('<i',destination-real_call_site-5)
         self.assertEqual(check_edges(lambda at,n: code, REWIRED_EDGE)[0]['target'],
                          hex(destination))
 
