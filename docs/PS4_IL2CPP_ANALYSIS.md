@@ -20,7 +20,7 @@ El desensamblado contiene 12 ventanas acotadas; una ventana no representa necesa
 | `DebugConsole.ShowConsole` | `0x005CA800` | Copia `RDI` a `R14`, `ESI` a `R13D`, escribe `R13B` en `[R14+0x5A]`, y llama helpers de UI/input. | El nombre se resuelve desde metadata; el flujo no crea un objeto. Requiere un `this` válido y no es un punto de extensión. |
 | `DebugConsole.Awake` | `0x005C1C30` | Campo `Cheats.DebugConsole` consultado en `0x005C1E13`; ruta false hacia `Object.Destroy`; store de `this` en `DebugConsole.static_fields+0x10` en `0x005C1EA2`. Otra guarda lee un campo candidato en `0x33EB300`. | Evidencia nueva del PR #2. El valor real del flag no está medido y la identidad PS4 del candidato `CoopPeerStarter.DedicatedHost` sigue sin verificar. CFG completo reproducible requiere el dump privado. |
 | `DebugConsole.GetInstance` | `0x005CB690` | Lee y retorna `DebugConsole.static_fields+0x10` (`0x005CB6B0..0x005CB6C2`). | Getter, no instancia ni activa un componente. |
-| `DebugConsole.OnDestroy` | RVA todavía no presente en el checkout | No se incluyó el método/cuerpo en las ventanas acotadas que tenemos. | No se afirma si limpia el singleton. El analizador local ya permite extraer el RVA de `dump.cs` y construir un CFG cuando se suministre el desensamblado privado. |
+| `DebugConsole.OnDestroy` | Pendiente de extraer con metadata/PRX originales | No se incluyó el método/cuerpo en las ventanas acotadas adjuntas al workspace. | No se afirma si limpia el singleton. `scripts/analyze_ps4_il2cpp_pipeline.py` extrae la fila `MethodDefinition`, mapea `methodIndex` a RVA y evalúa la ventana privada en un solo reporte cuando se faciliten los originales locales. |
 | `TheForest.Tools.DllModLoader.Awake` | `0x022CEF10` | Recorre una colección usando su longitud en `[R15+0x18]` y elementos desde `[R15+RBX*8+0x20]`; llama un slot virtual en `0x022CF014` y después a `LoadDllMod` en `0x022CF01D`. | La relación directa `Awake → LoadDllMod` está comprobada en el archivo. No demuestra que exista una API de plugins GoldHEN ni que el mod loader de PC funcione como cargador de extensiones en IL2CPP PS4. |
 | `TheForest.Tools.DllModLoader.LoadDllMod` | `0x022CF050` | La ventana muestra varios helpers y llamadas indirectas por vtable; no cubre toda la función. | No se identifica registro de callbacks, renderer o ABI completo para invocarlo. |
 | `TheForest.Modding.UI.ModList.OnEnable` | `0x017D5390` | Primer opcode `ret`, seguido de padding. | Método vacío en esta build; no sirve como extensión. |
@@ -47,10 +47,15 @@ Para el DualShock 4, las ventanas del juego no localizan una importación ScePad
 
 ## Componentes seguros que siguen pendientes
 
-1. Extraer del `dump.cs` privado el RVA/signatura de `DebugConsole.OnDestroy`, y obtener su cuerpo nativo completo. Trazar el store a `Instance` solo si el cuerpo lo muestra.
-2. Resolver los inicializadores que escriben las referencias de clase `0x33EB300` y `0x33EF3E8` contra el registro de tipos/métodos de metadata v23; no usar el nombre PC como prueba.
-3. Obtener la interfaz/vtable concreta de Rewired y los métodos de lectura de jugador/botones con metadata de este mismo módulo. No atribuirlos a ScePad hasta encontrar y validar esa relación.
+1. Ejecutar el pipeline offline único con el PRX/metadata privados para recuperar `OnDestroy` y su RVA; suministrar una ventana acotada e identificar stores solo desde instrucciones reales.
+2. Resolver los inicializadores/registro nativo que ligan `0x33EB300` y `0x33EF3E8` a TypeDefs del metadata PS4 v23. La metadata sola y las coincidencias de nombre no bastan.
+3. Interpretar los destinos de `ProcessGamePads` solo cuando el receiver, el slot y la tabla de interfaz estén ligados al mismo registro nativo.
 4. Mantener `src/unity_host_adapter.*` y el mapper DS4 en host. La decisión actual es **no-go**: no se ha probado callback title-scoped o loader AOT accesible desde el PRX.
+
+La ejecución local reproducible y sus límites están en
+[`IL2CPP_ANALYSIS_PIPELINE.md`](IL2CPP_ANALYSIS_PIPELINE.md). La decisión por
+alternativa de render/input y el siguiente componente necesario para un primer
+panel están en [`INTEGRATION_DECISION.md`](INTEGRATION_DECISION.md).
 
 No se habilitan hooks, lectura de mando, escrituras de framebuffer ni funciones de gameplay en esta etapa.
 

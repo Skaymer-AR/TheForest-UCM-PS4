@@ -91,28 +91,30 @@ analista. No infiere semántica de un campo desde un registro. Las pruebas usan
 ventanas sintéticas y validan el algoritmo, no sustituyen la ventana privada
 completa de `Awake`.
 
-## `OnDestroy`: estado no resuelto
+## `OnDestroy`: RVA y limpieza pendientes de los originales
 
-El comentario más reciente del PR recuperó `Awake` y `GetInstance`, pero no
-incluyó el RVA ni el cuerpo de `DebugConsole.OnDestroy`. No hay método de ese
-nombre en las ventanas privadas que están adjuntas al workspace. Por eso no es
-posible concluir si `OnDestroy` pone `Instance` en NULL, lo hace solo si
-`Instance == this`, o no lo limpia. Tampoco se puede establecer si Unity llega
-a llamar ese callback para el componente destruido en estas escenas.
+El desensamblado adjunto contiene ventanas selectivas de doce métodos, pero no
+incluye `DebugConsole.OnDestroy`. Los archivos originales
+`Il2CppUserAssemblies.prx` y `global-metadata.dat` tampoco están montados en
+este workspace. Por eso aquí no hay evidencia para publicar el índice
+`MethodDefinition`, el `methodIndex`, el RVA exacto, el cuerpo o una escritura a
+`Instance` de `OnDestroy`. La respuesta verificable sigue siendo **no resuelto**;
+no se infiere que Unity limpie el singleton por comportamiento usual.
 
-El soporte offline quedó preparado para continuar con los archivos locales:
+El nuevo comando único
+[`analyze_ps4_il2cpp_pipeline.py`](../scripts/analyze_ps4_il2cpp_pipeline.py)
+lee el método directamente de metadata v23, selecciona el puntero nativo con
+`methodIndex`, valida que el RVA caiga en un `PT_LOAD` file-backed y puede
+desensamblar una ventana local acotada. El análisis solo reporta una limpieza
+directa si una anotación basada en la instrucción exacta identifica el campo y
+el `MOV` tiene fuente inmediata cero. Registros, alias, helpers o ventanas con
+saltos externos quedan sin resolver. Una ventana CFG cerrada tampoco prueba por
+sí sola el tamaño exacto del método ni que Unity invoque `OnDestroy`.
 
-1. `analyze_il2cpp.py` lista métodos de `TheForest.DebugConsole`, incluido
-   `OnDestroy`, con RVA/signatura administrada a partir del dump local.
-2. `analyze_il2cpp_lifecycle.py` analiza el `llvm-objdump` privado con
-   `--method-rva` y `--raw-size`; `--store-site` etiqueta un store verificado,
-   por ejemplo el clear condicional del singleton. El analizador rechazará una
-   anotación que no sea un `MOV` a memoria dentro de la ventana.
-3. El reporte conserva branches fuera de la ventana como no resueltos; no
-   transforma un fragmento parcial en una afirmación de limpieza.
-
-No se ha solicitado ni es necesaria una nueva lectura de `Awake` o
-`GetInstance`.
+No se ha vuelto a buscar el cuerpo de `Awake` o `GetInstance`; sus hechos
+siguen separados en el manifiesto estático: `Cheats.DebugConsole` se lee en la
+guarda cerca de `0x005C1E13`, mientras `this` se escribe a
+`DebugConsole.Instance` en `0x005C1EA2`.
 
 ## DualShock 4: ruta Rewired
 
@@ -131,11 +133,13 @@ administrada ni un target demostrado. El slot de referencia `0x033EF3E8` necesit
 resolverse desde el inicializador/clase asociada del **mismo PRX** y ligarse al
 tipo de metadata v23 antes de nombrar la interfaz.
 
-El resolutor [`resolve_il2cpp_references.py`](../scripts/resolve_il2cpp_references.py)
-ahora clasifica este patrón y permite un TSV privado `0xTYPE_REF_SLOT_RVA Nombre.Tipo` con
-`--types`. Sin esa entrada etiqueta la clase como no resuelta; con ella solo
-anota la asociación que se proporcionó. No calcula automáticamente el
-registro de tipos nativo y no atribuye esas llamadas a la API de ScePad.
+El pipeline unificado inspecciona metadata v23 y reporta candidatos `Rewired`
+en una tabla sin asociarlos al slot. Metadata de tipos y un RVA de variable
+global no bastan para probar la relación: falta la tabla/registro nativo exacto
+del build y el inicializador que puebla ese slot. En la ventana adjunta, el
+resolutor confirma ambas instrucciones `call qword ptr [RCX]` como dispatch
+indirecto con referencia al slot `0x033EF3E8`; no identifica la interfaz,
+método, implementación ni API ScePad.
 
 La ruta demostrada es `PS4Controller.Update → ProcessGamePads → Rewired`; no
 hay evidencia aquí de un lector de DualShock accesible sin interceptar el
@@ -188,63 +192,10 @@ panel Unity IMGUI bajo las restricciones actuales. Un compositor HDMI externo
 sería una alternativa visual fuera del proceso, pero no cumpliría el objetivo
 de overlay Unity ni el control de cheats del juego.
 
-## Herramientas offline
+## Decisión de integración
 
-Verificar los nombres/declaraciones estáticas contra metadata y un `dump.cs`
-privado, exigiendo la versión y SHA reportados para PS4:
-
-```sh
-python3 scripts/verify_il2cpp_static_fields.py \
-  --metadata /ruta/privada/global-metadata.dat \
-  --expected docs/PS4_STATIC_FIELD_EXPECTATIONS.json \
-  --dump-cs /ruta/privada/dump.cs \
-  --output /tmp/theforest-static-fields.md
-```
-
-Si solo se tiene el ejecutable local, `--binary` y `--dumper` generan el dump
-en una carpeta temporal local. El hash distinto falla cerrado. Las rutas,
-metadata, binario, dump y código original no se copian al repositorio.
-
-Resolver métodos del tipo `DebugConsole` y listar el RVA administrado de
-`OnDestroy` desde los archivos privados:
-
-```sh
-python3 scripts/analyze_il2cpp.py \
-  --metadata /ruta/privada/global-metadata.dat \
-  --dump-cs /ruta/privada/dump.cs \
-  --output /tmp/theforest-methods.md
-```
-
-Después de obtener su RVA de ese reporte, definir variables con ese RVA y el
-tamaño acotado que se quiere revisar, desensamblar la ventana privada y
-analizarla:
-
-```sh
-ONDESTROY_RVA=0x...  # sustituir por el RVA extraído del dump local
-STOP_RVA=0x...       # RVA final de la ventana
-WINDOW_SIZE=0x...    # tamaño de la ventana
-llvm-objdump -d --x86-asm-syntax=intel \
-  --start-address="$ONDESTROY_RVA" --stop-address="$STOP_RVA" \
-  /ruta/privada/Il2CppUserAssemblies.elf > /tmp/ondestroy.txt
-python3 scripts/analyze_il2cpp_lifecycle.py /tmp/ondestroy.txt \
-  --method-rva "$ONDESTROY_RVA" --raw-size "$WINDOW_SIZE" \
-  --output /tmp/theforest-ondestroy-cfg.md
-```
-
-La etiqueta de store solo se agrega si el desensamblado prueba el destino; si
-hay un clear, se añade `--store-site 0x<RVA_DEL_STORE>=TheForest.DebugConsole.Instance`
-con la dirección observada en la instrucción. Para Rewired, `--types` recibe solo una
-asociación type-RVA que haya sido resuelta independientemente en los artefactos
-locales del mismo build:
-
-```sh
-python3 scripts/resolve_il2cpp_references.py \
-  /ruta/privada/Desensamblado_Metodos.txt \
-  --types /ruta/privada/rewired-types.tsv \
-  --output /tmp/theforest-rewired-refs.md
-```
-
-Los analizadores no suben ni modifican los archivos fuente. Las pruebas
-automatizadas usan dumps, instrucciones y metadata sintéticos: comprueban el
-parser, el hash/version gate, la clasificación de dispatch y el CFG, pero no
-prueban el runtime de Unity/IL2CPP, GoldHEN ni PS4.
+La evaluación GO/NO-GO por alternativa, requisitos del callback y siguiente
+componente se mantiene en [`INTEGRATION_DECISION.md`](INTEGRATION_DECISION.md).
+La ejecución local reproducible y los límites de parser están en
+[`IL2CPP_ANALYSIS_PIPELINE.md`](IL2CPP_ANALYSIS_PIPELINE.md). Ambos documentos
+mantienen el safety hold: no hooks, no flags y no prueba nueva en consola.

@@ -63,6 +63,7 @@ class Segment:
     filesz: int
     memsz: int
     align: int
+    flags: int
 
 
 @dataclass(frozen=True)
@@ -100,13 +101,13 @@ class Elf64Image:
                 entry = source.read(phentsize)
                 if len(entry) < 56:
                     raise ValueError("truncated ELF program header")
-                p_type, _flags, p_offset, p_vaddr, _paddr, p_filesz, p_memsz, p_align = \
+                p_type, p_flags, p_offset, p_vaddr, _paddr, p_filesz, p_memsz, p_align = \
                     struct.unpack_from("<IIQQQQQQ", entry, 0)
                 if p_type == PT_LOAD and p_filesz:
                     if p_offset + p_filesz > file_size:
                         raise ValueError("ELF load segment extends beyond the file")
                     self.segments.append(Segment(p_offset, p_vaddr, p_filesz,
-                                                 p_memsz, p_align))
+                                                 p_memsz, p_align, p_flags))
         if not self.segments:
             raise ValueError("ELF contains no file-backed PT_LOAD segments")
         if image_base is None:
@@ -135,6 +136,13 @@ class Elf64Image:
         if len(offsets) > 1:
             raise ValueError(f"RVA 0x{rva:X} maps to multiple ELF load segments")
         return next(iter(offsets)) if offsets else None
+
+    def is_executable(self, rva: int) -> bool:
+        """Return whether this RVA is in a file-backed PF_X PT_LOAD range."""
+        address = self.virtual_address(rva)
+        return any(segment.flags & 0x1
+                   and segment.vaddr <= address < segment.vaddr + segment.filesz
+                   for segment in self.segments)
 
     def read_rva(self, rva: int, length: int) -> bytes | None:
         offset = self.file_offset(rva)
