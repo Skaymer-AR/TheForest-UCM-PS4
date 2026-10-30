@@ -7,11 +7,13 @@ cd "$(dirname "$0")/.."
 
 python3 scripts/assert-safe-build.py
 sh scripts/test.sh
-# Build only the CRT object required by the official template. Do not build or
-# link the GoldHEN hook library for this no-hook baseline.
-if [ ! -f "$GOLDHEN_SDK/build/crtprx.o" ]; then
-  make -C "$GOLDHEN_SDK" crt
-fi
+# Compile only the CRT source required by the official template. Avoid the
+# SDK's aggregate make target, which also compiles the hook/detour archive.
+mkdir -p "$GOLDHEN_SDK/build"
+clang -target x86_64-pc-linux-gnu -ffreestanding -nostdlib -fno-builtin \
+  -fPIC -isysroot "$OO_PS4_TOOLCHAIN" \
+  -isystem "$OO_PS4_TOOLCHAIN/include" \
+  -c "$GOLDHEN_SDK/crt/crtprx.c" -o "$GOLDHEN_SDK/build/crtprx.o"
 build_dir=$(mktemp -d)
 mkdir -p output/safe
 

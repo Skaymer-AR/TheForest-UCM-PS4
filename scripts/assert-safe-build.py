@@ -21,8 +21,10 @@ assert "-lSceVideoOut" not in build and "-lScePad" not in build
 assert "src/bridge_lifecycle" not in build and "tests/" not in build, \
     "Host lifecycle model/tests must never enter PRX build"
 assert "archive/" not in build, "Archived unsafe code must never enter PRX build"
-assert 'make -C "$GOLDHEN_SDK" crt' in build, \
-    "Safe build must compile only the template CRT target"
+assert '"$GOLDHEN_SDK/crt/crtprx.c"' in build, \
+    "Safe build must compile only the official template CRT source"
+assert 'make -C "$GOLDHEN_SDK"' not in build, \
+    "Safe build must not run the aggregate hook SDK build"
 assert "nm \"$elf\"" in build and "Detour_|sceKernelMprotect" in build, \
     "Post-link gate must reject detour and patch symbols"
 assert "theforest_ucm_safe_baseline.prx" in build
