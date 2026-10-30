@@ -30,6 +30,7 @@ public static class UcmDs4HardwareInputTests
         source.Snapshot = new UcmRewiredHardwareSnapshot {
             Connected = true, AssignedToLocalPlayer = true,
             ControllerMapVerified = true,
+            InputFocusVerified = true, SceneOwnerVerified = true,
             HardwareGuid = UcmDs4HardwareInput.SonyDs4GuidA,
             PressedElementIds = (1u << UcmDs4ElementId.L1) |
                                 (1u << UcmDs4ElementId.R1) |
@@ -51,6 +52,20 @@ public static class UcmDs4HardwareInputTests
         source.Snapshot.ControllerMapVerified = false;
         Check(!input.TryRead(out connected, out buttons), "unverified controller map rejected");
         source.Snapshot.ControllerMapVerified = true;
+        source.Snapshot.InputFocusVerified = false;
+        Check(!input.TryRead(out connected, out buttons), "unverified live focus rejected");
+        Check(!connected && buttons == UcmButton.None, "lost focus gives neutral frame");
+        source.Snapshot.InputFocusVerified = true;
+        source.Snapshot.SceneOwnerVerified = false;
+        Check(!input.TryRead(out connected, out buttons), "unverified scene owner rejected");
+        Check(!connected && buttons == UcmButton.None, "lost scene gives neutral frame");
+        source.Snapshot.SceneOwnerVerified = true;
+        source.Snapshot.PressedElementIds |= (1u << 27);
+        Check(!input.TryRead(out connected, out buttons), "unknown hardware element rejected");
+        Check(!connected && buttons == UcmButton.None, "invalid element gives neutral frame");
+        source.Snapshot.PressedElementIds &= ~(1u << 27);
+        Check(input.TryRead(out connected, out buttons), "valid hardware snapshot recovers");
+        Check(connected && (buttons & UcmButton.Cross) != 0, "valid recovered buttons normalized");
         source.Snapshot.Connected = false;
         Check(input.TryRead(out connected, out buttons), "disconnection can be reported");
         Check(!connected && buttons == UcmButton.None, "disconnection is neutral");

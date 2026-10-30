@@ -18,6 +18,10 @@ namespace TheForest.UCM
         public bool Connected;
         public bool AssignedToLocalPlayer;
         public bool ControllerMapVerified;
+        // Must be established by the title-owned live provider on this frame.
+        // Serialized assets alone cannot verify focus or current scene ownership.
+        public bool InputFocusVerified;
+        public bool SceneOwnerVerified;
         public string HardwareGuid;
         // Provider-generated one-bit-per-hardware-ELEMENT mask (IDs 0..23).
         // NOT a raw ScePad bitmask or a Rewired action bitmask.
@@ -52,7 +56,10 @@ namespace TheForest.UCM
             if (!snapshot.Connected) return true;
             if (!snapshot.AssignedToLocalPlayer ||
                 !snapshot.ControllerMapVerified ||
-                !KnownHardware(snapshot.HardwareGuid)) return false;
+                !snapshot.InputFocusVerified ||
+                !snapshot.SceneOwnerVerified ||
+                !KnownHardware(snapshot.HardwareGuid) ||
+                (snapshot.PressedElementIds & 0xFF000000u) != 0u) return false;
 
             connected = true;
             uint bits = snapshot.PressedElementIds;
