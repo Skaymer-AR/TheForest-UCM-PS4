@@ -170,6 +170,26 @@ la misma pulsación mientras el panel tiene foco. Abrir otro handle ScePad no
 forma parte de esta propuesta. El núcleo/adaptador host existente sigue sin
 proveedor PS4 hasta demostrar el puente.
 
+### Resolución de entradas en escenas reales (avance 2026-10-30)
+
+La inspección read-only de `globalgamemanagers.assets`, `sharedassets0.assets`
+y escenas `level0`/`level1`/`level2` permitió resolver las referencias
+`RewiredSpawner → Rewired Input Manager VR/XInput` y las clases concretas de
+cada `MonoBehaviour`. La metadata identifica
+`_rewiredVRPrefab`/`_rewiredXInputPrefab`; el ELF confirma que las rutas
+`InstanceVRManager` y `InstanceManager` leen campos distintos.
+Los catálogos tienen respectivamente **52** y **55** acciones, con **49**
+pares nombre/ID iguales y otras diferencias importantes. Ejemplo:
+`Select` ID `57` VR frente a `58` XInput. Informe técnico:
+[`REWIRED_SCENE_GRAPH_20261030.md`](REWIRED_SCENE_GRAPH_20261030.md).
+
+Esto elimina la incertidumbre de dónde se encuentran los gestores y
+qué campos de AOT los seleccionan, **pero aún no comprueba el gestor
+instanciado en runtime**, las asignaciones físicas de botones DS4,
+ni la entrega de input al Player. El proveedor futuro debe comprobar esas
+tres condiciones, usar las acciones del gestor efectivamente activo y
+no interferir con los controles del personaje.
+
 ## 6. Pruebas y decisiones antes de autorizar otra fase
 
 | Fase | Prueba necesaria | Criterio para continuar |
