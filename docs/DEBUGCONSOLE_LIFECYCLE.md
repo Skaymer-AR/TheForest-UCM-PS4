@@ -209,6 +209,41 @@ pruebas sintéticas validan resolución de símbolos, xrefs, ramas, operandos
 RIP-relativos y clasificación conservadora de llamadas indirectas; no prueban
 Unity ni ejecución en PS4.
 
+
+## ACTUALIZACIÓN: Awake/GetInstance reanalizados directamente desde el PRX original (2026-10-29)
+
+La nota previa sobre la falta de ventanas de `Awake`/`GetInstance` describía **solo los adjuntos disponibles en Codex Cloud**. La conversación original recuperó de su archivo privado `Il2CppUserAssemblies.prx` (SHA-256 `0159ff61c99d25c8f0a821070e3d8b24aff58dbbe5429b8f29561f9960d02969`) y `global-metadata.dat` (v23, SHA-256 `238c400de31e28ed4f7f14e7781ea3b33de0d0bd6964ded680d78fce1d85a6c3`) los cuerpos nativos faltantes. Se verificó que los RVA corresponden a `TheForest.DebugConsole.Awake` y `GetInstance` mediante la tabla de punteros IL2CPP y el mapa de métodos. El desensamblado se hizo **offline** con `llvm-objdump`; el binario y los metadatos no se agregan a GitHub.
+
+### Instrucciones directas y su interpretación
+
+| Instrucción RVA | Operación desensamblada | Evidencia |
+| --- | --- | --- |
+| `0x005C1C92` | Lee el byte de un campo estático en `class + 0xA0 + 0x01`; `je 0x005C1D2B` si es cero | Es la primera condición de exclusión. Por el código de referencia PC de esa misma clase, corresponde plausiblemente a `CoopPeerStarter.DedicatedHost`. **El nombre de la clase referida aún debe confirmarse independientemente en la tabla de tipos PS4**. |
+| `0x005C1D47` | Lee un puntero de `DebugConsole` en `static_fields + 0x10` | Se compara la instancia ya registrada con el nuevo objeto; `UnityEngine.Object.op_Implicit` y `CompareBaseObjects` determinan si hay una instancia distinta. |
+| `0x005C1E13` | Compara `byte ptr [Cheats.static_fields + 0x10], 0`; si es cero salta a una ruta que termina en `UnityEngine.Object.Destroy` | La clase `Cheats` está corroborada porque el setter nativo `CheatsBridge.SetGodMode` usa la misma referencia a clase (RIP `0x33EC070`) y escribe su byte estático `+0x0B`; el orden de los campos del metadata incluye `Cheats.DebugConsole` en `+0x10`. Corresponde al guard `!Cheats.DebugConsole` visto en la referencia PC. |
+| `0x005C1E94`–`0x005C1EA2` | Obtiene `DebugConsole.static_fields` y escribe `this` (`R14`) en `+0x10` | **Confirmación estática de registro de la instancia**: `mov qword ptr [rax+0x10],r14` en `0x005C1EA2`. |
+| `0x005CB6B0`–`0x005CB6C2` | `GetInstance` carga la clase, luego `static_fields` (`+0xA0`) y finalmente `+0x10`; retorna | **Confirma el getter del mismo campo estático**. No crea el objeto ni habilita el componente. |
+| `0x005C1D26` | Tail-`jmp` a `0x02176930` (`UnityEngine.Object.Destroy`) tras preparar `this` | Ruta de destrucción de `Awake`, observable en varias condiciones de exclusión. |
+
+**Interpretación de control de flujo:** el cuerpo PS4 concuerda con la lógica de `Awake` publicada para el port PC: rechazar un host dedicado, una instancia competidora o una consola de depuración deshabilitada; si no hay una instancia válida y pasa los guards, registrar `this`. Este paralelismo es **corroboración**, no una asunción de identidad completa entre las dos compilaciones. Las ramas y los campos nativos indicados arriba sí se examinaron directamente en el PRX PS4.
+
+### Qué explica el singleton NULL y qué falta comprobar
+
+La ruta `Cheats.DebugConsole == false` puede destruir el componente antes de asignar `DebugConsole.Instance`. Por tanto, **es una explicación plausible y respaldada por código** del `NULL` leído en menú y partida, pero aún no se midió el valor de ese flag en una sesión PS4. Tampoco se comprobó si el componente llega a recibir `Awake` o si el objeto fue desactivado previamente por escenas. **No afirmar un diagnóstico causal definitivo ni cambiar ese flag a ciegas.**
+
+Aunque `OnGUI` está compilado con llamadas Unity IMGUI, activar el DebugConsole integrado no sería todavía instalar nuestro UCM, y **no ofrece una interfaz probada para registrar otro callback Unity desde GoldHEN**. `GetInstance` solo devuelve el puntero, no instancia el objeto; `ShowConsole` requiere un `this` válido.
+
+### Próxima entrega de Codex, ahora acotada y accionable
+
+1. Incorporar este CFG a la herramienta de resolución offline: deducir *por instrucciones* qué salto desemboca en `Destroy` y cuál alcanza el store de `Instance`, mostrando fuente, destino y guard de manera verificable.
+2. Comprobar la identidad de la primera referencia de clase (`0x33EB300`) contra el registro de tipos para distinguir `CoopPeerStarter.DedicatedHost` de cualquier otra opción; verificar formalmente el layout de static fields de `Cheats` y `DebugConsole` con sus metadatos de la versión PS4.
+3. Analizar `DebugConsole.OnDestroy` para determinar cuándo se anula o conserva `Instance` y si puede quedar un singleton obsoleto. La relación de escritura en `Awake` por sí sola no explica todas las causas de NULL.
+4. Resolver el despacho indirecto Rewired sin suponer targets o APIs ScePad.
+5. **Decisión de arquitectura**: documentar si existe realmente una ruta segura y existente para registrar un `OnGUI` externo sin detours ni modificar PKG. Si la respuesta es no, marcar la vía DebugConsole como **no habilitada** y evaluar otras arquitecturas, no producir más PRX de diagnóstico sin menú.
+6. Si más adelante se plantea comprobar un guard en hardware, hacerlo solo mediante **lectura** de memoria debidamente validada y con consentimiento explícito; sin ejecutar métodos, escribir flags o instalar hooks.
+
+No se requiere ninguna prueba en la consola en esta etapa. La conclusión central es que **ya no faltan los cuerpos de Awake/GetInstance para la investigación offline**: se recuperaron y se puede dejar de repetir esa solicitud.
+
 ## Siguiente experimento mínimo
 
 El siguiente paso es offline, no un ensayo de consola: generar con el PRX
