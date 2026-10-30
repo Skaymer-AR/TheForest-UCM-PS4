@@ -18,7 +18,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from analyze_ps4_il2cpp_candidates import (  # noqa: E402
-    Candidate,
     DEFAULT_EVIDENCE,
     parse_evidence,
 )

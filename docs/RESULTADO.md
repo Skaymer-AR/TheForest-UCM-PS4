@@ -1,6 +1,6 @@
 # Estado del proyecto The Forest UCM PS4
 
-Actualizado: 2026-10-30. Rama de trabajo: `feature/visual-menu-foundation`.
+Actualizado: 2026-10-29. Rama de trabajo: `feature/visual-menu-foundation`.
 
 ## Estado de seguridad
 
