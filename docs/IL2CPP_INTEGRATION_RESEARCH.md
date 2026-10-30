@@ -1,6 +1,6 @@
 # Investigación de integración Unity IL2CPP
 
-## Resultado actual
+> **2026-10-29 update: prior PS4 results recovered.** This document originally described the files available *inside Codex Cloud*, which lacked the user's private PRX/metadata. Earlier analysis in the parent ChatGPT project had already derived **42 CUSA12398 v1.15 RVA candidates** and the user had verified **two 16-byte function signatures** in PS4Debug. See [PS4_IL2CPP_PRIOR_EVIDENCE.md](PS4_IL2CPP_PRIOR_EVIDENCE.md) for those results, caveats, and the distinction between offline candidates vs physical verification. Do not interpret the PC-only table below as negating those prior PS4 findings. Neither source proves a safe render callback or native ABI. No original game binaries are committed here.\n\n## Resultado actual
 
 El mejor candidato de ciclo de vida encontrado en la evidencia pública es
 `TheForest.DebugConsole.OnGUI`: en una referencia de PC es un callback de GUI
