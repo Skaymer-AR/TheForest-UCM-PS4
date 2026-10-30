@@ -1,0 +1,100 @@
+{
+  "target": {
+    "title": "CUSA12398",
+    "version": "1.15",
+    "unity": "5.6.6f2",
+    "il2cpp_metadata_version": 23
+  },
+  "provenance": {
+    "il2cpp_elf_sha256": "0159ff61c99d25c8f0a821070e3d8b24aff58dbbe5429b8f29561f9960d02969",
+    "metadata_sha256": "238c400de31e28ed4f7f14e7781ea3b33de0d0bd6964ded680d78fce1d85a6c3",
+    "scene_level2_sha256": "99fce056f65647f62ba52d9957317b4ed876e600f854f12e65a20897d37c396d"
+  },
+  "compiled_actions": [
+    {
+      "name": "GUIBox",
+      "on_gui_link_va": "0x02383880",
+      "slot": 33
+    },
+    {
+      "name": "GUILabel",
+      "on_gui_link_va": "0x02384A20",
+      "slot": 33
+    },
+    {
+      "name": "GUIButton",
+      "on_gui_link_va": "0x02383D30",
+      "slot": 33,
+      "own_field_offsets": {
+        "sendEvent": "0xA8",
+        "storeButtonState": "0xB0"
+      }
+    },
+    {
+      "name": "GUILayoutBox",
+      "on_gui_link_va": "0x02386590",
+      "slot": 33
+    },
+    {
+      "name": "GUILayoutLabel",
+      "on_gui_link_va": "0x02388790",
+      "slot": 33
+    },
+    {
+      "name": "GUILayoutButton",
+      "on_gui_link_va": "0x02386870",
+      "slot": 33,
+      "own_field_offsets": {
+        "sendEvent": "0x50",
+        "storeButtonState": "0x58",
+        "text": "0x68",
+        "style": "0x78"
+      }
+    },
+    {
+      "name": "GUILayoutToggle",
+      "on_gui_link_va": "0x02389640",
+      "slot": 33
+    }
+  ],
+  "native_calls": [
+    {
+      "owner": "GUIButton.OnGUI",
+      "target": "UnityEngine.GUI.Button",
+      "link_va": "0x019BE750"
+    },
+    {
+      "owner": "GUIButton.OnGUI",
+      "target": "HutongGames.PlayMaker.Fsm.Event",
+      "link_va": "0x011172B0"
+    },
+    {
+      "owner": "GUILayoutButton.OnGUI",
+      "target": "UnityEngine.GUILayout.Button",
+      "link_va": "0x019CF470"
+    },
+    {
+      "owner": "GUILayoutButton.OnGUI",
+      "target": "HutongGames.PlayMaker.Fsm.Event",
+      "link_va": "0x011172B0"
+    }
+  ],
+  "scene_fsm_components": [
+    {
+      "id": 223934,
+      "gameobject": "CutSceneController",
+      "gameobject_id": 40654
+    },
+    {
+      "id": 223935,
+      "gameobject": "CutSceneController",
+      "gameobject_id": 40654
+    }
+  ],
+  "limitations": [
+    "static compilation does not prove execution or scene-visible UI",
+    "the two existing FSMs serve cutscene/camera actions and must not be altered without approval",
+    "new FSM serialization, asset inclusion, DS4 focus and runtime lifecycle remain unproven",
+    "retail PKG/PRX/live hooks not modified or installed"
+  ]
+}
