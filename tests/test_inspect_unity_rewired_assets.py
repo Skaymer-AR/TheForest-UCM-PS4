@@ -39,7 +39,7 @@ def monoscript(name, namespace, assembly):
 def action_bytes(select_id):
     entries = [
         (2, "MenuToggle"), (3, "Esc"), (43, "Back"),
-        (7, "Horizontal"), (8, "Vertical"), (9, "Jump"),
+        (7, "Horizontal"), (8, "Vertical"), (9, "Jump"), (11, "Run"),
         (10, "Fire1"), (19, "Inventory"), (30, "Batch"),
         (53, "Rebind"), (55, "RestoreDefaults"),
         (select_id, "Select")
