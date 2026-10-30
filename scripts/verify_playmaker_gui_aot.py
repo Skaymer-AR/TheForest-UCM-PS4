@@ -29,6 +29,13 @@ INPUT_ACTION_SPEC = {
     'EnableGUI':('OnEnter', 0x023D7FE0, 30),
     'SendEvent':('OnEnter', 0x023405A0, 30),
 }
+# GetButtonDown.OnUpdate calls an existing game-linked Rewired.Player method.
+# This validates an AOT input route, NOT the live PS4 player's current map.
+REWIRED_EDGE = {0x0253757B:0x00A25720}
+REWIRED_ACTION_FIELDS = {
+    'GetButtonDown': {'buttonName':0x40,'sendEvent':0x48,'storeResult':0x50},
+}
+METADATA_REGISTRATION = 0x032C4C98
 # VA of call instruction -> verified link VA destination.
 BUTTON_EDGES = {
     0x02383DF6:0x019BE750,  # GUI.Button
@@ -87,7 +94,23 @@ def inspect(module:bytes, metadata:bytes):
         if va!=expected or slot!=expected_slot or not image.executable(va):
             raise ValueError('action method mismatch: '+name+'.'+callback)
         input_actions[name]={'callback':callback,'link_va':hex(va),'virtual_slot':slot}
+    for kind, needed in REWIRED_ACTION_FIELDS.items():
+        full='HutongGames.PlayMaker.Actions.'+kind
+        owner=next(t for t in meta.types if t.full_name==full)
+        count, pointer=struct.unpack('<QQ', image.read(METADATA_REGISTRATION+16*5,16))
+        if count!=len(meta.types):
+            raise ValueError('field-offset table mismatch')
+        field_offsets_ptr=struct.unpack('<Q',image.read(pointer+8*owner.index,8))[0]
+        fields={}
+        for field in meta.owned_fields(owner):
+            if field.name in needed:
+                ordinal=field.index-owner.field_start
+                fields[field.name]=struct.unpack('<i',image.read(field_offsets_ptr+ordinal*4,4))[0]
+        if fields!=needed:
+            raise ValueError('Rewired input action field layout mismatch')
+        input_actions[kind]['fields']=fields
     return {
+        'rewired_button_down_native_edge':check_edges(image.read,REWIRED_EDGE),
         'precompiled_input_event_actions':input_actions,
         'title':'The Forest PS4 CUSA12398 v1.15',
         'precompiled_gui_actions':result,
