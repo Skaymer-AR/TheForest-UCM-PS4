@@ -47,9 +47,27 @@ But these facts do **not** prove any of the following:
 4. The ABI for managed `Rect`, `GUIContent`, `MethodInfo` and the active `Event` is established for external native calls.
 5. A graphical PRX has been linked, installed, or tested.
 
-The next *concrete* Codex research target is the **runtime registration/ownership contract of the current PlayMaker action list** and whether any **existing game-owned, stable, bounded indirection** could be used without patching shared code. Check whether concrete action objects can be found and managed without fabricating new IL2CPP types. If it requires manipulating a shared vtable or injecting arbitrary types, treat it as a **new-risk architecture** requiring a separate explicit safety decision, not an implementation shortcut.
+The next concrete research target—the owner and lifecycle of the existing action list—was checked against the exact title metadata and bounded native method windows below.
 
-## 4. Reproduce against private files
+## 4. ActionData loading and live-action lifecycle
+
+The relevant metadata surface does not expose an `AddAction`/`RegisterAction` API. `FsmState` exposes `get_Actions`, `set_Actions`, `LoadActions`, `SaveActions` and `ActivateActions`; `ActionData` exposes its serializer/deserializer methods (`LoadActions`, `CreateAction`, `LoadActionField`, `SaveActions`). The native implementations show the following path:
+
+| Method | Definition / method index | Link VA | Verified behavior |
+| --- | ---: | ---: | --- |
+| `FsmState.get_Actions` | 34035 / 31259 | `0x01118D30` | Returns the array at `FsmState+0x60`; when null, calls `ActionData.LoadActions` with `FsmState.actionData` at `+0x68`, then stores the returned array at `+0x60`. |
+| `FsmState.LoadActions` | 33997 / 31221 | `0x01122C00` | Calls the same `ActionData.LoadActions` method and assigns its result to the `actions` field. |
+| `ActionData.LoadActions` | 33610 / 30680 | `0x010F2A20` | Iterates the serialized action count and calls `ActionData.CreateAction` once per record. It is the load/deserialization path. |
+| `ActionData.CreateAction` | 33611 / 30681 | `0x010F2D80` | Called by the loader to materialize one serialized action record. No external registration call was found in this path. |
+| `FsmState.set_Actions` | 34036 / 31260 | `0x011305B0` | Performs only `FsmState+0x60 = value` and returns. It does not validate, initialize, attach or activate any action. |
+| `FsmState.ActivateActions` | 34001 / 31225 | `0x01118A30` | Reads the action array, checks `FsmStateAction.enabled` at `+0x18`, adds enabled objects to `activeActions` at `+0x70`, initializes them through virtual slot 26, marks them active and calls virtual `OnEnter` at slot 30. |
+| `PlayMakerGUI.CallOnGUI` | 34351 / 31675 | `0x01141320` | Resolves the FSM active state, calls `get_Actions`, loops the array and dispatches slot 33 only when `FsmStateAction.active` at `+0x1A` is set. |
+
+The `enabled` and `active` distinctions are confirmed by the native property accessors: `get_Enabled` reads `+0x18` (`0x01113490`), while `get_Active` reads `+0x1A` (`0x01127490`). Thus, changing the array pointer alone does not make a new action render. Calling `ActivateActions` to set up a new action also repeats the state-entry lifecycle for enabled actions; no rollback or safe in-flight detach path exists for an externally replaced array.
+
+**Decision:** this is not a safe external registration mechanism. An instance-level array replacement is technically distinguishable from a global vtable patch, but the setter is only a raw pointer assignment. Using it would still require constructing valid IL2CPP managed objects from serialized `ActionData`, assigning the correct state/FSM owner, running lifecycle methods at the right point on Unity's thread, rooting the objects, avoiding concurrent `CallOnGUI`, and restoring the original state only after callbacks are quiescent. None of those contracts is exposed or verified for this PRX. Building or inserting a separate serialized FSM/action graph would change the integration architecture and remains outside the current authorization.
+
+## 5. Reproduce against private files
 
 ```sh
 python3 scripts/inspect_playmaker_dispatch.py \
