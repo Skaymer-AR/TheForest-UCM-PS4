@@ -54,8 +54,10 @@ proved, and no Rewired/DS4 action IDs have been guessed.
 The read-only [Unity asset inventory](docs/UNITY_ASSET_TRIAGE.md) and
 [`scripts/inventory_unity_assets.py`](scripts/inventory_unity_assets.py)
 select likely Player/scene/bundle paths from a saved private PKG file listing.
-The full 170-file listing has not yet been supplied to this repository, so
-real scenes, Player version and Rewired mapping **remain unverified**.
+The full private PKG was recovered and its Unity assets inspected offline.
+The serialized Player version is **5.6.6f2** and all **30 build-scene paths**
+are verified in [the asset evidence report](docs/UNITY_PLAYER_ASSETS_20261030.md).
+Real Rewired action-to-DS4 bindings and a callable retail bootstrap **remain unverified**.
 Neither workflow modifies the PKG or publishes proprietary game assets.
 
 ## Pruebas host
