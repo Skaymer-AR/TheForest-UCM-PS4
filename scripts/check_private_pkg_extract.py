@@ -45,6 +45,13 @@ def container_type(path: Path) -> str:
     return "unrecognized header (do not assume ELF)"
 
 
+def previous_elf_comparison(path: Path, sha: str) -> str:
+    """Compare like-for-like only; raw SELF and historical ELF hashes differ by design."""
+    if not container_type(path).startswith("decrypted ELF"):
+        return "NOT COMPARABLE (current input is not a decrypted ELF64)"
+    return "SAME" if sha == PREVIOUS_PRX_SHA else "DIFFERENT"
+
+
 def choose_one(root: Path, basename: str) -> Path:
     matches = sorted(p for p in root.rglob("*") if p.is_file()
                      and p.name.lower() == basename.lower())
@@ -77,8 +84,8 @@ def main() -> int:
             print(f"  size={path.stat().st_size} sha256={sha}")
             print(f"  type={container_type(path)}")
             if name == "IL2CPP PRX":
-                print("  historical PRX SHA:",
-                      "SAME" if sha == PREVIOUS_PRX_SHA else "DIFFERENT")
+                print("  historical ELF SHA comparison:",
+                      previous_elf_comparison(path, sha))
         for path in meta:
             sha = digest(path)
             print(f"metadata: {path.relative_to(root)}")
@@ -111,3 +118,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
