@@ -68,7 +68,7 @@ Unity desde el PRX fuera de su contexto no cierra la brecha.
 | Carga del PRX sin hooks | El usuario confirmó previamente que un probe no-hook permite iniciar y jugar. |
 | Menú visual/navegación host | Existe y se conserva en `src/menu.*`, `src/overlay.*` y `src/drawlist.*`; no está conectado a Unity. |
 | `DebugConsole.OnGUI` | El desensamblado selectivo muestra llamadas GUI; no prueba un callback externo. |
-| Singleton `DebugConsole.Instance` | `Awake` lo escribe tras guardas; `GetInstance` lo lee. No prueba un valor activo en partida ni el comportamiento de `OnDestroy`. |
+| Singleton `DebugConsole.Instance` | `Awake` lo escribe tras guardas; `GetInstance` lo lee. `OnDestroy` fue resuelto en el PRX original (`0x005C3340`): en la ruta de limpieza conserva `this` en `Instance`, **no lo borra con NULL**; ver [PS4_ONDESTROY_NATIVE_RESOLVED.md](PS4_ONDESTROY_NATIVE_RESOLVED.md). Ninguno prueba una instancia activa en partida. |
 | Rewired | `PS4Controller.Update` conduce a `ProcessGamePads`; se observan dos dispatches virtuales, aún sin interfaz/método final. |
 | Cheats | No hay funciones del UCM conectadas o marcadas como disponibles por este trabajo. |
 | Hardware/Unity overlay | No validado en este trabajo. No se solicitó una prueba de PS4. |
