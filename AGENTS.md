@@ -15,6 +15,19 @@ Target: The Forest CUSA12398 v1.15, PS4 GoldHEN. User environment: firmware
 Do not request or recommend another PS4 test during the current architecture
 review. Do not install or publish hook-enabled v0.5/v0.6 PRXs.
 
+## Primary current task (actual in-game menu, not a demo)
+
+The user wants a **real graphical Ultimate Mod Menu in The Forest on PS4**.
+See [`docs/CODEX_ACTUAL_INGAME_PRX_HANDOFF.md`](docs/CODEX_ACTUAL_INGAME_PRX_HANDOFF.md)
+and [`docs/INGAME_PRX_HOST_GATE_20261030.md`](docs/INGAME_PRX_HOST_GATE_20261030.md)
+for the latest scene-native `PlayMakerGUI.OnGUI` candidate, file hashes, safety
+gates and actual required deliverable. Continue authorized offline work
+autonomously; do not stop after each file to ask for confirmation. Avoid
+browser demos, standalone-only mockups, notification-only PRXs and GoldHEN
+cheat alternatives. Never claim a runnable in-game menu before its callback,
+ABI, teardown and platform-build requirements are verified. The PS4 hardware
+test and live hook installation remain subject to an explicit approval gate.
+
 ## Required engineering approach
 
 - This integration-research branch runs offline checks only. Do not build or
