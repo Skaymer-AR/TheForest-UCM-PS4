@@ -101,6 +101,7 @@ class UnityRewiredInspectorTests(unittest.TestCase):
                 (1352, 115, monoscript("InputManager", "Rewired", "Assembly-CSharp.dll")),
                 (3035, 115, monoscript("RewiredSpawner", "TheForest.Utils", "Assembly-CSharp.dll")),
                 (3715, 115, monoscript("HardwareJoystickMap", "Rewired.Data.Mapping", "Rewired_Core.dll")),
+                (266, 115, monoscript("InputMappingButton", "TheForest.Utils", "Assembly-CSharp.dll")),
             ], [])
             hardware_guids = b"83b427e4-086f-47f3-bb06-be266abd1ca5;cd9718bf-a87a-44bc-8716-60a0def28a9f"
             build_asset(root / "sharedassets0.assets", [
@@ -109,6 +110,10 @@ class UnityRewiredInspectorTests(unittest.TestCase):
                 (192, 114, mono(21, 1352, b"\0" * 16 + action_bytes(57) + hardware_guids)),
                 (193, 114, mono(22, 1352, b"\0" * 16 + action_bytes(58) + hardware_guids)),
                 (133, 114, mono(0, 3715, b"SonyDualShock4" + hardware_guids)),
+            ], ["globalgamemanagers.assets"])
+            build_asset(root / "sharedassets1.assets", [
+                (500, 1, gameobject("inputMapButton_run", [(0, 501)])),
+                (501, 114, mono(500, 266, string("Run"))),
             ], ["globalgamemanagers.assets"])
             for scene, go_id, mb_id in (
                 ("level0", 8, 38),
@@ -123,7 +128,7 @@ class UnityRewiredInspectorTests(unittest.TestCase):
 
             report = audit.analyze(root)
             self.assertEqual(report["unity_version"], "5.6.6f2")
-            self.assertEqual(report["monoscripts_in_library"], 3)
+            self.assertEqual(report["monoscripts_in_library"], 4)
             self.assertEqual(len(report["spawners"]), 3)
             self.assertEqual(report["spawners"][2]["prefabs"][1]["path_id"], 22)
             self.assertEqual(report["input_manager_prefabs"]["21"]["actions"]["Select"], 57)
@@ -139,6 +144,8 @@ class UnityRewiredInspectorTests(unittest.TestCase):
                 report["input_manager_prefabs"]["21"]["matching_hardware_identifiers"],
                 report["input_manager_prefabs"]["22"]["matching_hardware_identifiers"])
             self.assertIn("Select", report["varying_action_name_ids"])
+            self.assertEqual(len(report["serialized_input_mapping_buttons"]), 1)
+            self.assertEqual(report["serialized_input_mapping_buttons"][0]["action"], "Run")
             self.assertIn("not a physical DualShock", report["limitations"][1])
 
     def test_invalid_header_does_not_fall_back_to_guess(self):
