@@ -91,6 +91,17 @@ Bounded x86-64 disassembly confirms:
 3. A real AOT component still needs the title's Unity/PS4 project or an equivalently complete rebuild pipeline, with registered methods and startup creation. Neither modifying the PKG nor shipping a PRX is authorized.
 4. Follow-up offline research should decode the **selected manager's actual Rewired controller-to-action map** and inspect Unity main-thread ownership/focus before preparing a provider. If all offline options are exhausted, present a single precise request for missing assets/toolchain or an explicitly authorized hardware test.
 
+## Rewired runtime mapping model (upstream documentation)
+
+Rewired's official docs confirm that a controller-to-action binding belongs
+to a **Controller Map on a Player**, with category/layout and enabled state;
+the hardware profile is distinct from the Player's active ActionElementMaps.
+This is why the serialized `SonyDualShock4` profile and an InputManager
+action ID cannot by themselves identify the real DS4 button or action owner.
+See [Controller Maps](https://guavaman.com/projects/rewired/docs/ControllerMaps.html),
+[Players](https://guavaman.com/projects/rewired/docs/Players.html)
+and [read-only controller-map enumeration](https://guavaman.com/projects/rewired/docs/HowTos.html).
+
 ## Reproduction
 
 ```sh
