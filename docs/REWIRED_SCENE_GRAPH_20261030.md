@@ -94,6 +94,42 @@ corresponda a un botón físico. En Rewired, las asignaciones específicas
 dependen de `ControllerMap` / `ActionElementMap` realmente cargados y
 habilitados en cada `Player`.
 
+## 3B. Interfaz de controles de `sharedassets1.assets` (nuevo)
+
+El archivo privado `Media/sharedassets1.assets` tiene **3.031**
+`MonoBehaviour`; entre ellos hay **25 componentes**
+`TheForest.Utils.InputMappingButton`, dos
+`TheForest.Utils.InputMappingAction` y un
+`TheForest.Utils.InputMappingButtonManager`.
+
+Los 25 controles enlazan un `GameObject` (por ejemplo
+`inputMapButton_run`) con un **nombre de acción** serializado. Todos los
+nombres existen en los catálogos de los gestores VR y XInput, y los IDs
+correspondientes coinciden en ambos.
+
+| Acción comprobada | VR/XInput action ID | Ejemplo de componente UI |
+| --- | ---: | --- |
+| `Run` | 16 | `inputMapButton_run` |
+| `Inventory` | 19 | `inputMapButton_inventory` |
+| `Jump` | 9 | `inputMapButton_jump` |
+| `SurvivalBook` | 28 | `inputMapButton_survivalbook` |
+| `Horizontal` | 7 | `inputMapButton_horizontal_pos/neg` |
+| `Vertical` | 8 | `inputMapButton_vertical_pos/neg` |
+| `Build` | 38 | `inputMapButton_build` |
+| `ItemSlot1` a `ItemSlot4` | 48–51 | cuatro controles de ranuras |
+
+Otras acciones verificadas: `Take`, `Utility`, `Drop`,
+`Rotate`, `Crouch`, `RestKey`, `Craft`, `Save`,
+`PlayerList`, `Lighter`, `WalkyTalky` y `Map`.
+El analizador `inspect_unity_rewired_assets.py` resuelve ahora
+el script, `GameObject`, nombre de acción y su ID en ambos gestores
+para cada uno de los 25 componentes, sin duplicar assets privados.
+
+**Alcance:** los componentes son controles de una interfaz de
+asignación; no constituyen la configuración física de cada botón
+del mando en una sesión PS4. No deben utilizarse como prueba
+de que, por ejemplo, `Jump` corresponda a Cross.
+
 ## 4. Native IL2CPP corroboration: two different prefab fields
 
 The private ELF comparison against the previously retained IL2CPP reference is exact: SHA-256 `0159ff61c99d25c8f0a821070e3d8b24aff58dbbe5429b8f29561f9960d02969`. The metadata is version 23; `TheForest.Utils.RewiredSpawner` (`TypeDefinition` index `11900`) has three successive fields:
@@ -145,4 +181,4 @@ python3 scripts/inspect_unity_rewired_assets.py --assets-root /private/unity-ass
 python3 -m unittest discover -s tests -p 'test_*.py'
 ```
 
-The input folder should contain the five private files named in §1. No proprietary data is included in the test fixtures; generated JSON contains derived names, IDs and cryptographic hashes only.
+The input folder should contain the six private files named in §1 plus `sharedassets1.assets` for UI action controls. No proprietary data is included in the test fixtures; generated JSON contains derived names, IDs and cryptographic hashes only.
