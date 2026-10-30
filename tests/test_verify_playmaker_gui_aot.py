@@ -3,7 +3,7 @@ import sys
 import unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
-from verify_playmaker_gui_aot import check_edges, inspect, SPEC
+from verify_playmaker_gui_aot import check_edges, inspect, SPEC, INPUT_ACTION_SPEC
 
 
 class PrecompiledGuiAotTests(unittest.TestCase):
@@ -25,6 +25,14 @@ class PrecompiledGuiAotTests(unittest.TestCase):
     def test_bad_module_rejected(self):
         with self.assertRaisesRegex(ValueError,'wrong IL2CPP module'):
             inspect(b'bad ELF',b'bad metadata')
+
+    def test_input_and_event_callbacks_are_declared_separately(self):
+        self.assertEqual(INPUT_ACTION_SPEC['GetButtonDown'],
+                         ('OnUpdate', 0x025374D0, 32))
+        self.assertEqual(INPUT_ACTION_SPEC['EnableGUI'],
+                         ('OnEnter', 0x023D7FE0, 30))
+        self.assertEqual(set(INPUT_ACTION_SPEC),
+                         {'GetButtonDown','GetKeyDown','EnableGUI','SendEvent'})
 
     def test_gui_action_coverage(self):
         self.assertEqual(len(SPEC),7)
