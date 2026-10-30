@@ -21,5 +21,5 @@ mono "$tmpdir/ds4-tests.exe"
 mcs -nologo -warnaserror -langversion:4 -target:library \
     -out:"$tmpdir/host.dll" "$model" "$ds4" "$host" tests/csharp/UnityEngineStub.cs
 mcs -nologo -warnaserror -langversion:4 -define:UNITY_EDITOR -target:library \
-    -out:"$tmpdir/editor-host.dll" "$model" "$host" tests/csharp/UnityEngineStub.cs
+    -out:"$tmpdir/editor-host.dll" "$model" "$ds4" "$host" tests/csharp/UnityEngineStub.cs
 echo "UCM Unity-host stub compilation: PASS (standalone + UNITY_EDITOR)"
