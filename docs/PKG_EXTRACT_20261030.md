@@ -71,6 +71,23 @@ Se compiló en `/tmp`, sin instalar paquetes del juego ni guardar binarios en el
 
 `--list` y `--unpack-inner-pfs --no-signature-check --no-icv-check --unpack` terminaron con código `1`. En ambos casos la herramienta informó que faltaba el exponente privado del keyset `pkg_entry_key_3`, no pudo cargarlo ni descifrar el bloque de claves de entradas y no obtuvo la clave de imagen para generar las claves de cifrado/firma PFS. Omitir las comprobaciones de firma e ICV no resolvió esa falta. **No se extrajo el PFS ni el árbol `Image0` y no se modificó el PKG.**
 
-### Qué desbloquea el siguiente análisis
+### Actualización posterior: assets aportados en ZIP
 
-El camino más pequeño y seguro para continuar con ControllerMap/ActionElementMap es disponer de las seis copias originales ya enumeradas en [`REWIRED_SCENE_GRAPH_20261030.md`](REWIRED_SCENE_GRAPH_20261030.md), o de una copia extraída y sin modificar del árbol `Image0` que las contenga. No hace falta compartir claves privadas. Con esas entradas se puede volver a ejecutar el analizador actual y continuar con los mapas físicos, la escena activa y el jugador Rewired. Hasta entonces, la asignación DS4 efectiva en runtime queda sin verificar y el PRX gráfico sigue en NO-GO.
+El propietario aportó después `Archivo.zip`, `Archivo(1).zip`, `Archivo 2.zip`,
+`Archivo 2(1).zip` y `Archivo 3.zip`. Una ejecución privada del
+`scripts/verify_unity_assets_in_archives.py` verificó con los seis SHA-256
+fijados las copias de `globalgamemanagers.assets`, `sharedassets0.assets`,
+`sharedassets1.assets`, `level0`, `level1` y `level2`; `sharedassets0/1` también
+aparecen en `Archivo 3.zip`. Las coincidencias se extrajeron a `/tmp` para
+análisis, sin modificar el PKG ni añadir assets al repositorio.
+
+Esto permitió decodificar parte de los mapas serializados
+`ControllerMap_Editor` / `ActionElementMap` para los dos InputManager. El
+resultado derivado está en
+[`REWIRED_CONTROLLER_MAPS_20261030.md`](REWIRED_CONTROLLER_MAPS_20261030.md).
+Sigue sin conocerse el Player activo, el controlador conectado/asignado, qué
+gestor o mapa se carga y habilita, el foco de entrada ni la política de
+consumo durante una sesión. La extracción PFS de la copia privada continúa
+bloqueada por la falta de la clave privada `pkg_entry_key_3`; estos ZIPs no
+requirieron esa extracción. No se alteró el PKG, no se instaló ningún PRX y
+no se hizo una prueba en consola.

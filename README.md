@@ -54,10 +54,15 @@ proved, and no Rewired/DS4 action IDs have been guessed.
 The read-only [Unity asset inventory](docs/UNITY_ASSET_TRIAGE.md) and
 [`scripts/inventory_unity_assets.py`](scripts/inventory_unity_assets.py)
 select likely Player/scene/bundle paths from a saved private PKG file listing.
-The full private PKG was recovered and its Unity assets inspected offline.
+The private PKG parts were reconstructed, but local PFS extraction remains
+blocked by a missing private key. The six required Unity assets were later
+verified from user-provided ZIPs and inspected offline.
 The serialized Player version is **5.6.6f2** and all **30 build-scene paths**
 are verified in [the asset evidence report](docs/UNITY_PLAYER_ASSETS_20261030.md).
-Real Rewired action-to-DS4 bindings and a callable retail bootstrap **remain unverified**.
+Serialized Rewired `ControllerMap` / `ActionElementMap` DS4 bindings are now
+decoded in [`docs/REWIRED_CONTROLLER_MAPS_20261030.md`](docs/REWIRED_CONTROLLER_MAPS_20261030.md).
+The active runtime Player, connected DS4, selected manager/maps, input focus,
+input consumption and callable retail bootstrap **remain unverified**.
 Neither workflow modifies the PKG or publishes proprietary game assets.
 
 ## Rewired scene graph and native prefab selection (verified offline)

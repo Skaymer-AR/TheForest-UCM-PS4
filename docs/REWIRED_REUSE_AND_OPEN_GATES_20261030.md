@@ -1,10 +1,10 @@
-# Rewired: reused offline evidence and exact remaining gates (2026-10-30)
+# Rewired: verified serialized maps and remaining runtime gates (2026-10-30)
 
-**Title:** The Forest PS4, CUSA12398 v1.15. **Authority:** older private
-Unity asset inspections already documented in
-`docs/REWIRED_SCENE_GRAPH_20261030.md` and
-`docs/PLAYMAKER_VIRTUAL_DISPATCH_20261030.md`. This page **does not**
-claim new extraction or live console proof. No installation/hook is authorized.
+**Title:** The Forest PS4, CUSA12398 v1.15. This page consolidates verified
+ZIP recovery, serialized input maps, and remaining runtime gates documented
+in `docs/REWIRED_SCENE_GRAPH_20261030.md` and
+`docs/PLAYMAKER_VIRTUAL_DISPATCH_20261030.md`. No live console proof,
+installation, or hook is authorized.
 
 ## Evidence already acquired — do not redo
 
@@ -24,7 +24,10 @@ Do **not** use an action ID as a DualShock physical key. Hardware element
 IDs `Cross=6`, `Circle=7`, `L1=10`, `R1=11`, D-pad `18–21`
 are from the generic `SonyDualShock4` hardware profile; the profile is
 not a verified controller assignment for the active Player. The asset
-profile contains 24 known elements numbered 0 through 23.
+profile contains 24 known elements numbered 0 through 23. The serialized
+ControllerMap/ActionElementMap findings, including different bindings for
+the two DS4 hardware GUIDs, are in
+[`REWIRED_CONTROLLER_MAPS_20261030.md`](REWIRED_CONTROLLER_MAPS_20261030.md).
 
 ## Which gates remain open
 
@@ -32,7 +35,7 @@ profile contains 24 known elements numbered 0 through 23.
 | --- | --- | --- |
 | Serialized scene and prefab links | Verified previously for `level0`–`level2` | Runtime-created scene and object identity |
 | Rewired action name/ID catalog | Verified in two InputManager prefabs | Selected manager and active Player |
-| SonyDualShock4 hardware-element IDs | Previously derived from `sharedassets0` | Active ControllerMap/ActionElementMap, layout/category, effective player-to-controller assignment |
+| SonyDualShock4 hardware-element IDs | IDs and serialized ControllerMap/ActionElementMap records decoded for both InputManagers | Active Player/controller assignment, map and ActionElementMap enabled state, runtime layout/category, input focus/consumption |
 | Unity input focus and scene owner | No live provider; host contracts require both | Runtime snapshot consistent with a specific Unity frame |
 | Graphics host | PlayMaker virtual call graph and object lifecycle statically inspected | Safe title-owned OnGUI registration/teardown + ABI + render-thread proof |
 
@@ -49,27 +52,33 @@ live provider, plus rejection of any set hardware element ID outside 0–23.
 This is deliberately a fail-closed check, **not** a discovered retail API.
 C#4 synthetic tests exercise both focus and scene loss and invalid bits.
 
-## Existing archives and next defensible analysis
+## ZIP recovery and current offline evidence
 
-Two ZIP uploads were provided in the current conversation under generic
-names. Their **contents have not been inspected** in this runtime, so
-neither an absence of these assets nor their presence may be inferred.
-Do not identify an unrelated previously inspected archive as one of them
-without verifying its contents.
+Five user-supplied archives were scanned privately by
+`scripts/verify_unity_assets_in_archives.py`. All six exact pinned assets
+matched, including `sharedassets0.assets` and `sharedassets1.assets` from
+`Archivo 3.zip`; matching copies were extracted under `/tmp`. No asset or
+commercial binary was committed. The run reported `all_six_verified: true`.
 
-Before asking the user for new PS4 extraction, first inspect *these ZIPs*
-privately for any `Media/{globalgamemanagers.assets,sharedassets0.assets,
-sharedassets1.assets,level0,level1,level2}`. If found, hash and
-reuse matching files. Then decode active Rewired controller map data
-where the serialized layout supports it; distinguish saved defaults
-from live PlayStation input assignment.
+The recovered `sharedassets0.assets` supplied the serialized maps: 13
+ControllerMap records (4 DS4-GUID maps, 96 ActionElementMaps) in the VR
+manager, and 9 ControllerMap records (all 9 DS4-GUID maps, 195
+ActionElementMaps) in the XInput manager. The parser also resolves each
+manager's map category names, joystick layouts, and the serialized Player ID 1
+default category/layout enable flags. It separately decodes the eight
+`InputCategory` action categories and the ActionElementMap category selector;
+that selector is kept distinct from the action's own catalog category and
+from the ControllerMap category. These remain configuration data, not proof
+of the live local Player. See
+[`REWIRED_CONTROLLER_MAPS_20261030.md`](REWIRED_CONTROLLER_MAPS_20261030.md)
+for key bindings and category namespaces, and
+[`REWIRED_CONTROLLER_MAPS_20261030.json`](REWIRED_CONTROLLER_MAPS_20261030.json)
+for the full derived output. The supplied `resources.assets` was also parsed
+and contained no resolved Rewired MonoBehaviours or matching identifiers in
+its TextAssets; its companion `.resS` is a raw resource stream, not a separate
+serialized object database.
 
-If the originals remain unavailable, preserve this verified derived
-evidence, continue the independent graphical host ABI/ownership analysis,
-and make only a narrowly scoped read-only transfer request if it unlocks
-a specific remaining check. No new PRX or console test is implied.
-
-## New ZIP-first option (no FTP required when originals are present)
+## ZIP-first reproduction (no FTP required)
 
 The standalone read-only archive checker `scripts/verify_unity_assets_in_archives.py`
 inspects only whitelisted `Media/<filename>` members (including nested
@@ -93,11 +102,5 @@ python3 scripts/verify_unity_assets_in_archives.py \
 Only exact six-file SHA-256 matches may be published to the private output.
 Malformed ZIPs, path traversal, mismatched hashes and oversized entries
 fail without publishing an unverified asset. Tests use synthetic ZIP fixtures.
-No commercial binary is stored in this repository.
-
-**Status of user-supplied ZIPs:** They were received in the conversation,
-but due to local container execution failure their ZIP entries have not yet
-been inspected by this assistant. CI validates the scanner against synthetic
-fixtures only. Work can execute this scanner directly on the actual private
-attachments, if they are available in its cloud computer. Do not conflate
-simulated tests with actual archive inspection.
+No commercial binary is stored in this repository. The actual archive scan
+verified the supplied files; synthetic tests exercise checker behavior.
