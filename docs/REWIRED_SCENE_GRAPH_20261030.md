@@ -10,6 +10,7 @@ The new [`scripts/inspect_unity_rewired_assets.py`](../scripts/inspect_unity_rew
 | --- | --- | ---: |
 | `Media/globalgamemanagers.assets` | `2518dad0f38f6357276d1e33b4653a907df82dc8b0eb56450b49cb3eb86af2a8` | 3,814 |
 | `Media/sharedassets0.assets` | `f2b4c877b11b999ab590d71cb2682a017fb44c21720673487de288ff7c05e321` | 194 |
+| `Media/sharedassets1.assets` | `d227ee3ac409b21bb956c2457d19b248006c212f58ecd4fb396f34ffc2a6e815` | 7,565 |
 | `Media/level0` | `d2d1b170cb1494ecaba4616b1d46e9467fac007c60fe0ba18fa8924a0e0ee8aa` | 39 |
 | `Media/level1` | `cbfff68d57c3cadd304cead6c5486f9eb427c368b443bf4bfedff9d16172e790` | 2,977 |
 | `Media/level2` | `99fce056f65647f62ba52d9957317b4ed876e600f854f12e65a20897d37c396d` | 242,796 |
@@ -181,4 +182,4 @@ python3 scripts/inspect_unity_rewired_assets.py --assets-root /private/unity-ass
 python3 -m unittest discover -s tests -p 'test_*.py'
 ```
 
-The input folder should contain the six private files named in §1 plus `sharedassets1.assets` for UI action controls. No proprietary data is included in the test fixtures; generated JSON contains derived names, IDs and cryptographic hashes only.
+The input folder should contain the six private files named in §1, including `sharedassets1.assets` for UI action controls. No proprietary data is included in the test fixtures; generated JSON contains derived names, IDs and cryptographic hashes only.
