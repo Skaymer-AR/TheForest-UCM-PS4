@@ -127,6 +127,10 @@ class UnityRewiredInspectorTests(unittest.TestCase):
             self.assertEqual(report["spawners"][2]["prefabs"][1]["path_id"], 22)
             self.assertEqual(report["input_manager_prefabs"]["21"]["actions"]["Select"], 57)
             self.assertEqual(report["input_manager_prefabs"]["22"]["actions"]["Select"], 58)
+            vr = report["input_manager_prefabs"]["21"]
+            self.assertEqual(len(vr["components"]), 1)
+            self.assertEqual(vr["components"][0]["script"], "Rewired.InputManager")
+            self.assertTrue(vr["components"][0]["enabled"])
             self.assertEqual(report["generic_hardware_profiles"][0]["profile"], "SonyDualShock4")
             self.assertIn("Select", report["varying_action_name_ids"])
             self.assertIn("not a physical DualShock", report["limitations"][1])
