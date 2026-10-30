@@ -1,3 +1,5 @@
+> **ACTUALIZACIÓN 2026-10-30:** se reconstruyó el PKG privado y se analizaron sus assets: Player **5.6.6f2** confirmado, **30** escenas BuildSettings enumeradas, y referencias a Rewired/DebugConsole localizadas. La evidencia reproducible y los límites se detallan en [UNITY_PLAYER_ASSETS_20261030.md](UNITY_PLAYER_ASSETS_20261030.md). El texto siguiente refleja el plan inicial previo a la extracción; Rewired action IDs y controles DS4 siguen sin resolver.
+
 # The Forest CUSA12398 1.15: Unity asset triage
 
 **Status:** path inventory tool developed; game asset data **not yet analyzed**.
