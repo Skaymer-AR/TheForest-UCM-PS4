@@ -233,6 +233,7 @@ def analyze(root: Path) -> dict:
         if go["name"] not in ("Rewired Input Manager VR", "Rewired Input Manager XInput"):
             continue
         managers = []
+        attached_components = []
         for file_id, pid in go["components"]:
             if (file_id != 0 or pid not in shared.objects
                     or shared.objects[pid].class_id != 114):
@@ -241,12 +242,18 @@ def analyze(root: Path) -> dict:
             if shared.external(mb["script_file"]) != "globalgamemanagers.assets":
                 continue
             sc = scripts.get(mb["script_id"])
+            if sc:
+                attached_components.append(dict(
+                    object_id=pid,
+                    script=sc["namespace"] + "." + sc["class_name"] if sc["namespace"] else sc["class_name"],
+                    enabled=mb["enabled"]))
             if sc and sc["class_name"] == "InputManager" and sc["namespace"] == "Rewired":
                 managers.append(dict(component_id=pid, enabled=mb["enabled"],
                                      actions=action_catalog(shared.obj(pid))))
         if len(managers) != 1:
             raise ValueError("InputManager prefab has ambiguous components")
-        prefabs[gid] = dict(name=go["name"], active=go["active"], **managers[0])
+        prefabs[gid] = dict(name=go["name"], active=go["active"],
+                            components=attached_components, **managers[0])
     if len(prefabs) != 2:
         raise ValueError("expected two Rewired input prefabs")
 
