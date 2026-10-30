@@ -77,15 +77,26 @@ class RecoveredPs4EvidenceTests(unittest.TestCase):
         self.assertEqual(preflight["rel32_stolen_bytes"], 6)
         self.assertEqual(preflight["rel32_stolen_prefix"],
                          bytes.fromhex("55 48 89 E5 41 57"))
+        self.assertEqual(preflight["recovery_original_bytes"],
+                         preflight["rel32_stolen_prefix"])
+        self.assertEqual(preflight["target_rva"], 0x005C37B0)
+        self.assertEqual(preflight["resume_rva"], 0x005C37B6)
         self.assertTrue(preflight["rel32_near_relay_required"])
         self.assertFalse(preflight["absolute_stolen_window_verified"])
         self.assertIn("unverified", preflight["runtime_callback_active"])
+        self.assertEqual(len(preflight["blockers"]), 4)
+        self.assertFalse(preflight["patch_write_performed"])
+        self.assertIn("require platform quiescence", preflight["release_policy"])
+        self.assertIn("otherwise retain executable resources",
+                      preflight["release_policy"])
         self.assertFalse(preflight["install_go"])
 
         report = analysis.render_report(candidates)
         self.assertIn("Localized IMGUI callback preflight", report)
         self.assertIn("preserve the PKG", report)
         self.assertIn("runtime invocation is **unverified**", report)
+        self.assertIn("retain original bytes `55 48 89 E5 41 57`", report)
+        self.assertIn("resume at RVA `0x005C37B6`", report)
         self.assertIn("Installation verdict: **NO-GO**", report)
 
     def test_local_imgui_detour_preflight_rejects_a_changed_anchor(self):

@@ -330,7 +330,7 @@ def _candidate_status(candidate: Candidate, local_bytes: bytes | None) -> str:
 
 
 def assess_local_imgui_detour(candidate: Candidate | None) -> dict[str, object]:
-    """Read-only preflight for a method-local OnGUI detour; never emits a patch."""
+    """Read-only, reversible entry plan; never emits or applies a patch."""
     if candidate is None or candidate.name != "TheForest.DebugConsole.OnGUI":
         return {"anchor_match": False, "install_go": False,
                 "reason": "TheForest.DebugConsole.OnGUI anchor is unavailable."}
@@ -344,21 +344,32 @@ def assess_local_imgui_detour(candidate: Candidate | None) -> dict[str, object]:
     # could be allocated within signed-rel32 range and patching were quiesced.
     # The 14-byte absolute-jump case needs 17 complete prologue bytes because
     # byte 13 starts a four-byte `and rsp, imm8` instruction; only 16 are known.
+    blockers = (
+        "runtime OnGUI invocation is unverified (the prior Instance read was NULL)",
+        "Unity GUI renderer ABI is unverified",
+        "platform-level thread quiescence is unavailable",
+        "safe callback unload/teardown is not established",
+    )
     return {
         "anchor_match": True,
         "method_scope_only": True,
+        "target_rva": candidate.rva,
         "rel32_transfer_bytes": 5,
         "rel32_stolen_bytes": len(ON_GUI_REL32_STOLEN_PREFIX),
         "rel32_stolen_instructions": ("push rbp", "mov rbp,rsp", "push r15"),
         "rel32_stolen_prefix": ON_GUI_REL32_STOLEN_PREFIX,
+        "recovery_original_bytes": ON_GUI_REL32_STOLEN_PREFIX,
+        "resume_rva": candidate.rva + len(ON_GUI_REL32_STOLEN_PREFIX),
         "rel32_near_relay_required": True,
         "absolute_transfer_bytes": 14,
         "absolute_stolen_bytes_required": 17,
         "absolute_stolen_window_verified": False,
         "runtime_callback_active": "unverified; prior PS4Debug Instance read was NULL",
+        "blockers": blockers,
+        "patch_write_performed": False,
+        "release_policy": "restore original bytes and require platform quiescence; otherwise retain executable resources",
         "install_go": False,
-        "reason": ("No runtime callback proof, Unity GUI call ABI, thread quiescence, "
-                   "or safe teardown contract; this is analysis only."),
+        "reason": "; ".join(blockers) + "; this is analysis only.",
     }
 
 
@@ -462,6 +473,7 @@ def render_report(candidates: list[Candidate], image: Elf64Image | None = None,
         "",
         "- Best identified graphics candidate: `TheForest.DebugConsole.OnGUI` at `0x005C37B0`; its PS4 body calls Unity IMGUI, but runtime invocation is **unverified** and the previously read `Instance` was NULL.",
         "- A method-only detour would preserve the PKG and avoid global GNM/VideoOut/ScePad hooks. The confirmed entry prefix supports a 5-byte relative transfer over six complete prologue bytes (`push rbp; mov rbp,rsp; push r15`), conditional on a nearby relay. The 16-byte anchor does not verify the 17-byte window needed for a 14-byte absolute transfer.",
+        "- Offline recovery plan only: retain original bytes `55 48 89 E5 41 57` as the restoration snapshot and resume at RVA `0x005C37B6`. No patch write is performed. Restore before release and require platform thread quiescence; if restore or quiescence cannot be proven, retain executable resources.",
         f"- Installation verdict: **{'GO' if local_hook['install_go'] else 'NO-GO'}**. {local_hook['reason']}",
         "- A title-local patch remains insufficient to draw UCM until the callback is observed active and a Unity GUI renderer/ABI and nonblocking quiescent teardown are validated.",
     ])
