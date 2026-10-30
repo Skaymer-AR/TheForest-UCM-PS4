@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Forest — Ultimate Mod Menu · Prueba visual PS4</title>
+<style>
+html,body { margin:0; min-height:100%; background:#06110f; color:#e8f5ec; font:16px Arial,Helvetica,sans-serif; }
+body { background:radial-gradient(ellipse at 70% 20%,#25473d 0%,#112820 33%,#06110f 80%); overflow-x:hidden; }
+.sky {position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.45;background:linear-gradient(110deg,transparent 48%,rgba(185,215,189,.08) 50%,transparent 51%),repeating-linear-gradient(91deg,transparent 0,transparent 52px,rgba(0,0,0,.18) 54px,transparent 62px);}
+.shell {position:relative;z-index:1; max-width:1120px; margin:0 auto; padding:30px 22px 45px;}
+.header {display:flex;display:-webkit-flex;justify-content:space-between;align-items:center;border-bottom:1px solid #4c675d;padding-bottom:15px;gap:20px;}
+.brand {font-size:12px;letter-spacing:4px;color:#94cdb6;font-weight:bold;margin-bottom:8px;}
+h1 {font-size:27px;margin:0;letter-spacing:1px;font-weight:bold;}
+.pill {display:inline-block;padding:10px 13px;border:1px solid #66846e;color:#b9dac2;background:#192e28;letter-spacing:1px;font-size:12px;font-weight:bold;text-transform:uppercase;}
+.notice {margin:20px 0;background:#1c2c27;border-left:4px solid #d7ad66;padding:12px 15px;color:#f0ddba;line-height:1.45;font-size:14px;}
+.layout {display:flex;display:-webkit-flex;align-items:stretch;gap:17px;}
+.sidebar {width:242px;flex-shrink:0;border:1px solid #40584e;background:rgba(12,27,23,.92);padding:15px;box-sizing:border-box;}
+.panel {flex:1;min-width:0;border:1px solid #648673;background:rgba(9,24,20,.96);padding:18px 21px 23px;box-sizing:border-box;min-height:490px;box-shadow:0 12px 45px rgba(0,0,0,.45);}
+.section-name {font-size:11px;letter-spacing:2px;color:#87b2a1;margin:0 0 13px;text-transform:uppercase;}
+button {font:inherit;cursor:pointer;border-radius:2px;-webkit-appearance:none;appearance:none;}
+button:focus {outline:3px solid #ffe09a;outline-offset:2px;}
+.tab {display:block;width:100%;padding:9px 10px;margin:3px 0;text-align:left;background:transparent;border:1px solid transparent;color:#bbc9bd;font-size:14px;}
+.tab.active {background:#26493c;border-color:#6fbaa0;color:white;font-weight:bold;}
+.tab:hover,.tab:focus {background:#365b4c;color:white;}
+.panel-title {font-size:21px;margin:0;color:#e4f4e9;letter-spacing:.4px;}
+.panel-intro {font-size:13px;line-height:1.5;color:#b2c9ba;margin:8px 0 20px;}
+.item {position:relative;display:block;width:100%;text-align:left;margin-bottom:8px;padding:13px 12px;background:#142d25;color:#e4eee7;border:1px solid #38594b;min-height:56px;box-sizing:border-box;}
+.item span.name {display:block;margin-right:120px;font-size:15px;}
+.item .state {position:absolute;right:11px;top:15px;font-size:11px;letter-spacing:.5px;padding:5px 7px;color:#e0c8a1;background:#4c3c29;}
+.item.selected,.item:focus {background:#315e4b;border-color:#9fdcbd;}
+.item.available .state {background:#245845;color:#d0f2dc;}
+.empty {padding:55px 10px;text-align:center;border:1px dashed #52695d;color:#9cb9a8;}
+.foot {display:flex;display:-webkit-flex;gap:15px;flex-wrap:wrap;margin-top:16px;}
+.primary {background:#2f6049;border:1px solid #9bc4aa;color:#fff;padding:11px 16px;font-weight:bold;}
+.primary:hover,.primary:focus {background:#47765f;}
+.neutral {background:#1a3329;border:1px solid #618171;color:#d0e5d6;padding:11px 16px;}
+.help {line-height:1.65;font-size:13px;margin-top:21px;color:#c2d9c7;}
+.status {margin-top:16px;border-top:1px solid #365044;padding-top:14px;font-size:13px;color:#d3e0d2;}
+.status strong {color:#a8e6be;}
+.muted {color:#a9beaf;}
+.closed {display:none;}
+.demo-note {margin:18px 0 0;font-size:12px;color:#b0c9ba;line-height:1.5;}
+@media (max-width:800px){.layout {display:block;}.sidebar{width:100%;margin-bottom:12px;}.tab{display:inline-block;width:auto;margin:3px;font-size:12px;}.panel{min-height:440px;}.item span.name {margin-right:105px;}.header{display:block;}.pill{margin-top:12px;}}
+</style>
+</head>
+<body>
+<div class="sky" aria-hidden="true"></div>
+<div class="shell">
+ <header class="header"><div><div class="brand">THE FOREST · CUSA12398 v1.15</div><h1>ULTIMATE MOD MENU</h1></div><div class="pill">PROTOTIPO VISUAL · PS4</div></header>
+ <div class="notice"><strong>PRUEBA SEGURA:</strong> esta pantalla NO está integrada en The Forest. No modifica la partida, el juego ni la consola. Las funciones de gameplay están bloqueadas.</div>
+ <main class="layout">
+  <nav class="sidebar" aria-label="Categorías del menú"><div class="section-name">Categorías</div><div id="tabs"></div></nav>
+  <section class="panel" aria-label="Panel de opciones">
+   <h2 class="panel-title" id="category-name">CHEATS</h2>
+   <p class="panel-intro" id="category-intro">Prueba visual del menú. Seleccioná opciones para explorar.</p>
+   <div id="items"></div>
+   <div class="foot"><button class="primary" id="open-close" type="button">CERRAR MENÚ</button><button class="neutral" id="reset" type="button">REINICIAR DEMO</button></div>
+   <div class="help" id="help">Cruceta: moverte por las opciones. Seleccionar: botón de confirmación del navegador (X u O según región). Teclado: ↑/↓ opciones, ←/→ categorías, Enter seleccionar, Esc cerrar. Los botones L1/R1 no son accesibles individualmente desde el navegador PS4.</div>
+   <div class="status"><strong>ESTADO:</strong> <span id="status" role="status" aria-live="polite">Demo cargada. No hay conexión con el juego.</span></div>
+  </section>
+ </main>
+ <p class="demo-note">TheForest-UCM-PS4 · Experimento de interfaz independiente, sin plugins, sin hooks, sin PKG y sin acceso a la memoria del juego. No valida el funcionamiento de un menú dentro de The Forest.</p>
+</div>
+<script>
+(function (global) {
+ 'use strict';
+ var categories = ['Cheats','Environment','Player','Animals','Mutants','Spawn','Inventory','Coop','Dev','Game'];
+ var presets = [
+  ['god_mode','God Mode',0,'locked'],
+  ['infinite_stamina','Infinite Stamina',0,'locked'],
+  ['hunger_thirst','Hunger and Thirst',2,'locked'],
+  ['free_building','Build without materials',9,'locked'],
+  ['add_inventory','Add inventory item',6,'locked'],
+  ['teleport','Teleport player',2,'locked'],
+  ['spawn_enemy','Spawn enemy',4,'locked'],
+  ['spawn_object','Spawn object',5,'locked'],
+  ['time_of_day','Time of day',1,'locked'],
+  ['weather','Weather',1,'locked'],
+  ['hints','Show controls',8,'toggle'],
+  ['opacity','Panel opacity (opaque renderer)',8,'locked'],
+  ['close','Close menu',8,'close']
+ ];
+ function Model() { this.reset(); }
+ Model.prototype.reset = function () {
+  this.category=0; this.selected=[]; this.visible=true; this.hints=true; this.last='Demo lista';
+  for(var i=0;i<categories.length;i++) this.selected[i]=0;
+ };
+ Model.prototype.items = function () {
+  var result=[]; for(var i=0;i<presets.length;i++) if(presets[i][2]===this.category)result.push(presets[i]);
+  return result;
+ };
+ Model.prototype.selectCategory = function (index) {
+  this.category=(index+categories.length)%categories.length;
+  this.last='Categoría: '+categories[this.category];
+ };
+ Model.prototype.move = function (delta) {
+  var items=this.items();
+  if(items.length) { this.selected[this.category]=(this.selected[this.category]+items.length+delta)%items.length; this.last='Seleccionado: '+items[this.selected[this.category]][1]; }
+ };
+ Model.prototype.activate = function (index) {
+  var entries=this.items(), item=entries[index];
+  if(!this.visible||!item) return 'inactive';
+  this.selected[this.category]=index;
+  if(item[3]==='locked') { this.last=item[1]+': función bloqueada en la demo'; return 'locked'; }
+  if(item[3]==='toggle') { this.hints=!this.hints; this.last='Controles: '+(this.hints?'visibles':'ocultos'); return 'toggle'; }
+  if(item[3]==='close') { this.visible=false; this.last='Menú cerrado'; return 'close'; }
+  return 'inactive';
+ };
+ Model.prototype.confirm = function(){ return this.activate(this.selected[this.category]); };
+ Model.prototype.toggleVisible = function () { this.visible=!this.visible; this.last=this.visible?'Menú abierto':'Menú cerrado'; };
+ global.UcmDemoCore={Model:Model,categories:categories,presets:presets};
+}(this));
+</script>
+<script>
+(function () {
+ 'use strict';
+ var model=new UcmDemoCore.Model();
+ var categories=UcmDemoCore.categories;
+ var labels=document.getElementById('tabs');
+ var rows=document.getElementById('items');
+ var heading=document.getElementById('category-name');
+ var intro=document.getElementById('category-intro');
+ var status=document.getElementById('status');
+ var openClose=document.getElementById('open-close');
+ var help=document.getElementById('help');
+ function button(label,css,handler) {
+  var b=document.createElement('button'); b.type='button';b.className=css;b.appendChild(document.createTextNode(label));b.onclick=handler; return b;
+ }
+ function focusOption(index) {
+  var items=rows.getElementsByTagName('button');if(items.length && items[index])items[index].focus();
+ }
+ function render(restoreFocus) {
+  var i,items=model.items(),cat=model.category;
+  labels.innerHTML='';rows.innerHTML='';
+  for(i=0;i<categories.length;i++) {
+   (function(idx){
+    var tab=button(categories[idx],'tab'+(idx===cat?' active':''),function(){model.selectCategory(idx);render(false);focusOption(model.selected[model.category]);});
+    tab.setAttribute('aria-current',idx===cat?'page':'false');
+    labels.appendChild(tab);
+   }(i));
+  }
+  heading.textContent=categories[cat].toUpperCase();
+  intro.textContent=model.visible?'Menú gráfico de prueba, sin ejecutar comandos del juego.':'El menú está cerrado. Seleccioná ABRIR MENÚ para continuar.';
+  if(model.visible) {
+   if(!items.length){var e=document.createElement('div');e.className='empty';e.textContent='Sin opciones disponibles en esta categoría.';rows.appendChild(e);}
+   for(i=0;i<items.length;i++){
+    (function(idx){
+     var item=items[idx]; var b=button('', 'item'+(idx===model.selected[cat]?' selected':'')+(item[3]!=='locked'?' available':''),function(){model.activate(idx);render(false);if(model.visible)focusOption(idx);});
+     var name=document.createElement('span');name.className='name';name.textContent=item[1];b.appendChild(name);
+     var state=document.createElement('span');state.className='state';
+     state.textContent=item[3]==='locked'?'BLOQUEADO':item[3]==='toggle'?(model.hints?'ACTIVO':'INACTIVO'):'CERRAR';
+     b.appendChild(state);rows.appendChild(b);
+    }(i));
+   }
+  }
+  openClose.textContent=model.visible?'CERRAR MENÚ':'ABRIR MENÚ';
+  help.style.display=model.hints?'block':'none';
+  status.textContent=model.last+' · Sin conexión con The Forest';
+  if(restoreFocus&&model.visible)focusOption(model.selected[cat]);
+ }
+ document.getElementById('open-close').onclick=function(){model.toggleVisible();render(false);this.focus();};
+ document.getElementById('reset').onclick=function(){model.reset();render(true);};
+ document.addEventListener('keydown',function(ev){
+  ev=ev||window.event;
+  var code=ev.which||ev.keyCode,handled=true;
+  if(code===38&&model.visible)model.move(-1);
+  else if(code===40&&model.visible)model.move(1);
+  else if(code===37&&model.visible)model.selectCategory(model.category-1);
+  else if(code===39&&model.visible)model.selectCategory(model.category+1);
+  else if(code===13&&model.visible){
+   // Let PS4 browser handle its own focused buttons. Avoid two activations.
+   handled=false;
+  }
+  else if(code===27&&model.visible){model.visible=false;model.last='Menú cerrado';}
+  else handled=false;
+  if(handled){if(ev.preventDefault)ev.preventDefault();render(true);}
+ },false);
+ render(false);
+}());
+</script>
+</body>
+</html>
