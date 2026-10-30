@@ -60,6 +60,23 @@ are verified in [the asset evidence report](docs/UNITY_PLAYER_ASSETS_20261030.md
 Real Rewired action-to-DS4 bindings and a callable retail bootstrap **remain unverified**.
 Neither workflow modifies the PKG or publishes proprietary game assets.
 
+## Rewired scene graph and native prefab selection (verified offline)
+
+The current [Rewired scene/prefab investigation](docs/REWIRED_SCENE_GRAPH_20261030.md)
+parses Unity object and script references, not just strings: the start,
+title, and gameplay `RewiredSpawner` components all point to two input
+prefabs in `sharedassets0.assets`. Verified native metadata names both
+prefab fields; `InstanceManager` accesses the XInput field and
+`InstanceVRManager` accesses the VR field. The built-in Rewired action
+catalogs differ (`Select` is 57 in VR and 58 in XInput). These are action
+IDs, **not** known DualShock 4 button bindings.
+
+[`scripts/inspect_unity_rewired_assets.py`](scripts/inspect_unity_rewired_assets.py)
+regenerates the evidence read-only from **private** Unity 5.6.6f2 assets.
+The 5 input files and original game binaries are never committed; the CI
+uses synthetic serialized fixtures. No gameplay controls, hook or PKG
+build has been enabled.
+
 ## Pruebas host
 
 ```sh
