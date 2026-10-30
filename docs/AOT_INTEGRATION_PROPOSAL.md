@@ -31,9 +31,13 @@ La diferencia entre hashes SELF y ELF no representa una diferencia de código
 en estos archivos. Esto no autentica criptográficamente el PKG/SELF ni prueba
 qué módulos están cargados en una sesión de consola.
 
-El eboot contiene la cadena `5.6.6f2`. Es la versión candidata de Unity para
-el estudio, coherente con metadata v23; antes de elegir un editor/SDK debe
-confirmarse con la información del Player/assets y su revisión de plataforma.
+La versión **Unity Player `5.6.6f2`** ya está confirmada también en las cabeceras de
+`Media/globalgamemanagers`, escenas `levelN` y archivos `sharedassets` extraídos
+privadamente del mismo PKG; el BuildSettings serializado contiene **30 escenas**,
+con `level2 = Assets/Scenes/ForestMain_v08.unity`. Véase
+[`UNITY_PLAYER_ASSETS_20261030.md`](UNITY_PLAYER_ASSETS_20261030.md).
+Esto **no** verifica que estén disponibles el Editor con soporte PS4, el SDK ni
+el proyecto/build IL2CPP exactos del título.
 
 ## 2. Registro nativo localizado y comprobado
 
