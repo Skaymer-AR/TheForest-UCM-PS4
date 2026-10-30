@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "title": "The Forest PS4 CUSA12398 v1.15",
+  "evidence_source": "user-provided private read-only report; original files are not in the repository",
+  "historical_reference": {
+    "il2cpp_module_sha256": "0159ff61c99d25c8f0a821070e3d8b24aff58dbbe5429b8f29561f9960d02969",
+    "metadata_sha256": "238c400de31e28ed4f7f14e7781ea3b33de0d0bd6964ded680d78fce1d85a6c3"
+  },
+  "current_dump": {
+    "eboot": {
+      "path": "eboot.bin",
+      "size": 21830618,
+      "sha256": "fac03b6402a7659f0efd0c133aea2252e4218a6be7f23cf84b6af82099adcd2a",
+      "container": "SCE/SELF",
+      "rva_mapping_possible": false
+    },
+    "il2cpp_module": {
+      "path": "Media/Modules/Il2CppUserAssemblies.prx",
+      "size": 63934584,
+      "sha256": "f7e590358efbfb68dc5a61bf51b070b2b85eb223070b82a31e3fd5e5118777b6",
+      "container": "SCE/SELF",
+      "historical_sha256_match": false,
+      "rva_mapping_possible": false
+    },
+    "metadata": [
+      {
+        "path": "Media/Metadata/global-metadata.dat",
+        "size": 15400780,
+        "sha256": "238c400de31e28ed4f7f14e7781ea3b33de0d0bd6964ded680d78fce1d85a6c3",
+        "historical_sha256_match": true
+      },
+      {
+        "path": "Media/Native/Data/Metadata/global-metadata.dat",
+        "size": 15400780,
+        "sha256": "238c400de31e28ed4f7f14e7781ea3b33de0d0bd6964ded680d78fce1d85a6c3",
+        "historical_sha256_match": true
+      }
+    ]
+  },
+  "anchor_checks": "skipped_non_decrypted_elf64",
+  "verdict": "evidence_only_no_live_callback_abi_or_hook_validation",
+  "interpretation": "The hashes identify reported files only. A differing SELF/container hash does not establish whether decrypted code differs; no current-dump RVA or anchor mapping was performed."
+}

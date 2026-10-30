@@ -10,6 +10,8 @@ Offline method address correlation used a PRX IL2CPP method-pointer table at fil
 
 The user-provided `Reporte_Analisis_PS4.md` reports that all 42 method prefixes match the private original PRX (SHA-256 `0159ff61c99d25c8f0a821070e3d8b24aff58dbbe5429b8f29561f9960d02969`). The binary was not attached in this turn, so this checkout does not independently recalculate that comparison. Only `OnGUI` and `ToggleConsole` were additionally confirmed from live PS4Debug reads. The selected instruction windows in `Desensamblado_Metodos.txt` produced the direct call edges summarized in [PS4_IL2CPP_ANALYSIS.md](PS4_IL2CPP_ANALYSIS.md).
 
+**New dump provenance (2026-10-30):** the user-provided read-only report identifies the current `Il2CppUserAssemblies.prx` as an SCE/SELF container with SHA-256 `f7e590358efbfb68dc5a61bf51b070b2b85eb223070b82a31e3fd5e5118777b6`, different from the historical input hash above. Both metadata locations match the historical metadata hash, but the eboot/module inputs are not decrypted ELF64 files and RVA/anchor checks were skipped. This hash difference alone does **not** prove the decrypted code differs; it means this dump has not been mapped to the historical RVAs. See [PS4_DUMP_PROVENANCE.json](PS4_DUMP_PROVENANCE.json). Do not apply the 42 candidates to this container as if they were revalidated.
+
 ## PS4Debug read-only signature confirmation
 
 - `TheForest.DebugConsole.OnGUI`: RVA **`0x005C37B0`**; one-session RAM `0x8085F7B0`. Expected and **user-confirmed** first 16 bytes: `55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 E4`.

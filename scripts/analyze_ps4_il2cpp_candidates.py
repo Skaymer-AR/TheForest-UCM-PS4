@@ -85,7 +85,9 @@ class Elf64Image:
         with path.open("rb") as source:
             header = source.read(64)
             if len(header) < 64 or header[:4] != ELF_MAGIC:
-                raise ValueError("input is not an ELF file; use a local decrypted ELF/OELF")
+                raise ValueError(
+                    "input is not an ELF file; RVA mapping is unavailable for "
+                    "this container. Use a local decrypted ELF/OELF")
             if header[4] != ELFCLASS64 or header[5] != ELFDATA2LSB:
                 raise ValueError("expected little-endian ELF64")
             fields = struct.unpack_from("<HHIQQQIHHHHHH", header, 16)

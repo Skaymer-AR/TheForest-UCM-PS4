@@ -1,3 +1,4 @@
+import json
 import struct
 import sys
 import tempfile
@@ -23,6 +24,19 @@ def make_synthetic_elf(path: Path) -> None:
 
 
 class RecoveredPs4EvidenceTests(unittest.TestCase):
+    def test_new_dump_provenance_keeps_historical_rvas_unmapped(self):
+        manifest_path = Path(__file__).resolve().parents[1] / "docs/PS4_DUMP_PROVENANCE.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        module = manifest["current_dump"]["il2cpp_module"]
+        self.assertEqual(module["container"], "SCE/SELF")
+        self.assertFalse(module["historical_sha256_match"])
+        self.assertFalse(module["rva_mapping_possible"])
+        self.assertEqual(manifest["anchor_checks"], "skipped_non_decrypted_elf64")
+        for metadata in manifest["current_dump"]["metadata"]:
+            self.assertTrue(metadata["historical_sha256_match"])
+            self.assertEqual(metadata["sha256"],
+                             manifest["historical_reference"]["metadata_sha256"])
+
     def test_evidence_has_42_rows_and_two_byte_confirmations(self):
         candidates = analysis.parse_evidence(analysis.DEFAULT_EVIDENCE)
         self.assertEqual(len(candidates), 42)
@@ -117,6 +131,13 @@ class RecoveredPs4EvidenceTests(unittest.TestCase):
             self.assertEqual(image.image_base, 0x1000)
             self.assertEqual(image.file_offset(0x30), 0x130)
             self.assertEqual(image.read_rva(0x30, 1), b"\xA5")
+
+    def test_container_input_fails_closed_without_rva_mapping(self):
+        with tempfile.TemporaryDirectory() as temp:
+            container = Path(temp) / "Il2CppUserAssemblies.prx"
+            container.write_bytes(b"SCE/SELF container fixture")
+            with self.assertRaisesRegex(ValueError, "RVA mapping is unavailable"):
+                analysis.Elf64Image(container)
 
     def test_objdump_parser_reads_direct_call_and_jump_edges(self):
         lines = """\

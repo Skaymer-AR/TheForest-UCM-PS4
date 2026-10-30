@@ -6,6 +6,12 @@ las restricciones actuales. No se encontró ni se demostró un host AOT
 propiedad del título que el PRX GoldHEN pueda cargar o registrar. No se añade
 un proveedor ficticio al adaptador existente.
 
+El último dump reportado contiene un módulo SCE/SELF con hash distinto de la
+imagen ELF64 histórica que respalda los RVA del análisis. La metadata coincide,
+pero no hay ELF descifrado para mapear esos RVA contra el dump actual; esto no
+demuestra que el código descifrado haya cambiado. La procedencia está en
+[`PS4_DUMP_PROVENANCE.json`](PS4_DUMP_PROVENANCE.json).
+
 La decisión no significa que el objetivo sea imposible en cualquier
 arquitectura. Identifica la pieza concreta que falta: un componente ejecutable
 compilado/registrado por el backend IL2CPP del juego y un bootstrap que lo

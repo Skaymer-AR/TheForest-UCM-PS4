@@ -1,4 +1,6 @@
+import contextlib
 import hashlib
+import io
 import json
 import struct
 import sys
@@ -369,6 +371,28 @@ Example — RVA 0x00476279 — ventana 0x10 bytes
                 "--output", str(report_path),
             ])
         self.assertEqual(status, 2)
+        self.assertFalse(report_path.exists())
+
+    def test_cli_rejects_sce_self_container_before_rva_or_hash_analysis(self):
+        metadata_bytes = metadata_fixture()
+        module_bytes = b"SCE/SELF container fixture"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            metadata_path = root / "metadata.dat"
+            module_path = root / "module.prx"
+            report_path = root / "report.md"
+            metadata_path.write_bytes(metadata_bytes)
+            module_path.write_bytes(module_bytes)
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                status = pipeline.main([
+                    "--metadata", str(metadata_path), "--module", str(module_path),
+                    "--expected-metadata-sha256", hashlib.sha256(metadata_bytes).hexdigest(),
+                    "--expected-module-sha256", hashlib.sha256(module_bytes).hexdigest(),
+                    "--output", str(report_path),
+                ])
+        self.assertEqual(status, 2)
+        self.assertIn("RVA mapping is unavailable", stderr.getvalue())
         self.assertFalse(report_path.exists())
 
     def test_static_field_hash_failure_is_reported_and_returns_nonzero(self):

@@ -24,6 +24,14 @@ una asociación exacta con registro de tipos PS4. Las llamadas
 `0x004762D6`/`0x00476315` permanecen indirectas y sin nombre de interfaz o
 método destino.
 
+El último dump privado reportado contiene eboot y módulo como contenedores
+SCE/SELF: sus hashes son `fac03b64…99adcd2a` y `f7e59035…8777b6`. No sirven
+como imágenes de RVA hasta disponer de ELF64 descifrado. El módulo reportado
+tampoco coincide por hash con la imagen histórica que fija este pipeline; no
+se puede inferir de ello si el código descifrado difiere. La metadata sí
+coincide (`238c400d…d85a6c3`). La provenance está en
+[`PS4_DUMP_PROVENANCE.json`](PS4_DUMP_PROVENANCE.json).
+
 ## Una sola ejecución reproducible
 
 En una máquina que conserve localmente los dos originales privados:
@@ -36,7 +44,8 @@ python3 scripts/analyze_ps4_il2cpp_pipeline.py \
   --output /tmp/theforest-il2cpp-report.md
 ```
 
-El hash y la versión esperados se fijan por defecto al build PS4 reportado:
+El hash y la versión esperados se fijan por defecto a la imagen ELF64 histórica
+que se pudo analizar, no al contenedor SCE/SELF del último dump:
 
 - metadata v23, SHA-256 `238c400de31e28ed4f7f14e7781ea3b33de0d0bd6964ded680d78fce1d85a6c3`;
 - módulo SHA-256 `0159ff61c99d25c8f0a821070e3d8b24aff58dbbe5429b8f29561f9960d02969`;

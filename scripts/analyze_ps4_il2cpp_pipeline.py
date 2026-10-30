@@ -732,7 +732,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--metadata", type=Path, required=True,
                         help="private global-metadata.dat v23; never copied")
     parser.add_argument("--module", type=Path, required=True,
-                        help="private original Il2CppUserAssemblies.prx ELF")
+                        help=("private decrypted ELF64/OELF image for "
+                              "Il2CppUserAssemblies.prx; SELF containers "
+                              "cannot be RVA-mapped"))
     parser.add_argument("--method-pointer-table-offset", type=lambda v: int(v, 0),
                         default=METHOD_POINTER_TABLE_OFFSET)
     parser.add_argument("--expected-metadata-sha256", default=METADATA_SHA256)
@@ -762,6 +764,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         metadata_bytes = args.metadata.read_bytes()
         metadata = parse_metadata_v23(metadata_bytes)
+        # Reject encrypted SCE/SELF containers before hash comparison so the
+        # caller gets the actionable format limitation, not a misleading
+        # historical-image hash mismatch. This parses headers only.
+        image = Elf64Image(args.module)
         module_sha = _hash_file(args.module)
         expected_metadata_sha = args.expected_metadata_sha256.lower()
         expected_module_sha = args.expected_module_sha256.lower()
@@ -769,7 +775,6 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError(f"metadata SHA-256 mismatch: expected {expected_metadata_sha}, got {metadata.sha256}")
         if module_sha != expected_module_sha:
             raise ValueError(f"module SHA-256 mismatch: expected {expected_module_sha}, got {module_sha}")
-        image = Elf64Image(args.module)
         if image.image_base != 0:
             raise ValueError("pinned PS4 module was expected to use PT_LOAD image base 0; refusing RVA/table interpretation")
         methods = _query_method_rows(metadata, args.module, image,
