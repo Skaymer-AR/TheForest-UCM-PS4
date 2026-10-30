@@ -1,43 +1,46 @@
 # Codex instructions — The Forest UCM PS4 (SAFETY HOLD)
 
-Target: **The Forest CUSA12398 v1.15**, PS4 GoldHEN.
+Target: The Forest CUSA12398 v1.15, PS4 GoldHEN. User environment: firmware
+12.02 and GoldHEN 2.4B18.9.
 
-## CRITICAL 2026-10-29 hardware incident
+## Confirmed hardware history
 
-- v0.5 native GNM overlay PRX: black screen after splash, PS4 shell still
+- v0.3 no-hook probe loaded and allowed normal gameplay.
+- v0.5 GNM/VideoOut/Pad prototype left the game black while the shell stayed
   responsive.
-- v0.6 `passive_all` PRX: **full console lockup**. The game could not close
-  and Rest Mode attempt also hung. This is worse than a normal game crash.
-- Earlier v0.3 NO-HOOK probe: normal gameplay and notification confirmed.
+- v0.6 passive_all detours caused a full PS4 lockup.
+- The user removed the experimental PRX and confirmed The Forest starts
+  normally again.
 
-**STOP** requesting any additional user hardware tests involving old v0.5/v0.6
-inline API detours. See issue #4 and README.md.
+Do not request or recommend another PS4 test during the current architecture
+review. Do not install or publish hook-enabled v0.5/v0.6 PRXs.
 
 ## Required engineering approach
 
-- Start from this v0.7 no-hook hotfix. It compiles a single no-hook baseline.
-- Audit the upstream GoldHEN Detour implementation:
-  `Detour_DetourFunction64` copies x86-64 instructions to a stub without
-  general RIP-relative relocation handling. Validate ABI and code
-  relocation before reusing any hook.
-- Resolve the v0.6 unbounded `wait_for_original` spin and unbounded
-  `ps4_backend_stop` callback-drain design. Simply adding a timeout while
-  freeing an active trampoline is unsafe. No blocking waits on graphics,
-  input or plugin teardown thread.
-- Investigate an alternative overlay route that does NOT patch the
-  entrypoints of shared system libraries; establish safe startup and teardown
-  behavior, and prove it through offline tests before requesting hardware.
-- Do not change PKG, save files, unknown IL2CPP flags, or make calls using
-  the observed NULL DebugConsole instance.
-- No copyrighted game executable, metadata or assets in this repo.
-- `src/menu.*`, `src/overlay.*`, `src/drawlist.*` are host-only menu
-  logic/prototypes, **not** working in-game drawing.
-- Status reporting must separate **CI builds** from **verified hardware**.
+- Default CI may build only the no-hook PRX baseline. Do not add a hook-enabled
+  artifact or a profile that can be installed by default.
+- The current GoldHEN Detour SDK copies x64 instructions without general
+  RIP-relative relocation, patches executable code without thread quiescence,
+  and exposes the patched entry before v0.6 publishes its original-call
+  pointer. See docs/SAFE_OVERLAY_DESIGN.md; distinguish evidence from
+  hypotheses.
+- No timeout followed by freeing a possibly active trampoline. Restore
+  failure, missing quiescence proof, or active leases must retain resources.
+  Do not use blocking waits on render, input, or teardown paths.
+- Investigate a documented Unity or GoldHEN render callback that avoids
+  patching shared system API entrypoints. Do not use the observed NULL
+  DebugConsole instance or invent addresses/IL2CPP flags.
+- Keep src/menu.*, src/overlay.*, and src/drawlist.* unchanged unless the user
+  asks for UI work. They are host-side menu and renderer logic, not a working
+  in-game overlay.
+- src/bridge_lifecycle.* is host-test-only and must not be included in the
+  PRX build. The archived unsafe backends are for source review only.
+- Do not modify the PKG, save files, unknown game flags, or commit game
+  binaries/assets. Do not claim CI is hardware verification.
 
-## Next deliverable
+## Verification
 
-A documented fault tree / root-cause investigation and a redesigned
-render/input integration, with demonstrable bounds, safe unload, and
-tests of the error paths. Keep any future invasive experiment behind a
-compile-time opt-in; do not publish default artifacts that hook game
-or system libraries.
+Run python3 scripts/assert-safe-build.py and SANITIZE=1 sh scripts/test.sh.
+The tests simulate lifecycle errors and concurrency; they do not prove the
+PS4/GoldHEN platform supplies the quiescence primitive required for safe
+unload.

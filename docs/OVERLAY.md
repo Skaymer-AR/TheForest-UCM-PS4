@@ -1,43 +1,13 @@
-# Overlay status — critical safety hold
+# Overlay status
 
-**Do not load the original v0.5 or any hook-enabled v0.6 PRX on PS4.**
+**Safety hold: no active PS4 hooks or in-game rendering.**
 
-The user confirmed a full console lockup on October 29, 2026 using
-`theforest_ucm_passive_all.prx` from v0.6. Earlier v0.5 showed a black
-screen after startup but kept the shell responsive. See
-[Critical Incident #4](https://github.com/Skaymer-AR/TheForest-UCM-PS4/issues/4).
+The user reports that removing the experimental PRX restored normal startup. v0.5 produced a black game screen; v0.6 passive_all caused a full console lockup. Do not install or recommend any v0.5/v0.6 hook-enabled artifact.
 
-## Source findings (not yet definitive causation)
+The menu state machine, categories, normalized controller actions, overlay rendering interface, and draw-list generator remain in the repository. They are host-side components only. The currently built PRX is a no-hook target/version notification probe and does not render or read the DualShock 4.
 
-- v0.6 `wait_for_original()` used an unbounded spin waiting for a
-  trampoline pointer; in an unsuccessful publication race this never returns.
-- v0.6 `ps4_backend_stop()` waited without deadline for callback count to
-  reach zero, potentially blocking teardown and game closure.
-- The upstream GoldHEN SDK `Detour_DetourFunction64()` copies prologue
-  instructions into a stub. Its code does not implement a general relocation
-  pass for RIP-relative instructions; concurrent rewriting of system APIs is
-  a further risk.
-- The exact function/phase causing the lockup cannot be established without
-  logs, traces and careful offline binary/disassembly validation.
+The earlier PS4 backend is retained under archive/unsafe-v0.5 and archive/unsafe-v0.6 for source review only. The build uses only source/plugin_main.c and the no-op source/ps4_backend.c. scripts/assert-safe-build.py checks that boundary.
 
-## Mitigation in source v0.7
+The host lifecycle model in src/bridge_lifecycle.* exercises bounded callback entry, restoration failure, active leases, stale leases, and explicit quiescence requirements. Passing those tests does not prove that GoldHEN, Unity, or the PS4 loader provides the required runtime callback/unload guarantees.
 
-- Removed all detours from compiled backend. `source/ps4_backend.c` is a
-  pure no-op interface and explicitly rejects the old nonzero hooks profiles.
-- Only the `no_hooks` baseline is built. Artifact:
-  `theforest-ucm-safe-baseline-only`.
-- No GNM, VideoOut, ScePad hook, framebuffer access, overlays, or game writes.
-- The menu/overlay state machine and host tests are preserved separately.
-
-This is a **build safety mitigation**, not an implementation of the menu.
-Do not claim rendering or input is verified. Reintroducing in-process
-interception requires a review of memory protection, relocation, concurrent
-installation and teardown safety with nonblocking callbacks.
-
-## Next implementation milestone
-
-Codex should design a rendering/input path that avoids patching shared
-system API code at startup, establish a tested lifecycle, and separate an
-observable non-hook smoke test from any experimental hooks. No further PS4
-trials are requested until this review is complete and the user explicitly
-agrees to a new narrowly scoped test.
+See [SAFE_OVERLAY_DESIGN.md](SAFE_OVERLAY_DESIGN.md) for the trampoline/ABI audit, root-cause assessment, alternative integration paths, test matrix, and remaining research questions. No PS4 trial is requested.

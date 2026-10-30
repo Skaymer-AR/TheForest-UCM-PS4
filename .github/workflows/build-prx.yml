@@ -8,6 +8,8 @@ on:
       - "src/**"
       - "tests/**"
       - "scripts/**"
+      - "docs/**"
+      - "AGENTS.md"
       - ".github/workflows/build-prx.yml"
 
   pull_request:
@@ -17,11 +19,11 @@ permissions:
 
 jobs:
   tests:
-    name: Test C menu core
+    name: Test C menu and bridge lifecycle model
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Compile and run portable C tests
+      - name: Compile and run portable tests with ASan and UBSan
         run: SANITIZE=1 sh scripts/test.sh
       - name: Upload host UI preview (not a PS4 screenshot)
         uses: actions/upload-artifact@v4
@@ -67,6 +69,6 @@ jobs:
         with:
           name: theforest-ucm-safe-baseline-only
           path: |
-            output/safe/*.prx
+            output/safe/theforest_ucm_safe_baseline.prx
             output/safe/sha256.txt
           if-no-files-found: error

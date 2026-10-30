@@ -1,4 +1,4 @@
-// Safety hotfix v0.7: compile-only NO-HOOK baseline.
+// Safety baseline v0.8: compile-only NO-HOOK backend.
 // All API detours from v0.5/v0.6 are quarantined in Git history.
 // Do not restore inline hooks without independent safety review.
 #include "ps4_backend.h"
@@ -9,10 +9,11 @@
 
 static const Ps4BackendStatus g_safe_status = {
     .profile = "no_hooks",
-    .failed_hook = "none",
-    .videoout_hooked = false,
-    .pad_read_state_hooked = false,
-    .pad_read_hooked = false
+    .hooks_active = false,
+    .renderer_active = false,
+    .framebuffer_writes_active = false,
+    .controller_interception_active = false,
+    .gameplay_writes_active = false
 };
 
 bool ps4_backend_start(void) {

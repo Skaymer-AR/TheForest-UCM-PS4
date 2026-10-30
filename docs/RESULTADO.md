@@ -1,78 +1,37 @@
-# The Forest PS4 CUSA12398 v1.15 — DebugConsole findings
+# Estado del proyecto The Forest UCM PS4
 
-## Reproduced console observations
+## Estado actual (2026-10-30)
 
-- IL2CPP module base during this session: `0x8029C000`.
-- `DebugConsole.ToggleConsole` address `0x808676D0`: first 16 bytes matched offline.
-- `DebugConsole.OnGUI` address `0x8085F7B0`: first 16 bytes matched offline.
-- Static `DebugConsole` instance pointer `0x20949AD90` was `0x0` in both the game world and the main menu.
-- `Awake` guard A at `0x2058BE721` read `00` after initialization.
-- `Awake` guard B at `0x201A4F3F0` read `00` after initialization.
+El usuario retiró el PRX experimental y confirmó que The Forest CUSA12398 v1.15 vuelve a iniciar normalmente. No se solicita otra prueba en PS4 durante esta revisión.
 
-## Disassembly interpretation to validate further
+El PRX activo es una base sin hooks. Comprueba título/versión y muestra una notificación; no dibuja el menú, no lee el DualShock 4 y no modifica el juego. Ningún artifact con hooks v0.5/v0.6 debe instalarse o recomendarse.
 
-- `Awake` RVA: `0x005C1C30`.
-- At RVA `0x005C1C99`, `cmp byte ptr [rax+1], 0`; guard A=0 follows a branch to `0x005C1D2B`.
-- At RVA `0x005C1E13`, `cmp byte ptr [rax+0x10],0`; guard B=0 follows the branch to `0x005C1CA3`.
-- This branch exits without assigning a registered instance **if** those byte values were present during `Awake`.
-- We read the guards **after** startup, so the observations do not prove their values at invocation.
-- The semantic meaning of the guards remains unknown.
+## Historial de hardware confirmado
 
-## Development choice
+- v0.3, sin hooks: notificó que cargó y permitió entrar a una partida sin congelamientos.
+- v0.5, con renderer GNM y hooks de VideoOut/Pad: la notificación apareció, pero el juego quedó negro después de la pantalla inicial. El shell de PS4 respondió y el juego pudo cerrarse.
+- v0.6, perfil passive_all con hooks de VideoOut/Pad: se produjo un bloqueo completo de la consola.
+- Tras retirar el PRX experimental, el juego volvió a iniciar normalmente.
 
-Do not change guard B or call `ToggleConsole` when the instance pointer is NULL.
+Estos resultados relacionan el problema con el camino de integración experimental, pero no identifican el hilo ni la instrucción exacta que falló.
 
-The user confirmed that the non-hooking probe loads, The Forest enters a session,
-and gameplay continues without freezes or crashes. The load milestone is complete.
-The current task is diagnosing v0.5's startup hooks; no invocation hook or guard
-patch is needed for that work.
+## DebugConsole
 
-No original game data, binary or raw memory dump is committed.
+En una sesión anterior se observó la instancia de DebugConsole en NULL. Las guardas consultadas después de iniciar tampoco tienen semántica confirmada. No se modificaron guardas, datos del juego, PKG ni partidas; la integración actual no llama a DebugConsole.
 
-## Build and UI development evidence
+No se guardan ni reutilizan direcciones absolutas de esa sesión para este diseño.
 
-The first diagnostic PRX compiled successfully in GitHub Actions run
-[40957399526](https://github.com/Skaymer-AR/TheForest-UCM-PS4/actions/runs/40957399526)
-for commit `68150e5`. This does not verify loading on hardware. The new visual
-menu core has a host renderer and input/lifecycle tests, with an intentionally
-detached PS4 adapter. See [OVERLAY.md](OVERLAY.md) for boundaries and pending
-render/input integration. The observations above remain unchanged.
+## Implementación conservada
 
-## PS4 load confirmation (2026-10-29)
+El modelo de menú, sus categorías, navegación DualShock normalizada, interfaz de render y generador de draw-list siguen en src/ y sus pruebas host. El backend PS4 v0.5 está archivado en archive/unsafe-v0.5 solo para auditoría. Los detours v0.6 están en archive/unsafe-v0.6. Esos archivos no participan en el build.
 
-The user confirmed that the PRX displayed `The Forest: UCM probe loaded (NO
-HOOKS)` on their PS4, then The Forest entered a session and remained playable
-without freezes or crashes. This confirms the probe load and basic game
-stability only; it does not confirm that the menu is drawn or controlled by the
-DualShock 4.
+El nuevo src/bridge_lifecycle.* es un modelo host-only de estados y leases. No es una integración runtime ni prueba que GoldHEN proporcione una barrera de descarga segura.
 
-## v0.5 black-screen regression report (2026-10-29)
+## Verificación y límites
 
-On v0.5 the notification appeared, but after the title screen the game stayed
-black. The PS4 shell remained responsive; PS4Debug still saw `eboot.bin` and
-memory maps, and the game could be closed normally. This is a game startup/render
-regression, not a whole-console freeze. The earlier no-hook probe remained
-playable.
+- scripts/assert-safe-build.py verifica que el PRX compile sin hooks y que no incorpore el modelo host.
+- scripts/test.sh prueba el menú, la capa visual y el modelo de ciclo de vida.
+- SANITIZE=1 sh scripts/test.sh ejecuta los tests con ASan y UBSan.
+- GitHub Actions produce únicamente theforest-ucm-safe-baseline-only.
 
-Source review found that v0.5 installed the GNM submit/flip detour during
-`plugin_load`, even while its menu was hidden, allocated a direct-memory command
-buffer during load, and could append GPU work to the game's frame submission.
-This is the first path being removed, but source review alone cannot confirm it
-caused the black screen.
-
-## v0.6 startup-hook diagnostic (2026-10-29)
-
-The diagnostic build removes all GNM code/imports, rendering, framebuffer
-access/writes, Unity calls and gameplay changes. Its first profile leaves
-VideoOut, `scePadReadState` and `scePadRead` as passive observers. Additional
-profiles enable each hook individually and provide a no-hook control. Callback
-logs are replaced with atomic counters; the plugin logs the profile and
-summary only from load/unload handling.
-
-Portable tests and the v0.6 PRX profiles passed in GitHub Actions run
-[40971740647](https://github.com/Skaymer-AR/TheForest-UCM-PS4/actions/runs/40971740647);
-the `theforest-ucm-diagnostic-prx` artifact is available from that run. The
-user's hardware tests are still pending, so the black-screen regression is
-unresolved until a profile passes the title screen on PS4. No rendering or
-controller integration is claimed functional. See [OVERLAY.md](OVERLAY.md) for
-the profiles, ABI references, and exact feature boundary.
+La evaluación del trampoline, ABI, riesgos de concurrencia, alternativas de renderizado y los límites de las pruebas está en [SAFE_OVERLAY_DESIGN.md](SAFE_OVERLAY_DESIGN.md). Una compilación o test host no confirma que el overlay funcione en PS4.
