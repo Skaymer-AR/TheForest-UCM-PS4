@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-Codex's prior document `docs/IL2CPP_INTEGRATION_RESEARCH.md` says no PS4 RVAs were available **to Codex Cloud** because it did not have the binaries there. However, this ChatGPT conversation had already produced 42 PS4 method-address candidates, and the user physically verified the first 16 instruction bytes at two functions via PS4Debug. The two data sets should be reconciled, not discarded.
+The earlier `docs/IL2CPP_INTEGRATION_RESEARCH.md` contained stale wording because the private binaries were not present in that Cloud checkout. The user's prior analysis had already produced 42 PS4 method-address candidates, and the user physically verified the first 16 instruction bytes at two functions via PS4Debug. This evidence is now restored and analyzed in `docs/PS4_IL2CPP_ANALYSIS.md`.
 
 Offline method address correlation used a PRX IL2CPP method-pointer table at file offset `0x31738C0`, and a module base observed in one console session of `0x8029C000`. **Absolute RAM addresses from that session are not valid for other launches without checking the loaded module base.** RVAs below are not proofs of a valid native ABI, an instantiated object, or a safe callback registration mechanism.
 
@@ -72,3 +72,7 @@ Status `offline candidate` means **not hardware byte-checked** even though the R
 3. The PS4 console scene bundle analysis had found enabled `DebugConsole` objects in menu and gameplay scenes, but the static instance pointer was still NULL at runtime. A scene object name is not evidence of a reachable active callback.
 4. **No safe in-game overlay or DS4 route has been established.** Don't revive the experimental v0.5/v0.6 GNM/VideoOut/ScePad inline detours: they caused a black screen and a full console hang, respectively.
 5. If more private binary analysis is needed, request a local read-only script run by the user against their own retained files, not another upload of copyrighted binaries into a public repo. Generated method tables, bounded hex signatures and validation results can be checked in.
+
+## Reanalysis tooling
+
+The read-only analyzer in [`scripts/analyze_ps4_il2cpp_candidates.py`](../scripts/analyze_ps4_il2cpp_candidates.py) reads this table, validates both confirmed entry prefixes against a private local ELF, disassembles bounded windows for the focus methods and can scan direct `call`/`jmp` xrefs. It refuses to disassemble if either anchor mismatches. Analysis conclusions and invocation examples are in [`PS4_IL2CPP_ANALYSIS.md`](PS4_IL2CPP_ANALYSIS.md). Neither the ELF nor its generated full disassembly belongs in this repository.

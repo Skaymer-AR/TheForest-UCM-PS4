@@ -19,15 +19,17 @@ implementación comprobada.
 
 ## Investigación IL2CPP offline
 
-La evidencia pública consultada corresponde a decompilados y mods de PC. No
-confirma firmas ni direcciones de CUSA12398 PS4. La investigación de
-`DllModLoader`, `ModList`, `CheatsBridge`, `VirtualCursor` y `DebugConsole`, el
-candidato `DebugConsole.OnGUI`, y las herramientas para generar un informe de
-RVA desde archivos locales está en
-[`docs/IL2CPP_INTEGRATION_RESEARCH.md`](docs/IL2CPP_INTEGRATION_RESEARCH.md).
+La evidencia recuperada contiene 42 RVA candidatos de PS4 para CUSA12398
+v1.15. PS4Debug confirmó las firmas de entrada de `DebugConsole.OnGUI` y
+`DebugConsole.ToggleConsole`; las otras entradas no tienen bytes confirmados.
+El análisis de candidatos y ABI, más instrucciones para generar xrefs directas
+contra un ELF local, está en
+[`docs/PS4_IL2CPP_ANALYSIS.md`](docs/PS4_IL2CPP_ANALYSIS.md). El analizador es
+[`scripts/analyze_ps4_il2cpp_candidates.py`](scripts/analyze_ps4_il2cpp_candidates.py).
 
-Los binarios originales, metadatos y dumps generados deben permanecer fuera del
-repositorio. `scripts/analyze_il2cpp.py` los procesa localmente y no los sube.
+El ELF original, metadatos y dumps generados deben permanecer fuera del
+repositorio. El script compara primero las dos firmas PS4 conocidas y se niega
+a desensamblar si no coinciden. Nunca usa direcciones RAM de una sesión previa.
 
 ## Pruebas host
 
