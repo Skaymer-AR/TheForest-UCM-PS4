@@ -20,6 +20,7 @@ void ucm_unity_adapter_init(UcmUnityAdapter *adapter) {
     atomic_init(&adapter->state, UCM_ADAPTER_EMPTY);
     atomic_init(&adapter->callback_leases, 0u);
     atomic_flag_clear(&adapter->stop_gate);
+    atomic_flag_clear(&adapter->frame_gate);
 }
 
 static void unity_frame_callback(void *opaque,
@@ -28,14 +29,24 @@ static void unity_frame_callback(void *opaque,
     UcmPadSnapshot snapshot;
     UcmUnityAdapterState state;
     uint32_t buttons = 0u;
+    bool frame_owned = false;
 
     if (!adapter) return;
     atomic_fetch_add_explicit(&adapter->callback_leases, 1u,
                               memory_order_acq_rel);
     state = (UcmUnityAdapterState)atomic_load_explicit(
         &adapter->state, memory_order_acquire);
-    if (state != UCM_ADAPTER_RUNNING ||
-        !adapter->host.is_render_context(adapter->host.context,
+    if (state != UCM_ADAPTER_RUNNING)
+        goto done;
+
+    /* Unity's provider is not yet proven to serialize/reject concurrent
+     * OnGUI callbacks. Drop overlapping frames rather than blocking a GUI
+     * thread or racing the mutable menu/overlay state. */
+    if (atomic_flag_test_and_set_explicit(&adapter->frame_gate,
+                                          memory_order_acquire))
+        goto done;
+    frame_owned = true;
+    if (!adapter->host.is_render_context(adapter->host.context,
                                          render_context))
         goto done;
 
@@ -49,6 +60,8 @@ static void unity_frame_callback(void *opaque,
     overlay_frame(&adapter->overlay, snapshot.connected, buttons);
 
 done:
+    if (frame_owned)
+        atomic_flag_clear_explicit(&adapter->frame_gate, memory_order_release);
     atomic_fetch_sub_explicit(&adapter->callback_leases, 1u,
                               memory_order_release);
 }

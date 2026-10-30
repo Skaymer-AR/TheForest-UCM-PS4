@@ -253,6 +253,45 @@ static int test_inflight_callback_is_not_waited_on_or_detached(void) {
     return 0;
 }
 
+static int test_concurrent_gui_frames_are_dropped_nonblocking(void) {
+    FakeHost fake;
+    UcmUnityHostApi api;
+    UcmUnityAdapter adapter;
+    CallbackThreadArgs args;
+    pthread_t thread;
+    unsigned int spins;
+
+    fake_init(&fake, &api);
+    fake.block_read = true;
+    ucm_unity_adapter_init(&adapter);
+    CHECK(ucm_unity_adapter_start(&adapter, &api) == UCM_ADAPTER_OK);
+    args.fake = &fake;
+    CHECK(pthread_create(&thread, NULL, run_callback, &args) == 0);
+    for (spins = 0; spins < 1000000u && !atomic_load(&fake.read_entered); ++spins)
+        sched_yield();
+    if (!atomic_load(&fake.read_entered)) {
+        atomic_store(&fake.release_read, true);
+        (void)pthread_join(thread, NULL);
+        CHECK(false);
+    }
+
+    /* The second callback must return while the first read is held,
+     * without making another read or racing overlay_frame(). */
+    invoke_frame(&fake, fake.valid_render_context);
+    CHECK(atomic_load(&fake.read_count) == 1u);
+    CHECK(atomic_load(&fake.rect_count) == 0u);
+
+    atomic_store(&fake.release_read, true);
+    CHECK(pthread_join(thread, NULL) == 0);
+    CHECK(atomic_load(&fake.read_count) == 1u);
+
+    /* The gate must be released, so a later frame can proceed normally. */
+    invoke_frame(&fake, fake.valid_render_context);
+    CHECK(atomic_load(&fake.read_count) == 2u);
+    CHECK(ucm_unity_adapter_try_stop(&adapter) == UCM_ADAPTER_OK);
+    return 0;
+}
+
 static int test_failed_detach_retains_adapter(void) {
     FakeHost fake;
     UcmUnityHostApi api;
@@ -273,6 +312,7 @@ int main(void) {
     if (test_pad_mapping() || test_start_validation_and_registration_failure() ||
         test_render_context_navigation_and_stop() ||
         test_inflight_callback_is_not_waited_on_or_detached() ||
+        test_concurrent_gui_frames_are_dropped_nonblocking() ||
         test_failed_detach_retains_adapter())
         return 1;
     puts("Unity host adapter and DS4 mapper tests: PASS");

@@ -68,6 +68,8 @@ typedef struct {
     _Atomic int state;
     _Atomic uint32_t callback_leases;
     atomic_flag stop_gate;
+    /* Nonblocking exclusivity for mutable overlay state across GUI events. */
+    atomic_flag frame_gate;
     uintptr_t callback_token;
     bool detach_proven;
 } UcmUnityAdapter;
