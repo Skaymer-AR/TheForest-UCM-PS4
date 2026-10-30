@@ -11,9 +11,10 @@ código del juego ni se accede a memoria de consola.
 entrada fue confirmada físicamente por PS4Debug. Eso acredita que el código
 está compilado en el PRX, no que Unity esté invocando actualmente el callback.
 La instancia singleton se observó como NULL en el menú principal y durante una
-partida. La ventana privada recibida no contiene `DebugConsole.Awake` ni
-`GetInstance`, así que no permite reconstruir las condiciones exactas de
-registro o destrucción. No hay una ruta comprobada para activar una instancia
+partida. La primera tanda de ventanas enviada a Codex no contenía `DebugConsole.Awake`
+ni `GetInstance`. **Esas ventanas fueron recuperadas y desensambladas del PRX
+original después del commit 37a059c**. La sección de actualización de abajo
+explica las condiciones verificadas y lo que sigue siendo incierto. No hay una ruta comprobada para activar una instancia
 legítima, ni un proveedor de callback al que conectar el UCM sin interceptar
 código del juego.
 
@@ -246,10 +247,12 @@ No se requiere ninguna prueba en la consola en esta etapa. La conclusión centra
 
 ## Siguiente experimento mínimo
 
-El siguiente paso es offline, no un ensayo de consola: generar con el PRX
-original privado ventanas completas para `0x005C1C30`, `0x005CB690`,
-`0x005CA800` y las llamadas indirectas de `0x004761A0`; unirlas con la metadata
-de métodos, campos estáticos e interfaces/vtables, y correr el resolutor. Eso
+**Actualización:** las ventanas de `Awake` (`0x005C1C30`) y `GetInstance`
+(`0x005CB690`) **ya se recuperaron del PRX privado** y se resolvió el guard
+de `Cheats.DebugConsole` como causa plausible de la ausencia de instancia.
+El siguiente paso es formalizar el CFG/identidad de tipos de esas rutas,
+analizar la destrucción en `OnDestroy` y resolver las llamadas indirectas de
+Rewired desde `0x004761A0` con su metadata y vtables. Eso
 permitirá contestar si `Awake` registra el singleton, qué condición llega a
 `Destroy`, quién consulta `GetInstance` y qué métodos Rewired reciben los
 botones. Si el resultado aún no muestra una ruta de registro/no invasiva, no
