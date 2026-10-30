@@ -28,6 +28,18 @@ cheat alternatives. Never claim a runnable in-game menu before its callback,
 ABI, teardown and platform-build requirements are verified. The PS4 hardware
 test and live hook installation remain subject to an explicit approval gate.
 
+## New offline proof: PlayMaker action vtable
+
+Read [`docs/PLAYMAKER_VIRTUAL_DISPATCH_20261030.md`](docs/PLAYMAKER_VIRTUAL_DISPATCH_20261030.md).
+The real `PlayMakerGUI.OnGUI` calls `CallOnGUI` twice; the method traverses
+existing PlayMaker actions, and the indirect call `*0x320(%rax)` matches
+`FsmStateAction.OnGUI` virtual slot 33. Slot 30 (OnEnter, `*0x2f0`)
+and slot 32 (OnUpdate, `*0x310`) provide independent corroboration.
+**This is NOT a safe external callback registration API or permission to
+patch global class vtables.** Investigate ownership and lifecycle before
+suggesting any PRX/injection architecture. Avoid re-running unrelated
+DebugConsole or web demo work.
+
 ## Required engineering approach
 
 - This integration-research branch runs offline checks only. Do not build or
