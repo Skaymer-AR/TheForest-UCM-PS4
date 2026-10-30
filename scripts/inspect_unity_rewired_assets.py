@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ACTION_NAME = re.compile(rb"[A-Za-z0-9_ &-]{3,32}\Z")
+UUID_TEXT = re.compile(rb"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
 
 
 class Cursor:
@@ -299,8 +300,18 @@ def analyze(root: Path) -> dict:
         if (sc and sc["class_name"] == "HardwareJoystickMap"
                 and sc["namespace"] == "Rewired.Data.Mapping"
                 and b"SonyDualShock4" in shared.obj(pid)):
+            identifiers = sorted({value.decode("ascii").lower()
+                                  for value in UUID_TEXT.findall(shared.obj(pid))})
             hardware.append(dict(object_id=pid, profile="SonyDualShock4",
-                                 kind="generic-hardware-joystick-map"))
+                                 kind="generic-hardware-joystick-map",
+                                 identifiers=identifiers))
+    hardware_ids = set()
+    for hw in hardware:
+        hardware_ids.update(hw["identifiers"])
+    for pid, prefab in prefabs.items():
+        manager_ids = {value.decode("ascii").lower()
+                       for value in UUID_TEXT.findall(shared.obj(prefab["component_id"]))}
+        prefab["matching_hardware_identifiers"] = sorted(hardware_ids & manager_ids)
     action_maps = [prefab["actions"] for prefab in prefabs.values()]
     shared_pairs = len(set(action_maps[0].items()) & set(action_maps[1].items()))
     variations = {
