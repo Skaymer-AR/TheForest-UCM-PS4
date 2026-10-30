@@ -17,10 +17,13 @@ It has no PRX, hook or patch logic. The script itself was only tested with
 a synthetic FTP stand-in; no PS4 hardware test was performed.
 
 GoldHEN's opt-in FTP server normally uses TCP port **2121** on the local LAN.
-The title's mounted files may appear below
-`/mnt/sandbox/pfsmnt/CUSA12398-app0/Media/` and/or a patch mount.
-The script only enumerates matching title mounts and reads whitelisted files;
-a different mount layout fails closed. Merely owning a PKG does not
+The title's mounted files may appear below either
+`/mnt/sandbox/pfsmnt/` or `/mnt/sandbox/pfsmount/`, in
+`CUSA12398-app0`, `CUSA12398-patch0`, or
+`CUSA12398-app0-patch0-union` mounts.
+The collector checks these explicitly named alternatives, prioritizes the
+effective union mount, and only reads whitelisted files with pinned SHA-256.
+If none is mounted, it fails closed instead of exploring arbitrary paths. Merely owning a PKG does not
 guarantee those paths are currently mounted.
 
 On an authorized local machine, after the title is mounted and GoldHEN FTP

@@ -20,7 +20,10 @@ import tempfile
 from pathlib import Path
 
 TITLE = "CUSA12398"
-MOUNT_ROOT = "/mnt/sandbox/pfsmnt"
+MOUNT_ROOTS = ("/mnt/sandbox/pfsmnt", "/mnt/sandbox/pfsmount")
+# Union mount can present the effective game filesystem when a patch is active.
+# Prefer it over individual mounts; the full original SHA-256 still decides.
+MOUNT_SUFFIXES = ("-app0-patch0-union", "-patch0", "-app0")
 EXPECTED = {
     "globalgamemanagers.assets": "2518dad0f38f6357276d1e33b4653a907df82dc8b0eb56450b49cb3eb86af2a8",
     "sharedassets0.assets": "f2b4c877b11b999ab590d71cb2682a017fb44c21720673487de288ff7c05e321",
@@ -49,26 +52,32 @@ def inventory(ftp) -> dict[str, list[str]]:
     FTP NLST output varies between servers (basename or full path). Never
     infer an unlisted mount or explore arbitrary directories.
     """
-    try:
-        roots = ftp.nlst(MOUNT_ROOT)
-    except ftplib.all_errors as exc:
-        raise ValueError("Cannot list mounted game directories") from exc
-
     mounts: list[str] = []
-    for entry in roots:
-        name = ftp_basename(entry)
-        if name in {TITLE + "-app0", TITLE + "-patch0"}:
-            mounts.append(posixpath.join(MOUNT_ROOT, name))
+    for root in MOUNT_ROOTS:
+        try:
+            entries = ftp.nlst(root)
+        except ftplib.all_errors:
+            continue
+        for entry in entries:
+            name = ftp_basename(entry)
+            if any(name == TITLE + suffix for suffix in MOUNT_SUFFIXES):
+                mounts.append(posixpath.join(root, name))
 
     if not mounts:
         raise ValueError(
-            "No active CUSA12398 app/patch mount in /mnt/sandbox/pfsmnt; "
-            "the installed game must be mounted before an inventory can succeed"
+            "No mounted CUSA12398 app/patch/union found under "
+            "/mnt/sandbox/pfsmnt or /mnt/sandbox/pfsmount. "
+            "Start The Forest, leave it open at its title menu, and "
+            "check that the GoldHEN FTP server can list the game mount."
         )
 
     available: dict[str, list[str]] = {name: [] for name in EXPECTED}
-    # Patch assets can override base assets, but only matching hashes count.
-    for mount in sorted(set(mounts), key=lambda x: (not x.endswith("-patch0"), x)):
+    # Prefer union, then patch and app. Hash checks decide what is usable.
+    def priority(path: str):
+        return (next((i for i, suffix in enumerate(MOUNT_SUFFIXES)
+                      if path.endswith(suffix)), len(MOUNT_SUFFIXES)), path)
+
+    for mount in sorted(set(mounts), key=priority):
         remote_media = posixpath.join(mount, "Media")
         try:
             entries = ftp.nlst(remote_media)

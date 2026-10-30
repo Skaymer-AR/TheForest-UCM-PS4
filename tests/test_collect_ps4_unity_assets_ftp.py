@@ -22,7 +22,7 @@ class FakeReadOnlyFTP:
 
     def nlst(self, path):
         self.commands.append(("NLST", path))
-        if path == "/mnt/sandbox/pfsmnt":
+        if path in ("/mnt/sandbox/pfsmnt", "/mnt/sandbox/pfsmount"):
             return self.mounts
         prefix = path + "/"
         return [item for item in self.contents if item.startswith(prefix)
@@ -50,6 +50,25 @@ class ReadOnlyCollectorTests(unittest.TestCase):
         self.assertEqual(found["level1"], [prefix + "level1"])
         self.assertTrue(all(not found[x] for x in EXPECTED if x != "level1"))
         self.assertTrue(all(verb == "NLST" for verb, _ in fake.commands))
+
+
+    def test_union_mount_is_preferred_and_fallback_root_is_supported(self):
+        filename = "sharedassets0.assets"
+        union_path = "/mnt/sandbox/pfsmount/CUSA12398-app0-patch0-union/Media/" + filename
+        app_path = "/mnt/sandbox/pfsmount/CUSA12398-app0/Media/" + filename
+
+        class OnlyPfsmount(FakeReadOnlyFTP):
+            def nlst(self, path):
+                if path == "/mnt/sandbox/pfsmnt":
+                    raise ftplib.error_perm("550 unavailable")
+                if path == "/mnt/sandbox/pfsmount":
+                    return ["CUSA12398-app0", "CUSA12398-app0-patch0-union"]
+                return super().nlst(path)
+
+        fake = OnlyPfsmount(contents={union_path: b"union", app_path: b"base"})
+        found = inventory(fake)
+        self.assertEqual(found[filename], [union_path, app_path])
+        self.assertFalse(any(command[0] == "RETR" for command in fake.commands))
 
     def test_dry_run_never_downloads(self):
         fake = FakeReadOnlyFTP()
