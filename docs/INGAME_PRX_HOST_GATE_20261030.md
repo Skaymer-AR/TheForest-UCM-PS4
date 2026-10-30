@@ -61,6 +61,17 @@ Calling these APIs safely from a PRX requires proof of hidden IL2CPP
 string and exception handling, and Unity's correct IMGUI event/thread.
 **Do not call these methods by guessed C function-pointer casts.**
 
+## Native CallOnGUI dispatch triangulation (2026-10-30)
+
+Read the new [`PLAYMAKER_VIRTUAL_DISPATCH_20261030.md`](PLAYMAKER_VIRTUAL_DISPATCH_20261030.md).
+`PlayMakerGUI.OnGUI` makes real Unity GUI calls and invokes
+`CallOnGUI` twice. Existing `FsmStateAction.OnGUI` virtual slot 33
+corresponds to the `*0x320(%rax)` call in `CallOnGUI`, independently
+consistent with slots 30/32 for `OnEnter/OnUpdate`. The dispatch is
+for pre-existing PlayMaker action instances, **not a PRX callback
+registration API**. G2 (a safe route to execute our own code) remains
+**MISSING**; no vtable or native code was patched.
+
 ## 2. Proposed title-specific architecture, not an implementation claim
 
 A *possible* alternative to rebuilding IL2CPP AOT is:
