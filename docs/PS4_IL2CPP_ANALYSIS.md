@@ -71,3 +71,11 @@ python3 scripts/analyze_ps4_il2cpp_candidates.py \
 ```
 
 Los comandos no suben ni copian archivos del juego. El primer importador no necesita el ELF; contrasta los dos prefijos físicos si aparecen en el texto. El segundo exige que ambos prefijos coincidan antes de desensamblar. Sus pruebas usan texto y ELF sintéticos; no verifican runtime, GoldHEN, Unity ni PS4.
+
+Para el mapa de ciclo de vida de `DebugConsole`, los call-sites IMGUI, los
+dispatch indirectos de Rewired y las limitaciones para obtener xrefs completos,
+ver [`DEBUGCONSOLE_LIFECYCLE.md`](DEBUGCONSOLE_LIFECYCLE.md). El resolutor
+[`resolve_il2cpp_references.py`](../scripts/resolve_il2cpp_references.py)
+acepta ventanas privadas acotadas o un `llvm-objdump` completo con
+`--full-image`; solo resuelve referencias directas a RVA de método conocidos y
+deja los callers sin nombre cuando no hay límites de función fiables.

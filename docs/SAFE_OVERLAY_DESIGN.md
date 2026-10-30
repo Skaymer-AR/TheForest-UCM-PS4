@@ -112,6 +112,13 @@ provider is implemented for the game. Validate ownership of a separately opened
 pad handle before using it. Do not use sceVideoOut*, scePadRead*, or GNM
 entrypoint detours as generic startup hooks.
 
+The focused lifecycle and Rewired dispatch map is in
+[DEBUGCONSOLE_LIFECYCLE.md](DEBUGCONSOLE_LIFECYCLE.md). It confirms a compiled
+IMGUI path and `ProcessGamePads → ReInput.get_players`, but the `Awake` and
+`GetInstance` windows are not in the bounded dump. The two Rewired virtual
+dispatch targets remain unresolved, so this evidence adds no active game
+provider or callback registration API.
+
 Official references:
 
 - [Unity low-level native plug-in rendering extensions](https://docs.unity.com/en-us/engine/6000.0/manual/programming-environment/plug-ins/native-plugin-interface/low-level-native-plugin-rendering-extensions)
