@@ -40,6 +40,37 @@ La reconstrucción encontró cinco segmentos de carga plaintext y sin compresió
 
 El ELF del PRX contiene una inicialización generada que pasa las estructuras de `CodeRegistration` y `MetadataRegistration` al registrador nativo. El inspector valida los conteos y los 85.372 índices de métodos nativos; todos apuntan a rangos ejecutables. El tipo propuesto `TheForest.UCM.UltimateMenuHost` no está registrado. El registrador observado asigna los punteros recibidos a slots globales; no se debe invocar con tablas parciales como si las fusionara.
 
-La inspección estructural de SELF, ELF y tablas IL2CPP no valida la firma digital Sony del SELF ni la firma o integridad criptográfica del PKG. El hash íntegro del PKG tampoco está medido. Por tanto, no se declara verificación criptográfica de firmas.
+La inspección estructural de SELF, ELF y tablas IL2CPP no valida la firma digital Sony del SELF ni la firma o integridad criptográfica del PKG. En esa ejecución histórica, el hash íntegro del PKG aún no estaba medido; la reconstrucción y revalidación de la copia actual se registran abajo. Por tanto, no se declara verificación criptográfica de firmas.
 
 La arquitectura y el bloqueo para crear el menú AOT se documentan en [`AOT_INTEGRATION_PROPOSAL.md`](AOT_INTEGRATION_PROPOSAL.md): hace falta el proyecto Unity original o todas las entradas reconstruibles del build IL2CPP, junto al toolchain PS4 compatible y autorizado. No se modificó ni reconstruyó el PKG, no se creó ni instaló un PRX y no hubo prueba en consola.
+
+## Revalidación de Drive y límite de extracción PFS — 2026-10-30
+
+Se volvieron a listar las dos carpetas de Drive indicadas por el propietario. `TheForest_Extraidos` contiene `eboot.bin` y el árbol `Media`; dentro de ese árbol solo aparecen:
+
+| Ruta de Drive | Contenido actual |
+| --- | --- |
+| `Media/Native/Data/Metadata/` | `global-metadata.dat` |
+| `Media/Metadata/` | `global-metadata.dat` |
+| `Media/Modules/` | `Il2CppUserAssemblies.prx` |
+
+No aparecen `globalgamemanagers.assets`, `sharedassets0.assets`, `sharedassets1.assets` ni `level0`, `level1` o `level2`. Esos seis archivos se nombran porque son los insumos privados que el análisis histórico de [`REWIRED_SCENE_GRAPH_20261030.md`](REWIRED_SCENE_GRAPH_20261030.md) declara haber inspeccionado; **no se reobtuvieron ni se recalcularon sus hashes en esta ejecución**. La carpeta `TheForest_PKG_Partes` sí contiene las ocho partes listadas abajo.
+
+| Parte | Bytes |
+| --- | ---: |
+| `parte_01.bin` a `parte_07.bin` | 209,715,200 cada una |
+| `parte_08.bin` | 141,164,544 |
+
+La concatenación de las partes en un archivo temporal privado produce 1,609,170,944 bytes, SHA-256 `7214800a8276fdf5fceb91a4e18064114aded1265508d78085b41a1f317dbff3`. El encabezado indica Content ID `EP0238-CUSA12398_00-THEFOREST0000000`, DRM PS4 (`0x0F`), tipo de contenido `0x1A`, un PFS y un `package_size` coincidente. El flag `PKG_FLAGS_FINALIZED` está apagado. El PFS comienza en `0x780000` y ocupa 1,601,306,624 bytes. El hash y la lectura del encabezado confirman la reconstrucción de las partes, **no** la firma ni la integridad criptográfica del contenido.
+
+### Prueba con extractor local
+
+Se compiló en `/tmp`, sin instalar paquetes del juego ni guardar binarios en el repositorio, `flatz/pkg_pfs_tool` en el commit `4e74afa98b0f57b2b50a2182c1ef89905dc040a7`. La compilación local usó sus cabeceras y bibliotecas estáticas Linux incluidas más zlib del sistema; `readelf`/`ldd` muestran como dependencias dinámicas solo `libz.so.1` y `libc.so.6`. El compilador emitió advertencias de truncamiento de cadenas/formato del código de la herramienta.
+
+`--info --dump-sfo --dump-playgo` terminó con código `0` y corroboró `TITLE=The Forest`, `TITLE_ID=CUSA12398`, `APP_VER=01.15` y el Content ID indicado. Esto lee metadatos del contenedor y no demuestra que el PFS esté descifrado.
+
+`--list` y `--unpack-inner-pfs --no-signature-check --no-icv-check --unpack` terminaron con código `1`. En ambos casos la herramienta informó que faltaba el exponente privado del keyset `pkg_entry_key_3`, no pudo cargarlo ni descifrar el bloque de claves de entradas y no obtuvo la clave de imagen para generar las claves de cifrado/firma PFS. Omitir las comprobaciones de firma e ICV no resolvió esa falta. **No se extrajo el PFS ni el árbol `Image0` y no se modificó el PKG.**
+
+### Qué desbloquea el siguiente análisis
+
+El camino más pequeño y seguro para continuar con ControllerMap/ActionElementMap es disponer de las seis copias originales ya enumeradas en [`REWIRED_SCENE_GRAPH_20261030.md`](REWIRED_SCENE_GRAPH_20261030.md), o de una copia extraída y sin modificar del árbol `Image0` que las contenga. No hace falta compartir claves privadas. Con esas entradas se puede volver a ejecutar el analizador actual y continuar con los mapas físicos, la escena activa y el jugador Rewired. Hasta entonces, la asignación DS4 efectiva en runtime queda sin verificar y el PRX gráfico sigue en NO-GO.
