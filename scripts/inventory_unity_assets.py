@@ -92,8 +92,8 @@ def report(entries: list[Entry]) -> str:
         "| --- | ---: | --- |",
     ]
     for category, entry in found:
-        safe = entry.path.replace("|", "\\|").replace("&#", "&amp;#")
-        lines.append(f"| {category} | {entry.size if entry.size is not None else '—'} | \`{safe}\` |")
+        safe = entry.path.replace("|", "\\|").replace("`", "\\`")
+        lines.append(f"| {category} | {entry.size if entry.size is not None else '—'} | `{safe}` |")
     if not found:
         lines.append("| — | — | No matching filenames in supplied inputs |")
     lines.extend([
