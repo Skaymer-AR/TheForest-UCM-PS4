@@ -1,0 +1,47 @@
+{
+  "target": "The Forest PS4 CUSA12398 v1.15",
+  "metadata_type": "HutongGames.PlayMaker.ActionData",
+  "type_definition_index": 4457,
+  "provenance": {
+    "module_sha256": "0159ff61c99d25c8f0a821070e3d8b24aff58dbbe5429b8f29561f9960d02969",
+    "metadata_sha256": "238c400de31e28ed4f7f14e7781ea3b33de0d0bd6964ded680d78fce1d85a6c3"
+  },
+  "instance_field_offsets": {
+    "actionNames": "0x10",
+    "customNames": "0x18",
+    "actionEnabled": "0x20",
+    "actionIsOpen": "0x28",
+    "actionStartIndex": "0x30",
+    "actionHashCodes": "0x38",
+    "unityObjectParams": "0x40",
+    "fsmGameObjectParams": "0x48",
+    "fsmOwnerDefaultParams": "0x50",
+    "animationCurveParams": "0x58",
+    "functionCallParams": "0x60",
+    "fsmTemplateControlParams": "0x68",
+    "fsmEventTargetParams": "0x70",
+    "fsmPropertyParams": "0x78",
+    "layoutOptionParams": "0x80",
+    "fsmStringParams": "0x88",
+    "fsmObjectParams": "0x90",
+    "fsmVarParams": "0x98",
+    "byteData": "0xA0",
+    "byteDataAsArray": "0xA8",
+    "arrayParamSizes": "0xB0",
+    "arrayParamTypes": "0xB8",
+    "customTypeSizes": "0xC0",
+    "customTypeNames": "0xC8",
+    "paramDataType": "0xD0",
+    "paramName": "0xD8",
+    "paramDataPos": "0xE0",
+    "paramByteDataSize": "0xE8",
+    "nextParamIndex": "0xF0"
+  },
+  "structural_constraints": [
+    "fields above describe IL2CPP object layout, NOT serialized Unity file byte offsets",
+    "ActionData has arrays and byte-data sections; changing actionNames alone does not create valid GUI actions",
+    "new action must match concrete AOT action fields, parameter arrays and type metadata",
+    "actual scene state graph, asset path IDs, dependencies and packaging remain unproven",
+    "do not modify the existing CutSceneController gameplay FSMs"
+  ]
+}
