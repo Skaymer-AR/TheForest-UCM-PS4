@@ -93,6 +93,22 @@ class ReadOnlyCollectorTests(unittest.TestCase):
             self.assertEqual(target.read_bytes(), b"existing data")
             self.assertEqual(fake.commands, [])
 
+
+    def test_remote_ftp_error_is_reported_without_publishing(self):
+        prefix = "/mnt/sandbox/pfsmnt/CUSA12398-app0/Media/"
+
+        class InterruptedFTP(FakeReadOnlyFTP):
+            def retrbinary(self, command, callback, blocksize=8192):
+                raise ftplib.error_temp("421 test interruption")
+
+        fake = InterruptedFTP(contents={prefix + "level1": b"synthetic"})
+        with tempfile.TemporaryDirectory() as work:
+            result = collect(fake, Path(work), True)
+            selected = next(item for item in result["files"] if item["name"] == "level1")
+            self.assertEqual(selected["status"], "unverified")
+            self.assertEqual(len(selected["failures"]), 1)
+            self.assertEqual(list(Path(work).iterdir()), [])
+
     def test_unmounted_game_fails_without_file_transfer(self):
         fake = FakeReadOnlyFTP(roots=["/mnt/sandbox/pfsmnt/CUSA00000-app0"])
         with self.assertRaisesRegex(ValueError, "No active CUSA12398"):

@@ -141,7 +141,7 @@ def collect(ftp, destination: Path, download: bool) -> dict:
                 try:
                     result = retrieve_verified(ftp, source, destination / name,
                                                EXPECTED[name])
-                except (ValueError, OSError, ftplib.all_errors) as exc:
+                except (ValueError,) + ftplib.all_errors as exc:
                     failures.append({"remote": source, "error": str(exc)})
                     continue
                 record.update(result)
@@ -176,7 +176,7 @@ def main(argv=None) -> int:
                                  for item in result["files"]):
             return 2
         return 0
-    except (ftplib.all_errors, OSError, ValueError) as exc:
+    except (ValueError,) + ftplib.all_errors as exc:
         parser.exit(2, "ps4-unity-assets: %s\n" % exc)
 
 
