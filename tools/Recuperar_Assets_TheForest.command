@@ -28,7 +28,7 @@ case "$IP" in
     exit 1 ;;
 esac
 
-SCRIPT="$(mktemp /tmp/forest_ucm_assets.XXXXXX.py)" || exit 1
+SCRIPT="$(mktemp "${TMPDIR:-/tmp}/forest_ucm_assets.XXXXXX")" || exit 1
 trap 'rm -f "$SCRIPT"; finish' EXIT
 # Pinned reviewed source; no mutable branch/code is executed.
 SOURCE='https://raw.githubusercontent.com/Skaymer-AR/TheForest-UCM-PS4/d0478d330e0e38343e6e41e100b46240d727bb85/scripts/collect_ps4_unity_assets_ftp.py'
