@@ -23,6 +23,20 @@ Proceed autonomously through **all available offline research, coding, native-co
 - Rewired scene/prefab graphs and Sony DS4 hardware element IDs have been extracted. `src/menu.*`, `src/overlay.*` and `src/unity_host_adapter.*` already contain a tested menu/state core. `prototype/Unity56` is a **standalone Unity C# build fixture**, not injectable retail code.
 - v0.5 global render hook black-screened the game; v0.6 global detours froze the console. The quarantined old source must **never** be reused for a live test.
 
+## Updated native dispatch proof: do not repeat the same reverse engineering
+
+Read [`PLAYMAKER_VIRTUAL_DISPATCH_20261030.md`](PLAYMAKER_VIRTUAL_DISPATCH_20261030.md)
+and run `scripts/inspect_playmaker_dispatch.py` against the hash-verified
+private ELF and metadata. Bounded disassembly demonstrates
+`PlayMakerGUI.OnGUI → CallOnGUI` twice; `CallOnGUI` traverses preexisting
+action objects and calls virtual slot `33` via `*0x320(%rax)`.
+`FsmStateAction.OnEnter/OnUpdate/OnGUI` metadata slots `30/32/33`
+match independent x64 indirections `*0x2f0/*0x310/*0x320`.
+This is a real game-owned IMGUI path, but no plugin registration or safe
+interception is demonstrated. In particular **do not** patch shared
+`Il2CppClass` vtables as a shortcut: derived action overrides and
+in-flight method calls make naive replacement both incomplete and unsafe.
+
 ## Concrete engineering steps (complete without interruptions)
 
 1. **Assess title-owned callback feasibility.** Confirm the method/scene and inspect the native dispatch path for `PlayMakerGUI.OnGUI` and its lifecycle. Validate that any PRX callback would run only inside Unity's IMGUI event on the correct thread; consider non-inline pointer indirection only if runtime ownership and atomicity can be independently demonstrated. Do not treat a static OnGUI RVA as runtime invocation proof.
