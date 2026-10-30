@@ -74,3 +74,7 @@ Run python3 scripts/assert-safe-build.py and SANITIZE=1 sh scripts/test.sh.
 The tests simulate lifecycle errors and concurrency; they do not prove the
 PS4/GoldHEN platform supplies the quiescence primitive required for safe
 unload or an in-game Unity callback.
+
+## Alternate implementation evidence
+
+The original IL2CPP metadata contains precompiled GUIBox, GUIButton, GUILabel, GUILayoutButton and GUILayoutToggle actions. The evidence and serialization limitations are recorded in docs/PLAYMAKER_PRECOMPILED_GUI_EVIDENCE.md and docs/PLAYMAKER_ACTIONDATA_LAYOUT.json. An isolated PlayMaker FSM may provide an in-game graphical host without a new AOT class, but its actual Unity serialization, lifecycle and controller support remain unverified. Existing CutSceneController FSM components must remain untouched. This option is an architecture change; request authorization before editing the retail game's scene files or building a package. Continue safe offline research and tests autonomously.
