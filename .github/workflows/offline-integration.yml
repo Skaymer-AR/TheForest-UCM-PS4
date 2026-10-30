@@ -27,6 +27,8 @@ jobs:
         run: python3 scripts/assert-safe-build.py
       - name: Run host C tests, adapter fault cases and Python analyzer tests
         run: SANITIZE=1 sh scripts/test.sh
+      - name: Test PS4 browser-only passive menu and match source item IDs
+        run: node tests/js/test_ps4_browser_demo.js
 
   unity-prototype:
     name: Unity 5.6 AOT prototype C#4 compile (offline only)
