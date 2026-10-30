@@ -6,13 +6,13 @@
       "type_suffix": "Cheats",
       "field": "DebugConsole",
       "static": true,
-      "native_evidence": "Awake stores this field at static_fields+0x10 (native disassembly RVA 0x005C1EA2)"
+      "native_evidence": "DebugConsole.Awake reads Cheats.static_fields+0x10 (candidate Cheats.DebugConsole guard) near RVA 0x005C1E13; false path reaches Object.Destroy. It does not write this field at 0x005C1EA2."
     },
     {
       "type_suffix": "DebugConsole",
       "field": "Instance",
       "static": true,
-      "native_evidence": "Awake reads/sets this field at static_fields+0x10; metadata field identity and native storage offset are separate evidence"
+      "native_evidence": "DebugConsole.Awake writes this pointer to DebugConsole.static_fields+0x10 at RVA 0x005C1EA2; DebugConsole.GetInstance reads that same location around RVA 0x005CB6B0-0x005CB6C2."
     }
   ],
   "unresolved_native_type_reference": {
