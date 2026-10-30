@@ -130,7 +130,7 @@ class ReadOnlyCollectorTests(unittest.TestCase):
 
     def test_unmounted_game_fails_without_file_transfer(self):
         fake = FakeReadOnlyFTP(roots=["/mnt/sandbox/pfsmnt/CUSA00000-app0"])
-        with self.assertRaisesRegex(ValueError, "No active CUSA12398"):
+        with self.assertRaisesRegex(ValueError, "No mounted CUSA12398"):
             inventory(fake)
         self.assertFalse(any(x[0] == "RETR" for x in fake.commands))
 
