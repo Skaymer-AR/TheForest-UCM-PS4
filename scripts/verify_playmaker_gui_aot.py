@@ -21,6 +21,14 @@ SPEC = {
     'GUILayoutButton':0x02386870,
     'GUILayoutToggle':0x02389640,
 }
+# The original title also compiles related event/input action callbacks.
+# Their presence does NOT establish a DS4/Rewired binding.
+INPUT_ACTION_SPEC = {
+    'GetButtonDown':('OnUpdate', 0x025374D0, 32),
+    'GetKeyDown':('OnUpdate', 0x0253EA50, 32),
+    'EnableGUI':('OnEnter', 0x023D7FE0, 30),
+    'SendEvent':('OnEnter', 0x023405A0, 30),
+}
 # VA of call instruction -> verified link VA destination.
 BUTTON_EDGES = {
     0x02383DF6:0x019BE750,  # GUI.Button
@@ -63,7 +71,24 @@ def inspect(module:bytes, metadata:bytes):
         if va!=expected or not image.executable(va) or slot!=33:
             raise ValueError('OnGUI pointer/slot mismatch: '+full)
         result[name]={'type_definition':owners[0].index,'link_va':hex(va),'virtual_slot':slot}
+    input_actions={}
+    for name,(callback,expected,expected_slot) in INPUT_ACTION_SPEC.items():
+        full='HutongGames.PlayMaker.Actions.'+name
+        owner=[t for t in meta.types if t.full_name==full]
+        if len(owner)!=1:
+            raise ValueError('missing input/event action: '+full)
+        defs=[m for m in meta.methods_named(owner[0],callback) if m.method_index>=0]
+        if len(defs)!=1:
+            raise ValueError('missing action method: '+name+'.'+callback)
+        m=defs[0]
+        va=struct.unpack('<Q',image.read(METHOD_TABLE+m.method_index*8,8))[0]
+        pos,_=meta.sections['methods']
+        slot=struct.unpack_from('<H',metadata,pos+56*m.definition_index+52)[0]
+        if va!=expected or slot!=expected_slot or not image.executable(va):
+            raise ValueError('action method mismatch: '+name+'.'+callback)
+        input_actions[name]={'callback':callback,'link_va':hex(va),'virtual_slot':slot}
     return {
+        'precompiled_input_event_actions':input_actions,
         'title':'The Forest PS4 CUSA12398 v1.15',
         'precompiled_gui_actions':result,
         'button_to_native_gui_and_fsm_event_edges':check_edges(image.read),
