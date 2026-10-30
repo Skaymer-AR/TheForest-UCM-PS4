@@ -75,7 +75,12 @@ python3 scripts/inspect_playmaker_dispatch.py \
   --metadata /private/global-metadata.dat \
   --output /private/playmaker-dispatch.json
 
+python3 scripts/validate_playmaker_owner_graph.py \
+  --module /private/il2cpp.elf \
+  --metadata /private/global-metadata.dat \
+  --output /private/playmaker-owner-audit.json
+
 python3 -m unittest discover -s tests -p 'test_*.py'
 ```
 
-The inspector rejects different ELF or metadata hashes, changed native method pointer indices, changed virtual slots, missing call sites or unsupported disassembly. The synthetic tests contain no commercial code. Real game binary paths and disassembly dumps must remain private. **A PASS only confirms a particular static callgraph**, not title-owned callback execution or safe PRX integration.
+The inspectors reject different ELF or metadata hashes, changed native method pointer indices, changed virtual slots, changed action-state field checks, missing call sites or unsupported disassembly. The synthetic tests contain no commercial code. Real game binary paths and disassembly dumps must remain private. **A PASS only confirms a particular static callgraph and owner layout**, not title-owned callback execution or safe PRX integration.

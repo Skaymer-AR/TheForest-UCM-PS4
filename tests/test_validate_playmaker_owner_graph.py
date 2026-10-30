@@ -9,7 +9,14 @@ from validate_playmaker_owner_graph import SITES, verify_sites, inspect
 class PlayMakerOwnershipTests(unittest.TestCase):
     def test_all_exact_native_sites(self):
         data = {va: bytes.fromhex(hexbytes) for va,hexbytes in SITES.values()}
-        self.assertEqual(len(verify_sites(lambda va,n: data[va][:n])), 12)
+        self.assertEqual(len(verify_sites(lambda va,n: data[va][:n])), 19)
+
+    def test_distinguishes_enabled_active_and_raw_actions_setter(self):
+        self.assertEqual(SITES['action_enabled_filter'][1], '807b1800')
+        self.assertEqual(SITES['action_enabled_property_read'][1], '8a4718c3')
+        self.assertEqual(SITES['action_active_check'][1], '807f1a00')
+        self.assertEqual(SITES['action_active_property_read'][1], '8a471ac3')
+        self.assertEqual(SITES['set_actions_raw_pointer'][1], '48897760c3')
 
     def test_bad_instruction_fails_closed(self):
         data = {va: bytes.fromhex(hexbytes) for va,hexbytes in SITES.values()}
