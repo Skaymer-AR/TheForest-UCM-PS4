@@ -7,18 +7,22 @@ metadata quedan validados antes de aceptar las correspondencias.
 
 ## Estado de los insumos en Codex Cloud
 
-En el checkout de esta tarea están disponibles el informe Markdown y el texto
-de ventanas selectivas que adjuntó el usuario. Se confirmó que el parser
-acepta esas ventanas y que `ProcessGamePads` contiene llamadas indirectas en
-`0x004762D6` y `0x00476315`, ambas precedidas por el lookup de interfaz IL2CPP
-que referencia el slot `0x033EF3E8`.
+Los binarios originales no están montados en este checkout. Sin embargo, el
+usuario ya resolvió `DebugConsole.OnDestroy` directamente contra esos
+originales. El resultado queda fijado en
+[`PS4_ONDESTROY_NATIVE_RESOLVED.md`](PS4_ONDESTROY_NATIVE_RESOLVED.md) y en el
+manifiesto de expectativas
+[`PS4_ONDESTROY_EXPECTATIONS.json`](PS4_ONDESTROY_EXPECTATIONS.json): definición
+82470, `methodIndex=75393`, token `0x0600777D`, RVA `0x005C3340`. El manifiesto
+separa la escritura cero a `Counters` (`static_fields+0x08`, `0x005C3384`) de
+la escritura de R14/`this` a `Instance` (`static_fields+0x10`, `0x005C356C`).
+Los tests host validan esa clasificación con ventanas sintéticas; no vuelven
+a analizar ni pretenden reemplazar los binarios originales.
 
-No están disponibles aquí el PRX original ni `global-metadata.dat`. Por ello
-no se publica un índice/RVA real para `DebugConsole.OnDestroy`, no se vinculan
-`0x033EB300`/`0x033EF3E8` a tipos PS4 y no se identifica un destino virtual.
-Los hashes esperados y el offset del método-pointer table sí están registrados
-en la evidencia anterior, pero no reemplazan los archivos fuente necesarios
-para volver a comprobarlos.
+Los slots `0x033EB300`/`0x033EF3E8` y los destinos de Rewired siguen sin tener
+una asociación exacta con registro de tipos PS4. Las llamadas
+`0x004762D6`/`0x00476315` permanecen indirectas y sin nombre de interfaz o
+método destino.
 
 ## Una sola ejecución reproducible
 
@@ -50,24 +54,29 @@ completo:
 python3 scripts/analyze_ps4_il2cpp_pipeline.py \
   --metadata /ruta/privada/global-metadata.dat \
   --module /ruta/privada/Il2CppUserAssemblies.prx \
-  --disassemble-targeted --window-bytes 0x180 \
+  --disassemble-targeted --window-bytes 0x240 \
   --output /tmp/theforest-il2cpp-targeted.md
 ```
 
-El tamaño es una ventana de inspección, no una longitud de función IL2CPP. Si
-el CFG termina abierto, contiene saltos externos o bytes omitidos, el reporte
-retiene la incertidumbre. Para revisar limpieza de `Instance`, se requiere
-además una anotación local, basada en el desensamblado exacto, como:
+El tamaño es una ventana de inspección, no una longitud de función IL2CPP. El
+valor `0x240` llega desde RVA `0x005C3340` hasta el inicio conocido de
+`DebugConsole.Update` en `0x005C3580`, y cubre los stores observados de
+`OnDestroy`. El pipeline comprueba los bytes de toda instrucción suministrada
+contra el ELF original. En ese método reconoce de forma separada las dos
+expectativas fijadas en el manifiesto: `Counters=0` en `0x005C3384` y
+`Instance=R14` en `0x005C356C`; también verifica el `mov r14,rdi` en
+`0x005C3351` antes de describir R14 como `this`. No interpreta el write-back
+como limpieza del singleton ni como evidencia de objeto Unity vivo.
+
+Para otros stores no cubiertos por ese manifiesto, se puede aportar una
+anotación local basada en el desensamblado exacto, como:
 
 ```sh
 --store-site 0x<RVA_INSTRUCCION>=TheForest.DebugConsole.Instance
 ```
 
-El analizador confirma que la instrucción anotada es un `MOV` con destino en
-memoria. Solo clasifica como escritura cero una fuente inmediata `0`/`0x0`;
-no hace análisis de flujo de datos para registros ni asume que el nombre de la
-anotación sea verdadero. El reporte diferencia una limpieza visible de la
-prueba de que todos los caminos o el callback de Unity estén activos.
+Las anotaciones genéricas no se usan para sobrescribir ni renombrar las dos
+expectativas PS4 ya registradas.
 
 Para contrastar los campos `static` se puede añadir un `dump.cs` local
 producido desde los mismos originales:
@@ -94,8 +103,10 @@ omite rutas locales e instrucciones crudas.
    `PT_LOAD` ejecutable y respaldado por bytes del archivo. También compara cada secuencia
    de bytes de las ventanas contra el módulo y valida el destino comentado de
    accesos RIP-relative.
-3. Reporta `DebugConsole.OnDestroy` con índice/RVA si existe en esos insumos y
-   evalúa exclusivamente las instrucciones de la ventana suministrada.
+3. Para los hashes originales, exige que `DebugConsole.OnDestroy` resuelva a
+   definición 82470, `methodIndex=75393`, token `0x0600777D` y RVA
+   `0x005C3340`. Clasifica las instrucciones de `Counters` y `Instance`
+   separadamente; no infiere la invocación en runtime.
 4. Inspecciona los bytes estáticos de los slots nativos
    `0x033EB300`/`0x033EF3E8`, pero los etiqueta como bytes de archivo, nunca
    como valores de ejecución.
@@ -117,6 +128,8 @@ una resolución.
 
 `tests/test_analyze_ps4_il2cpp_pipeline.py` crea metadata v23 y ELF sintéticos
 pequeños. Verifica mapping `methodIndex`→RVA, hash/versión, ownership de campos,
-CFG con rutas completas e incompletas, las dos llamadas virtuales y el estado
-no resuelto de los slots sin metadata registration. No simula resultados reales
-de la PS4 ni confirma que Unity llame a los métodos.
+CFG con rutas completas e incompletas, la identidad fija de `OnDestroy`, la
+separación `Counters=0` frente a `Instance=this`, las dos llamadas virtuales y
+el estado no resuelto de los slots sin metadata registration. Las pruebas no
+simulan análisis de binarios originales, no verifican PS4 en vivo ni confirman
+que Unity invoque los métodos.

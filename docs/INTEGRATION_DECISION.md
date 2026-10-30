@@ -1,74 +1,127 @@
 # Decisión de integración del UCM
 
-**Build:** The Forest PS4 CUSA12398 v1.15. **Estado de implementación:** NO-GO
-para mostrar el UCM mediante la arquitectura GoldHEN actualmente comprobada.
-La notificación del PRX y el núcleo visual host no equivalen a un panel dentro
-de Unity. Se conserva la seguridad de no hooks; no se genera ni se solicita
-instalar un PRX experimental.
+**Build objetivo:** The Forest PS4 CUSA12398 v1.15, GoldHEN 2.4B18.9 en
+firmware 12.02. **Resultado:** **NO-GO** para un overlay Unity ejecutable con
+las restricciones actuales. No se encontró ni se demostró un host AOT
+propiedad del título que el PRX GoldHEN pueda cargar o registrar. No se añade
+un proveedor ficticio al adaptador existente.
 
-## Alternativas evaluadas
+La decisión no significa que el objetivo sea imposible en cualquier
+arquitectura. Identifica la pieza concreta que falta: un componente ejecutable
+compilado/registrado por el backend IL2CPP del juego y un bootstrap que lo
+inserte en el ciclo Unity. El PRX actual no ofrece ese bootstrap.
 
-| Alternativa | Decisión | Evidencia y condición para reconsiderar |
+## Evaluación de las rutas
+
+| Ruta | Decisión | Motivo verificable |
 | --- | --- | --- |
-| Reutilizar `DebugConsole.OnGUI` como registro externo | **NO-GO** | Es un callback IMGUI compilado del componente del juego, no una API de suscripción. `GetInstance` solo devuelve `Instance`; el flujo de `Awake` puede destruir el objeto antes de registrarlo. Falta demostrar que exista una instancia activa o un mecanismo de registro externo. |
-| Llamar `GUI`/`GUILayout` desde el hilo del PRX | **NO-GO** | Las llamadas observadas en `OnGUI` no autorizan ejecutarlas desde otro hilo o fuera del evento IMGUI de Unity. No se ha demostrado contexto GUI, hilo ni duración de vida válidos para el PRX. |
-| `UnityRenderingEvent` / `IssuePluginEvent` para render nativo | **NO-GO en este build; condicional para render nativo** | Requiere que un caller del título cargue un plug-in Unity compatible e invoque el evento en el hilo gráfico. No se ha encontrado ese caller. Esta ruta no suministra por sí misma `OnGUI` ni resuelve la entrada. |
-| Callback AOT/component del título mediante un mod loader PS4/IL2CPP | **ÚNICA ruta candidata; hoy NO-GO** | Un componente ya compilado para IL2CPP podría recibir callbacks Unity propios (`OnGUI`/`Update`) y usar servicios Unity/Rewired desde su contexto. `DllModLoader.Awake` y `AppDomain.Load` no prueban que exista un loader ejecutable AOT en PS4. Para pasar a GO debe verificarse la carga de código AOT, cómo se agrega/activa el componente, firma ABI, hilo, contexto IMGUI y retiro seguro. |
-| Detour localizado de un método del título (`OnGUI`/`Update`) | **NO-GO bajo el safety hold** | Aunque sería más acotado que interceptar GNM/VideoOut/ScePad, sigue requiriendo parcheo, relocación RIP, publicación atómica del original y quiescencia de todos los hilos. El SDK GoldHEN usado no acredita esas garantías; `DebugConsole.OnGUI` además podría no ejecutarse por ausencia de instancia. |
-| Leer Rewired desde un callback propio del título | **Condicional; no implementado** | Evitaría interceptar ScePad y leería un snapshot dentro del ciclo del juego. Los callsites `0x004762D6`/`0x00476315` son vtable indirectos, pero faltan interfaz TypeDef exacta, slot de método y target concreto. Hace falta cerrar esa resolución y validar API/estado Rewired del jugador. |
-| Abrir un handle ScePad propio para el DS4 | **NO-GO sin prueba de coexistencia** | No se encontró contrato PS4 de esta configuración que pruebe que un segundo handle sea no exclusivo, no consuma eventos y coexista con Rewired/handle del juego. Tampoco se debe asumir equivalencia con una lectura global. |
+| `DebugConsole.OnGUI` existente | **NO-GO** | Tiene llamadas reales a `GUI`, `GUILayout` y `GUI.TextField`; no expone una API para sumar otro callback. El singleton observado en hardware fue NULL y `Awake` tiene rutas de destrucción antes del registro. `OnDestroy` incluso puede volver a escribir `this` en `Instance`; ese puntero no prueba un objeto Unity vivo. |
+| Crear un AOT `MonoBehaviour` y añadirlo a un objeto | **NO-GO bajo el estado actual** | Es el host Unity adecuado para `OnGUI` y lectura Rewired, pero no hay proyecto Unity del juego ni loader PS4 demostrado que acepte código nativo AOT nuevo, registre sus métodos en IL2CPP y agregue la instancia a un objeto activo. No se ha demostrado que `DllModLoader.AppDomain.Load` haga ninguna de esas tres cosas. |
+| `DllModLoader` / `AppDomain.Load` | **Candidato no validado** | El PS4 nativo confirma la ruta `DllModLoader.Awake → LoadDllMod` y llamadas a `File.ReadAllBytes`/`AppDomain.Load`. Eso demuestra una carga solicitada por el código compilado, no que IL2CPP ejecute IL arbitrario, que los métodos nuevos estén AOT compilados, ni que se registre un `MonoBehaviour`. No contamos el ModAPI de PC como evidencia. |
+| Unity native plug-in / `UnityRenderingEvent` | **NO-GO** | Unity debe cargar el módulo como plugin Unity y llamar su inicializador `UnityPluginLoad` con `IUnityInterfaces`; el título debe encolar el evento de render. El loader GoldHEN observado carga un PRX y llama `plugin_load` (resuelve `plugin_unload`, pero eso no forma un ciclo Unity); no proporciona la inicialización Unity ni se encontró un caller del título para encolar un evento. Un evento de render nativo tampoco habilita por sí solo IMGUI. |
+| Llamar `GUI`/`GUILayout` desde hilo o notificación del PRX | **NO-GO** | No es un evento IMGUI de Unity. `GUIUtility.CheckOnGUI` dentro del callback existente refuerza que las funciones GUI dependen de ese contexto. |
+| Hook title-scoped de un `OnGUI` activo | **NO-GO ahora** | Sería un parche al código del juego, no un host AOT. `DebugConsole.OnGUI` no tiene instancia confirmada; no se identificó otro callback IMGUI activo. El SDK de detours usado no acredita relocación RIP general ni quiescencia/handoff seguro. No se acepta un hook experimental para suplir evidencia faltante. |
+| Hook global GNM/VideoOut/ScePad | **PROHIBIDO** | Las versiones v0.5/v0.6 causaron pantalla negra y bloqueo de consola. Se mantienen deshabilitadas. |
 
-## Render e input son dos fronteras distintas
+### Qué aporta cada callback
 
-El render necesita un callback llamado por Unity en un contexto que acepte
-IMGUI. Un PRX externo puede conservar el draw list del menú, pero todavía
-necesita un puente que lo invoque desde un callback del título. La presencia
-del código `DebugConsole.OnGUI` y de funciones GUI no proporciona ese puente.
+Unity IMGUI requiere que Unity invoque `OnGUI` en sus eventos GUI —por ejemplo
+Layout/Repaint— para un componente asociado a un objeto válido. Un `Update` o
+`LateUpdate` del juego demuestra contexto de ciclo de vida Unity, pero no
+contexto IMGUI. `GL.IssuePluginEvent` ofrece otro contexto nativo de render,
+pero requiere un plugin Unity reconocido y un caller Unity que encole el evento;
+no es un registro que el PRX GoldHEN pueda llamar por sí solo.
 
-La entrada necesita un snapshot de botones con ownership claro. La mejor
-frontera conceptual es el mismo callback AOT del título leyendo Rewired sin
-consumir sus eventos; la navegación quedaría desacoplada del input físico. Para
-evitar que el mando también controle al personaje mientras el menú esté abierto
-se necesita validar además un mecanismo de foco/consumo del juego. No se
-interceptará ScePad globalmente ni se supondrá que abrir otro handle sea
-transparente.
+El código de GoldHEN disponible en el plugin loader llama
+`sceKernelLoadStartModule`, resuelve `plugin_load`/`plugin_unload` con
+`sceKernelDlsym` y ejecuta `plugin_load`. El loader usa `plugin_unload` en su
+ruta de error de carga; no documenta con eso un ciclo de callback Unity ni una
+prueba de quiescencia para el cierre normal del PRX. No se pasa un objeto
+`UnityEngine`, una interfaz `IUnityInterfaces`, ni un callback de ciclo Unity.
+Referencias del loader: [GoldHEN plugin loader](https://github.com/GoldHEN/GoldHEN_Plugins_Repository/blob/main/plugin_src/plugin_loader/source/main.c)
+y [plugin template](https://github.com/GoldHEN/GoldHEN_Plugins_Repository/blob/main/plugin_src/plugin_template/source/main.c).
 
-## Próximo componente necesario
+Por tanto, un PRX independiente puede poseer código nativo y su propio
+`plugin_load`, pero eso no lo convierte en un componente del PlayerLoop ni le
+da contexto GUI. `src/unity_host_adapter.*` expresa el contrato que haría falta
+(callback, render context, renderer y snapshot de mando), y sigue host-only:
+no existe un proveedor PS4 que satisfaga ese contrato.
 
-El siguiente componente para que el UCM **pueda llegar a pantalla** es un
-**host de callback Unity title-scoped**, no otro backend de framebuffer: un
-componente AOT cargable por un mecanismo PS4 ya presente, con callback IMGUI
-real y contrato de alta/baja probado. Su primera versión solo debe dibujar el
-panel estático del menú existente y leer una entrada de prueba por Rewired;
-no debe ejecutar cheats. Antes de conectarlo al PRX hay que demostrar en los
-artefactos PS4 originales:
+## Entrada del DualShock 4
 
-1. Un mod loader o cargador de plug-in compatible con IL2CPP AOT en esta build,
-   incluyendo la ruta real de carga; `AppDomain.Load` no basta.
-2. El método/callback propio que Unity invoca, su ABI, objeto dueño, thread,
-   contexto IMGUI y momento de teardown.
-3. La cadena de inicialización/registro que asocia los slots `0x033EB300` y
-   `0x033EF3E8` con TypeDefs del metadata v23, y el target real de las dos
-   llamadas virtuales Rewired.
-4. Una fuente de input no consumidora y el comportamiento de foco al abrir el
-   panel.
-5. Un ciclo de vida que primero retire el callback y pruebe quiescencia antes
-   de liberar recursos; sin spin/wait en render o input.
+La ruta nativa confirmada del juego es
+`PS4Controller.Update → ProcessGamePads → Rewired.ReInput.get_players`.
+Las llamadas indirectas en `0x004762D6` y `0x00476315` siguen el patrón de
+dispatch de interfaz IL2CPP, pero la interfaz Rewired, los métodos y las
+implementaciones concretas no están ligados todavía al registro nativo de
+este build. No se atribuyen a `GetButton`, ScePad ni a otra API concreta.
 
-Si no existe loader AOT compatible ya disponible y no se permite modificar el
-PKG, todavía no se ha demostrado una forma de añadir ese callback a esta build.
-En ese caso se debe decidir entre encontrar un host title-scoped ya incluido en
-el juego o cambiar el requisito de no modificar el paquete; llamar funciones
-Unity desde el PRX fuera de su contexto no cierra la brecha.
+Con un host AOT real, la opción menos intrusiva sería leer un snapshot Rewired
+desde un callback propio del título y no consumirlo. Aún habría que verificar
+la interfaz/API exacta, dispositivo asignado, jugador, estado de conexión y
+cómo pausar o dejar pasar los controles de personaje al abrir/cerrar el menú.
+Un handle abierto con `scePadOpen` sería otra posibilidad, pero los headers
+públicos solo prueban las firmas; no prueban coexistencia con el handle de
+Rewired de este juego. No hay un provider de mando implementado.
 
-## Capacidades actuales
+## Inicialización y cierre necesarios
 
-| Área | Estado comprobado |
+Una implementación viable debe cumplir esta secuencia:
+
+1. Un bootstrap del título crea/obtiene una instancia Unity válida en el hilo
+   del juego y registra el callback en un estado definido (`Awake`/`OnEnable`).
+2. El callback de render llama al menú solo durante el contexto IMGUI válido;
+   el callback de entrada lee un snapshot no bloqueante y no comparte ownership
+   del dispositivo sin autorización del juego.
+3. `OnDisable`/`OnDestroy` deja de publicar el callback. Antes de descargar el
+   PRX, el host demuestra que ningún callback está activo, encolado o puede
+   comenzar. `plugin_unload` por sí solo no prueba esa quiescencia.
+4. Si falla el retiro o no hay prueba de quiescencia, se retiene el estado y no
+   se liberan callback, trampolín ni código que pudiera seguir en uso.
+
+El adaptador host existente modela el último contrato de retiro y tiene pruebas
+de concurrencia/fallos, pero el juego no provee sus operaciones de registro ni
+quiescencia. No se llama `GetInstance` ni ningún método con `this` NULL.
+
+## Restricción que debe cambiar
+
+Para obtener un primer panel **sin hooks**, la vía defendible es añadir un host
+AOT propio del título. Eso requiere cambiar la restricción **“no modificar
+PKG”** y además disponer de un proyecto/build IL2CPP compatible (o un loader
+PS4 documentado que registre código AOT nuevo). El host debe compilar sus
+métodos para esta versión, incluirlos en el registro IL2CPP y crear una
+instancia desde el título. Permitir modificar el PKG sin poder producir ese
+build/registro no alcanza.
+
+Como alternativa distinta, se podría cambiar la prohibición de hooks globales
+por autorización explícita de un **hook limitado a un callback IMGUI activo del
+título**, usando un relocator x86-64 que preserve instrucciones RIP-relativas,
+publicación sincronizada y quiescencia de todos los hilos. Todavía falta
+identificar ese callback activo; `DebugConsole.OnGUI` no califica mientras la
+instancia esté ausente. Esta alternativa conserva el PKG, pero deja de cumplir
+“sin hooks” y requiere una infraestructura de desvío/rollback nueva, revisada
+antes de cualquier PRX.
+
+Con ambas restricciones intactas, no hay un componente ejecutable que pueda
+conectar el menú a Unity. El siguiente componente necesario no es otro renderer
+ni una notificación: es el **bootstrap AOT del título** (o evidencia verificable
+de que `DllModLoader` ya carga y registra uno). Hasta tenerlo, solo avanzan de
+forma segura los analizadores, el núcleo host y sus pruebas.
+
+## Estado
+
+| Área | Estado |
 | --- | --- |
-| Carga del PRX sin hooks | El usuario confirmó previamente que un probe no-hook permite iniciar y jugar. |
-| Menú visual/navegación host | Existe y se conserva en `src/menu.*`, `src/overlay.*` y `src/drawlist.*`; no está conectado a Unity. |
-| `DebugConsole.OnGUI` | El desensamblado selectivo muestra llamadas GUI; no prueba un callback externo. |
-| Singleton `DebugConsole.Instance` | `Awake` lo escribe tras guardas; `GetInstance` lo lee. `OnDestroy` fue resuelto en el PRX original (`0x005C3340`): en la ruta de limpieza conserva `this` en `Instance`, **no lo borra con NULL**; ver [PS4_ONDESTROY_NATIVE_RESOLVED.md](PS4_ONDESTROY_NATIVE_RESOLVED.md). Ninguno prueba una instancia activa en partida. |
-| Rewired | `PS4Controller.Update` conduce a `ProcessGamePads`; se observan dos dispatches virtuales, aún sin interfaz/método final. |
-| Cheats | No hay funciones del UCM conectadas o marcadas como disponibles por este trabajo. |
-| Hardware/Unity overlay | No validado en este trabajo. No se solicitó una prueba de PS4. |
+| Núcleo de menú/navegación | Implementado para host; sigue desconectado de Unity. |
+| `DebugConsole.OnDestroy` | RVA `0x005C3340`, índice de definición `82470`, `methodIndex=75393`, token `0x0600777D`; `Counters=0` en `0x005C3384`, `Instance=this` en `0x005C356C`. Evidencia estática offline, no ejecución en consola. |
+| Contexto IMGUI accesible desde GoldHEN | **No demostrado / NO-GO**. |
+| AOT assembly loader y registro de componente | **No demostrado / NO-GO**. |
+| Lectura segura de botones | Rewired es la ruta del juego, pero slots/métodos concretos sin resolver; handle ScePad propio sin prueba de coexistencia. |
+| Funciones de cheat | Ninguna disponible en esta integración. |
+| Hooks y prueba en hardware | Deshabilitados; no se solicita una prueba nueva en PS4. |
+
+La evidencia del ciclo de vida está en
+[`DEBUGCONSOLE_LIFECYCLE.md`](DEBUGCONSOLE_LIFECYCLE.md), los datos nativos en
+[`PS4_ONDESTROY_NATIVE_RESOLVED.md`](PS4_ONDESTROY_NATIVE_RESOLVED.md), y la
+decisión de seguridad de detours/unload en
+[`SAFE_OVERLAY_DESIGN.md`](SAFE_OVERLAY_DESIGN.md).

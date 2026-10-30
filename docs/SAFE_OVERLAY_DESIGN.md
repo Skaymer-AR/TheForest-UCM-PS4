@@ -98,9 +98,10 @@ plugin traces are unavailable in this repository.
 
 | Route | What it would provide | Constraint / status |
 | --- | --- | --- |
-| Unity native rendering extension callback (UnityRenderingExtEvent) | Unity invokes native extension work at an explicit render event, on the render thread. | Preferred documented Unity route when a game-owned native plugin is loaded and managed code schedules the event. This GoldHEN PRX is not a Unity plugin; IssuePluginEvent needs a Unity-side caller. No PKG changes are allowed, and no existing The Forest callback/plugin was demonstrated. Not currently reachable. |
+| Unity native rendering extension callback (UnityRenderingExtEvent) | Unity invokes native extension work at an explicit render event, on the render thread. | Requires Unity to load the native plugin, call `UnityPluginLoad`/supply `IUnityInterfaces`, and a title-owned caller to enqueue the event. GoldHEN's `plugin_load` is a separate PRX entrypoint. No matching The Forest plugin/caller was found. This can provide native render context, not IMGUI by itself. Not reachable under the current no-PKG-change constraint. |
 | Public GoldHEN arbitrary-overlay callback | A supported compositor could draw without detouring game APIs. | No public arbitrary drawing/compositor callback was found in the pinned GoldHEN plugin SDK or plugin template. GoldHEN's main source is not public. Do not bind to private overlay internals. |
-| Existing Unity lifecycle methods (`DebugConsole.OnGUI`, `VirtualCursor.LateUpdate`, `ModList.OnEnable`, `DllModLoader.Awake`) | Could provide an existing title-owned callback if a live component or mod loader were reachable. | Prior PS4 analysis recovered RVA candidates; PS4Debug confirmed 16-byte entry prefixes only for `DebugConsole.OnGUI` and `ToggleConsole`. The `DebugConsole` instance observed by the user was NULL. No safe registration path is available. `OnGUI` remains the closest rendering candidate; see [PS4 IL2CPP analysis](PS4_IL2CPP_ANALYSIS.md). |
+| Existing Unity lifecycle methods (`DebugConsole.OnGUI`, `VirtualCursor.LateUpdate`, `ModList.OnEnable`, `DllModLoader.Awake`) | Could provide an existing title-owned callback if a live component or mod loader were reachable. | `OnGUI` calls GUI APIs but is not an external registration surface; the observed DebugConsole instance was NULL. `LateUpdate`/`Awake` are not IMGUI callbacks. `DllModLoader.AppDomain.Load` does not establish AOT method registration or `AddComponent`. No usable host is demonstrated. See [PS4 IL2CPP analysis](PS4_IL2CPP_ANALYSIS.md). |
+| Add a title-owned AOT component | Unity can invoke its `OnGUI`/`Update`; it can use title-linked APIs. | Technically suitable, but requires a build/loader that includes and registers its code with IL2CPP and creates the component. No project/build or compatible PS4 loader is available under the current constraints. Requires allowing package integration plus a verified AOT build path. |
 | Per-title import/GOT slot replacement | Narrows the patch to one module's call site instead of rewriting a shared function prologue. | Still races import resolution and concurrent calls, needs a stable callback and unload proof, and does not create a Unity render callback by itself. Not approved as a shortcut. |
 | Open a separately owned DS4 handle and poll it | Could avoid intercepting the game's scePadRead* calls. | OpenOrbis signatures and button masks are verified from public headers; whether the game's open handle can coexist and how an already-open handle is owned remain unverified. The host adapter consumes snapshots only; no handle is opened in this build. |
 | External HDMI compositor | Would avoid in-process code patching. | Requires separate hardware/capture/latency work and is outside this GoldHEN PRX architecture. |
@@ -116,16 +117,16 @@ The focused lifecycle and Rewired dispatch map is in
 [DEBUGCONSOLE_LIFECYCLE.md](DEBUGCONSOLE_LIFECYCLE.md). It confirms a compiled
 IMGUI path, the guarded singleton registration in `Awake`, and
 `ProcessGamePads → ReInput.get_players`. `GetInstance` returns that same
-static field and does not instantiate a component. The `OnDestroy` body is not
-present in the available source evidence, so singleton cleanup remains
-unknown. The Rewired calls use an IL2CPP interface/vtable dispatch pattern,
-but their metadata type and method targets are unresolved. These findings
-support a **no-go** decision for connecting this GoldHEN PRX to Unity IMGUI:
-no live title-owned callback registration route has been demonstrated.
-`DllModLoader.AppDomain.Load` is not proof of a working IL2CPP/AOT component
-loader. See the linked lifecycle document for the title-scoped architecture
-requirements and offline commands to resolve `OnDestroy` from private local
-files.
+static field and does not instantiate a component. The original PS4
+`OnDestroy` body is now resolved: it conditionally clears `Counters` at
+`0x005C3384` and writes R14/`this` back to `Instance` at `0x005C356C`, not NULL.
+The Rewired calls use IL2CPP interface dispatch, but their metadata type and
+method targets are unresolved. These findings support a **no-go** decision for
+connecting this GoldHEN PRX to Unity IMGUI: no live title-owned callback or AOT
+component registration route has been demonstrated. `DllModLoader.AppDomain.Load`
+is not proof of an IL2CPP/AOT component loader. See
+[INTEGRATION_DECISION.md](INTEGRATION_DECISION.md) for the exact restriction
+change required to introduce a title-owned AOT host.
 
 Official references:
 
@@ -221,23 +222,29 @@ required platform proof exists. ASan/UBSan are not target-hardware evidence.
 - No PKG, save data, framebuffer, unknown flags, or hard-coded session
   addresses are changed.
 
-## Remaining questions before any future console experiment
+## Requirements before implementation can resume
 
-1. Can an existing title-owned loader introduce a Unity callback in this PS4
-   build without editing PKG or patching shared system entrypoints? The
-   compiled `DebugConsole.OnGUI` path by itself is not a registration API.
-2. Can GoldHEN or the loader keep a PRX resident until a real callback and GPU
-   quiescence proof is available, or is unloading unsupported for this use?
-3. What does this build's `DebugConsole.OnDestroy` do to `Instance`, and can a
-   verified non-patching title-scoped callback be provided with correct
-   IL2CPP ABI/thread context? No guessed addresses or DebugConsole flags are
-   acceptable.
-4. Can a separately opened DS4 handle coexist with the game's handle without
-   stealing input or requiring interception?
-5. Can target module exports and instruction bytes be captured for offline
-   ABI/relocation analysis without changing the game image?
+1. Provide a verified PS4 IL2CPP AOT loader/bootstrap that can register a new
+   title-owned component, or allow integration into a rebuildable/patchable
+   Unity title package so the component can be compiled and registered.
+2. If package integration remains disallowed, identify an actually active
+   title-local IMGUI callback and explicitly authorize a reviewed method-level
+   detour. The present GoldHEN detour SDK is insufficient for that work; a
+   relocator, synchronized publication, rollback, and thread-quiescence proof
+   are prerequisites. A `DebugConsole.Instance` readback of NULL is not such a
+   callback.
+3. Resolve the Rewired interface TypeDef, method slots, and target mappings
+   from this build's native registration before naming the two indirect calls.
+4. Prove whether a separately opened DS4 handle coexists with the game's
+   handle, or provide a read-only Rewired provider from the title-owned host.
+5. Establish the host callback's disable/destroy order and quiescence before
+   any PRX unload or resource release.
 
-No PS4 test is requested by this change. Any later hardware trial requires a
-separate review and explicit user approval, one reviewed bridge change at a
-time, a known no-hook rollback, and proof that the proposed callback/unload
-contract exists. A passing CI job alone is not grounds for a trial.
+The known `DebugConsole.OnDestroy` behavior is documented at
+[`PS4_ONDESTROY_NATIVE_RESOLVED.md`](PS4_ONDESTROY_NATIVE_RESOLVED.md) and is
+not an open research question: it clears `Counters` conditionally and writes
+`this` back to `Instance` on the matching path. No PS4 test is requested by
+this change. Any future hardware trial requires a separate review and explicit
+user approval, one reviewed bridge change at a time, a known rollback, and
+proof that the proposed callback/unload contract exists. A passing CI job
+alone is not grounds for a trial.

@@ -118,11 +118,14 @@ NULL, Unity fake-null y referencias obsoletas.
 
 La evidencia fue obtenida con una copia privada del módulo y metadatos
 originales; **no** implica que ese flujo concreto se haya observado en consola.
-El analizador
-[`analyze_ps4_il2cpp_pipeline.py`](../scripts/analyze_ps4_il2cpp_pipeline.py)
-puede validar métodos offline; necesita pruebas sobre este caso real que
-comprueben tanto el clear de `Counters` como el write-back de `Instance`.
-El safety hold y la decisión NO-GO permanecen.
+El manifiesto [`PS4_ONDESTROY_EXPECTATIONS.json`](PS4_ONDESTROY_EXPECTATIONS.json)
+registra la identidad exacta de metadata/RVA y ambas instrucciones esperadas.
+El pipeline las clasifica separadamente: `Counters=0` y `Instance=R14`, y solo
+llama al valor `this` si la ventana también contiene el `mov r14,rdi` de
+`0x005C3351`. Pruebas sintéticas cubren las dos instrucciones y rechazan el
+cero en `Instance` como si fuera el write-back documentado. Con los archivos
+originales locales, el pipeline además verifica hashes e bytes contra el ELF.
+Esto no constituye una nueva validación en consola. El safety hold permanece.
 
 ## DualShock 4: ruta Rewired
 

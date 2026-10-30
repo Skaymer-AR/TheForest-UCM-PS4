@@ -96,6 +96,19 @@ def elf_fixture():
     return bytes(blob)
 
 
+def on_destroy_mapping_elf_fixture():
+    # A sparse-sized synthetic executable PT_LOAD is enough to exercise the
+    # exact pinned methodIndex -> RVA lookup without any game binary.
+    blob = bytearray(0x5C8000)
+    blob[:16] = b"\x7fELF\x02\x01\x01" + b"\0" * 9
+    struct.pack_into("<HHIQQQIHHHHHH", blob, 16,
+                     3, 62, 1, 0, 64, 0, 0, 64, 56, 1, 0, 0, 0)
+    struct.pack_into("<IIQQQQQQ", blob, 64,
+                     1, 5, 0x1000, 0, 0, 0x5C7000, 0x5C7000, 0x1000)
+    struct.pack_into("<Q", blob, 0x200 + 75393 * 8, 0x005C3340)
+    return bytes(blob)
+
+
 PROCESS_GAMEPADS = """\
 PS4Controller.ProcessGamePads — RVA 0x004761A0 — ventana 0x180 bytes
   4761a0: 55                            push rbp
@@ -207,6 +220,88 @@ TheForest.DebugConsole.OnDestroy — RVA 0x00002000 — ventana 0x20 bytes
             methods, [incomplete], symbols,
             {0x2002: "TheForest.DebugConsole.Instance"}, {})
         self.assertIn("CFG window has gaps, an external branch, or an open end", uncertain)
+
+    def test_pinned_on_destroy_identity_matches_definition_method_index_token_and_rva(self):
+        expected = json.loads((ROOT / "docs/PS4_ONDESTROY_EXPECTATIONS.json")
+                              .read_text(encoding="utf-8"))
+        method = expected["method"]
+        row = {"type": method["type"], "method": method["name"],
+               "definition_index": method["definition_index"],
+               "method_index": method["method_index"],
+               "token": int(method["token"], 16),
+               "rva": int(method["rva"], 16), "status": "resolved"}
+        pipeline.validate_pinned_on_destroy_identity(
+            [row], expected["metadata_sha256"], expected["module_sha256"])
+        row["rva"] += 1
+        with self.assertRaisesRegex(ValueError, "identity mismatch"):
+            pipeline.validate_pinned_on_destroy_identity(
+                [row], expected["metadata_sha256"], expected["module_sha256"])
+
+    def test_pinned_on_destroy_method_index_maps_to_the_recorded_executable_rva(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            module_path = Path(temp_dir) / "synthetic-module.elf"
+            module_path.write_bytes(on_destroy_mapping_elf_fixture())
+            image = pipeline.Elf64Image(module_path)
+            method = pipeline.MethodDefinition(82470, "OnDestroy", 0, 75393,
+                                               0x0600777D, 0)
+            self.assertEqual(pipeline.resolve_method_rva(
+                module_path, image, method, 0x200), (0x005C3340, True))
+
+    def test_on_destroy_counters_clear_is_distinct_from_instance_this_store(self):
+        expected = json.loads((ROOT / "docs/PS4_ONDESTROY_EXPECTATIONS.json")
+                              .read_text(encoding="utf-8"))
+        method = expected["method"]
+        row = {"method": method["name"], "type": method["type"],
+               "definition_index": method["definition_index"],
+               "method_index": method["method_index"],
+               "token": int(method["token"], 16), "rva": int(method["rva"], 16),
+               "status": "resolved"}
+        window = parse_windows("""\
+TheForest.DebugConsole.OnDestroy — RVA 0x005C3340 — ventana 0x240 bytes
+  5c3340: 55                            push rbp
+  5c3351: 4c 89 f7                      mov r14, rdi
+  5c3384: 48 c7 40 08 00 00 00 00       mov qword ptr [rax + 0x8], 0
+  5c356c: 4c 89 70 10                   mov qword ptr [rax + 0x10], r14
+  5c3578: c3                            ret
+""")[0]
+        symbols, _ = load_symbols()
+        report = pipeline._on_destroy_assessment(
+            [row], [window], symbols, {}, {}, pinned_input=True)
+        self.assertIn("DebugConsole.Counters", report)
+        self.assertIn("matches `mov [rax + 0x8], 0`", report)
+        self.assertIn("DebugConsole.Instance", report)
+        self.assertIn("matches `mov [rax + 0x10], r14`", report)
+        self.assertIn("source resolves to `this`", report)
+        self.assertIn("not an Instance clear", report)
+        self.assertNotIn("supports a clear", report)
+        unpinned = pipeline._on_destroy_assessment(
+            [row], [window], symbols, {}, {}, pinned_input=False)
+        self.assertNotIn("Pinned PS4 instruction expectations", unpinned)
+        self.assertIn("no analyst-annotated direct store", unpinned)
+
+    def test_on_destroy_instance_zero_is_not_misread_as_the_recorded_this_store(self):
+        expected = json.loads((ROOT / "docs/PS4_ONDESTROY_EXPECTATIONS.json")
+                              .read_text(encoding="utf-8"))
+        method = expected["method"]
+        row = {"method": method["name"], "type": method["type"],
+               "definition_index": method["definition_index"],
+               "method_index": method["method_index"],
+               "token": int(method["token"], 16), "rva": int(method["rva"], 16),
+               "status": "resolved"}
+        window = parse_windows("""\
+TheForest.DebugConsole.OnDestroy — RVA 0x005C3340 — ventana 0x240 bytes
+  5c3340: 55                            push rbp
+  5c3351: 4c 89 f7                      mov r14, rdi
+  5c3384: 48 c7 40 08 00 00 00 00       mov qword ptr [rax + 0x8], 0
+  5c356c: 48 c7 40 10 00 00 00 00       mov qword ptr [rax + 0x10], 0
+  5c3578: c3                            ret
+""")[0]
+        symbols, _ = load_symbols()
+        report = pipeline._on_destroy_assessment(
+            [row], [window], symbols, {}, {}, pinned_input=True)
+        self.assertIn("Counters", report)
+        self.assertIn("Instance` at `0x005C356C` (0x10) does not match", report)
+        self.assertIn("Do not infer Instance cleanup", report)
 
     def test_rewired_vtable_callsites_are_indirect_and_do_not_acquire_names(self):
         window = parse_windows(PROCESS_GAMEPADS)[0]

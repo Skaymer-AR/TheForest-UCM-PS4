@@ -47,10 +47,10 @@ Para el DualShock 4, las ventanas del juego no localizan una importación ScePad
 
 ## Componentes seguros que siguen pendientes
 
-1. **OnDestroy ya fue recuperado** del PRX/metadata privados: `methodIndex=75393`, RVA `0x005C3340`. Incorporar al pipeline pruebas de la **escritura no nula** a `Instance` en `0x005C356C` y de la limpieza diferenciada de `Counters` en `0x005C3384`, con cobertura de ramas parciales.
+1. **OnDestroy y sus dos stores ya están incorporados** al manifiesto y al pipeline: definición `82470`, `methodIndex=75393`, RVA `0x005C3340`; `Counters=0` en `0x005C3384`; `Instance=R14/this` en `0x005C356C`. Los tests host rechazan confundir el segundo store con un cero.
 2. Resolver los inicializadores/registro nativo que ligan `0x33EB300` y `0x33EF3E8` a TypeDefs del metadata PS4 v23. La metadata sola y las coincidencias de nombre no bastan.
 3. Interpretar los destinos de `ProcessGamePads` solo cuando el receiver, el slot y la tabla de interfaz estén ligados al mismo registro nativo.
-4. Mantener `src/unity_host_adapter.*` y el mapper DS4 en host. La decisión actual es **no-go**: no se ha probado callback title-scoped o loader AOT accesible desde el PRX.
+4. Mantener `src/unity_host_adapter.*` y el mapper DS4 en host. La decisión formal es **no-go**: no se ha probado callback title-scoped ni loader AOT accesible desde el PRX. Para una integración sin hooks debe permitirse un host AOT del título registrado por su build IL2CPP; el detalle de esa restricción está en [`INTEGRATION_DECISION.md`](INTEGRATION_DECISION.md).
 
 La ejecución local reproducible y sus límites están en
 [`IL2CPP_ANALYSIS_PIPELINE.md`](IL2CPP_ANALYSIS_PIPELINE.md). La decisión por

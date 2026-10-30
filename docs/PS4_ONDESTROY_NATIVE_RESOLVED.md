@@ -39,13 +39,20 @@ At the function entry `0x005C3351`, `mov r14,rdi` preserves the incoming object 
 - This provides an **independent contextual native reference supporting the hypothesis** that `0x33EB300` is `CoopPeerStarter` and `+0x01` is `DedicatedHost`. **It is not yet an exact class/type-registration mapping**; keep the slot as candidate pending direct registration evidence.
 - The Rewired interface/type slot `0x33EF3E8` remains unresolved; `ProcessGamePads` at `0x00476279` loads this slot for interface-map lookup and calls indirectly at `0x004762D6`/`0x00476315`. A branch into a virtual-dispatch table is not proof of a particular method or ScePad function.
 
-## Next Codex work (no on-console trial)
+## Follow-up status
 
-1. Update `docs/DEBUGCONSOLE_LIFECYCLE.md` and `docs/PS4_IL2CPP_ANALYSIS.md` so they no longer say OnDestroy methodIndex, RVA or body is missing. Use this report for the actual native evidence; don't rewrite these as hypothetical PC behaviors.
-2. Add `DebugConsole.OnDestroy → RVA 0x005C3340, methodIndex=75393` to the existing reproducible pipeline's expectations/host tests, and assert the observed **non-NULL write at `0x005C356C`**, plus independent clear of `Counters` at `0x005C3384`.
-3. Separate *observed null pointer*, *destroyed-object fake null*, and *stale native pointer* as distinct possible states. Do not call Unity methods or enable flags to explore.
-4. For slot `0x33EB300`, resolve the exact metadata registration index; for `0x33EF3E8`, resolve the interface type and slot dispatch from IL2CPP metadata; mark unresolved if unsupported.
-5. Preserve **NO-GO** on external IMGUI callback. Evaluate whether a viable non-global-detour, owned Unity-side host could exist; don't claim such a host already exists.
-6. Keep all game binaries out of public GitHub, all tests host-only, PR #2 draft, no hook-enabled PRX.
+The manifest [`PS4_ONDESTROY_EXPECTATIONS.json`](PS4_ONDESTROY_EXPECTATIONS.json)
+and the unified offline pipeline now record the method index/RVA and distinguish
+the `Counters=0` store from the `Instance=this` store. Synthetic tests verify
+that a zero source at the Instance site is rejected as the documented
+write-back. They do not replace the original-binary analysis or verify runtime
+invocation.
+
+The remaining integration decision is explicit in
+[`INTEGRATION_DECISION.md`](INTEGRATION_DECISION.md): no AOT component loader,
+Unity callback registration route, or safe title-owned host has been
+demonstrated from the GoldHEN PRX under the current constraints. No hook-enabled
+PRX or console trial is part of that decision. Rewired type registration and
+the exact input methods remain unresolved.
 
 **Evidence classification:** OnDestroy RVA/index and assembly instructions were verified against the original private PS4 PRX + metadata. Only `OnGUI` and `ToggleConsole` entry signatures were previously physically verified in a real PS4Debug session. Nothing above verifies Unity runtime state or makes a new hardware test safe.

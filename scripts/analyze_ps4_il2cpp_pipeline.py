@@ -45,6 +45,7 @@ METADATA_VERSION = 23
 METADATA_SHA256 = "238c400de31e28ed4f7f14e7781ea3b33de0d0bd6964ded680d78fce1d85a6c3"
 MODULE_SHA256 = "0159ff61c99d25c8f0a821070e3d8b24aff58dbbe5429b8f29561f9960d02969"
 METHOD_POINTER_TABLE_OFFSET = 0x31738C0
+ONDESTROY_EXPECTATIONS_PATH = ROOT / "docs/PS4_ONDESTROY_EXPECTATIONS.json"
 METHOD_RECORD = struct.Struct("<I10iI4H")
 TYPE_RECORD = struct.Struct("<II9iI8i8HII")
 FIELD_RECORD = struct.Struct("<IiiI")
@@ -376,6 +377,33 @@ def _query_method_rows(metadata: MetadataV23, module: Path, image: Elf64Image,
     return result
 
 
+def validate_pinned_on_destroy_identity(method_rows: list[dict[str, object]],
+                                        metadata_sha256: str,
+                                        module_sha256: str) -> None:
+    """Fail closed if the original pinned files no longer resolve OnDestroy."""
+    expectations = json.loads(ONDESTROY_EXPECTATIONS_PATH.read_text(encoding="utf-8"))
+    if (metadata_sha256 != expectations["metadata_sha256"] or
+            module_sha256 != expectations["module_sha256"]):
+        return
+    expected = expectations["method"]
+    expected_values = (
+        int(expected["definition_index"]), int(expected["method_index"]),
+        int(expected["token"], 16), int(expected["rva"], 16),
+    )
+    matches = [row for row in method_rows
+               if row.get("type") == expected["type"] and
+               row.get("method") == expected["name"]]
+    if len(matches) != 1:
+        raise ValueError("pinned PS4 inputs must resolve exactly one DebugConsole.OnDestroy row")
+    row = matches[0]
+    actual = (int(row.get("definition_index", -1)),
+              int(row.get("method_index", -1)), int(row.get("token", -1)),
+              int(row.get("rva", -1)) if row.get("rva") is not None else -1)
+    if actual != expected_values:
+        raise ValueError("pinned PS4 DebugConsole.OnDestroy identity mismatch: "
+                         f"expected {expected_values}, got {actual}")
+
+
 def _metadata_type_candidates(metadata: MetadataV23) -> tuple[list[dict[str, object]], list[TypeDefinition]]:
     candidates: list[dict[str, object]] = []
     for type_def in metadata.find_types("CoopPeerStarter"):
@@ -400,7 +428,8 @@ def _on_destroy_assessment(method_rows: list[dict[str, object]],
                            windows: list[Window],
                            symbols: dict[int, set[str]],
                            store_sites: dict[int, str],
-                           conditions: dict[int, str]) -> str:
+                           conditions: dict[int, str],
+                           pinned_input: bool = False) -> str:
     matches = [row for row in method_rows
                if row.get("method") == "OnDestroy"
                and row.get("type") == "TheForest.DebugConsole"]
@@ -411,11 +440,93 @@ def _on_destroy_assessment(method_rows: list[dict[str, object]],
     if row.get("status") != "resolved":
         return (f"UNRESOLVED: metadata row exists (`methodIndex` `{row.get('method_index')}`), "
                 "but it has no executable, file-backed native RVA.")
+    expectations = json.loads(ONDESTROY_EXPECTATIONS_PATH.read_text(encoding="utf-8"))
+    expected_method = expectations["method"]
+    expected_identity = (
+        int(expected_method["definition_index"]),
+        int(expected_method["method_index"]),
+        int(expected_method["token"], 16),
+        int(expected_method["rva"], 16),
+    )
+    actual_identity = (
+        int(row.get("definition_index", -1)),
+        int(row.get("method_index", -1)),
+        int(row.get("token", -1)),
+        int(row.get("rva", -1)),
+    )
     rva = int(row["rva"])
+    pinned_identity = pinned_input and actual_identity == expected_identity
     window = next((item for item in windows if item.rva == rva), None)
     if window is None:
         return (f"RVA `0x{rva:08X}` is resolved, but no bounded native body starts there; "
-                "whether it clears `DebugConsole.Instance` remains unresolved.")
+                "the Counters and Instance store instructions were not verified from this input.")
+
+    instructions = {item.address: item for item in window.instructions}
+
+    def normalized_store(site: int) -> tuple[str, str] | None:
+        instruction = instructions.get(site)
+        if instruction is None or instruction.mnemonic not in {"mov", "movq"}:
+            return None
+        operands = instruction.operands.split(",", 1)
+        if len(operands) != 2:
+            return None
+        destination = re.sub(r"\s+", "", operands[0].lower())
+        destination = destination.replace("qwordptr", "")
+        source = re.sub(r"\s+", "", operands[1].lower())
+        return destination, source
+
+    def matches_store(site: int, field_offset: str, source_pattern: str) -> bool:
+        parsed = normalized_store(site)
+        if parsed is None:
+            return False
+        destination, source = parsed
+        expected_destination = f"[rax+{int(field_offset, 16):#x}]"
+        if destination != expected_destination:
+            return False
+        if source_pattern == "0":
+            return source in {"0", "0x0"}
+        return source == source_pattern
+
+    if pinned_identity and rva == int(expected_method["rva"], 16):
+        counters, instance = expectations["stores"]
+        counters_match = matches_store(
+            int(counters["rva"], 16), counters["static_fields_offset"],
+            counters["source_pattern"])
+        instance_match = matches_store(
+            int(instance["rva"], 16), instance["static_fields_offset"],
+            instance["source_pattern"])
+        this_evidence = expectations["this_register_evidence"]
+        this_move = instructions.get(int(this_evidence["rva"], 16))
+        expected_this_instruction = re.sub(
+            r"\s+", "", this_evidence["instruction"].lower())
+        actual_this_instruction = (re.sub(r"\s+", "", this_move.mnemonic.lower() +
+                                          this_move.operands.lower())
+                                  if this_move else "")
+        preserves_this = bool(
+            this_move and actual_this_instruction == expected_this_instruction)
+        counters_label = (
+            f"`{counters['static_field']}` at `0x{int(counters['rva'], 16):08X}` "
+            f"({counters['static_fields_offset']}) "
+            f"{'matches' if counters_match else 'does not match'} `mov [rax + 0x8], 0`"
+        )
+        instance_source = ("`this` (R14 was saved from RDI at the recorded prologue site)"
+                           if instance_match and preserves_this else
+                           "R14 (origin not verified in this window)")
+        instance_label = (
+            f"`{instance['static_field']}` at `0x{int(instance['rva'], 16):08X}` "
+            f"({instance['static_fields_offset']}) "
+            f"{'matches' if instance_match else 'does not match'} `mov [rax + 0x10], r14`; "
+            f"source resolves to {instance_source}"
+        )
+        if counters_match and instance_match:
+            return ("Pinned PS4 instruction expectations: " + counters_label + "; " +
+                    instance_label + ". The zero store targets Counters; the Instance "
+                    "store writes a register value and is not an Instance clear. These "
+                    "are observed instruction patterns, not proof that Unity invoked "
+                    "OnDestroy or that the stored pointer remains a live Unity object.")
+        return ("Pinned PS4 OnDestroy identity resolved, but its recorded store patterns "
+                "were not both present at their expected RVAs: " + counters_label + "; " +
+                instance_label + ". Do not infer Instance cleanup from this window.")
 
     local_stores = {site: label for site, label in store_sites.items()
                     if window.rva <= site < window.rva + window.size}
@@ -424,7 +535,6 @@ def _on_destroy_assessment(method_rows: list[dict[str, object]],
     cfg, _sinks, _guards = analyze_window(window, symbols, local_stores,
                                           local_conditions)
     incomplete = bool(cfg.fallthrough_gaps or cfg.external_branches or cfg.open_end)
-    instructions = {item.address: item for item in window.instructions}
     zero_stores = []
     for site, label in local_stores.items():
         if label not in {"DebugConsole.Instance", "TheForest.DebugConsole.Instance"}:
@@ -565,10 +675,16 @@ def render_pipeline_report(metadata: MetadataV23, module_sha256: str,
         for result in results:
             lines.append(f"| `{result.get('type', '—')}` | `{result.get('field', '—')}` | "
                          f"{result.get('static', '—')} | {result.get('status')} |")
-    lines.extend(["", "## DebugConsole.OnDestroy singleton cleanup", "",
+    on_destroy_expectations = json.loads(
+        ONDESTROY_EXPECTATIONS_PATH.read_text(encoding="utf-8"))
+    pinned_on_destroy_input = (
+        metadata.sha256 == on_destroy_expectations["metadata_sha256"] and
+        module_sha256 == on_destroy_expectations["module_sha256"])
+    lines.extend(["", "## DebugConsole.OnDestroy native writes", "",
                   _on_destroy_assessment(method_rows, windows, symbols,
-                                         store_sites, conditions),
-                  "", "The fixed `Awake` evidence distinguishes reads of `Cheats.DebugConsole` near `0x005C1E13` from the write of `this` to `DebugConsole.Instance` at `0x005C1EA2`; this report does not reinterpret either as `OnDestroy` behavior."])
+                                         store_sites, conditions,
+                                         pinned_input=pinned_on_destroy_input),
+                  "", "Pinned identity expectations are recorded in `docs/PS4_ONDESTROY_EXPECTATIONS.json`. When the original PS4 input hashes are supplied, the pipeline checks the metadata definition index, methodIndex, token, executable RVA, and each supplied instruction byte against the module."])
     lines.extend(["", "## Native bounded windows", ""])
     if not windows:
         lines.append("No disassembly window supplied/generated. Method RVAs above are not proof that Unity invokes those methods.")
@@ -594,7 +710,7 @@ def render_pipeline_report(metadata: MetadataV23, module_sha256: str,
                           render_cfg(Path("private-bounded-window.txt"), window,
                                      symbols, local_stores, local_conditions)])
     lines.extend(["", "## Conclusion limits", "",
-                  "- A resolved `OnDestroy` methodIndex/RVA identifies native code, not its runtime call or object lifetime. The body must be present in a complete bounded window before claiming singleton cleanup.",
+                  "- A resolved `OnDestroy` methodIndex/RVA identifies native code, not its runtime call or object lifetime. The two pinned stores are classified separately and do not establish an active Unity object.",
                   "- `0x33EB300` and `0x33EF3E8` are reported only as data/type-reference slots. Type candidates are metadata matches, not proof those slots point to those types.",
                   "- A vtable callsite is not a concrete method target without the receiver class and selected interface/vtable mapping.",
                   "- The pipeline is read-only. Metadata, module, dump.cs, and disassembly remain local; output omits source paths and instruction bytes.", ""])
@@ -629,7 +745,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="optional private bounded llvm-objdump text windows")
     parser.add_argument("--disassemble-targeted", action="store_true",
                         help="disassemble only Awake, OnDestroy, and ProcessGamePads windows")
-    parser.add_argument("--window-bytes", type=lambda v: int(v, 0), default=0x180)
+    parser.add_argument("--window-bytes", type=lambda v: int(v, 0), default=0x240,
+                        help="bounded bytes per selected method; 0x240 covers OnDestroy through its next method")
     parser.add_argument("--objdump", help="local llvm-objdump/objdump executable")
     parser.add_argument("--store-site", action="append", default=[],
                         help="analyst-verified store annotation 0xRVA=Field.Name")
@@ -657,6 +774,7 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("pinned PS4 module was expected to use PT_LOAD image base 0; refusing RVA/table interpretation")
         methods = _query_method_rows(metadata, args.module, image,
                                      args.method_pointer_table_offset)
+        validate_pinned_on_destroy_identity(methods, metadata.sha256, module_sha)
         type_candidates, rewired_interfaces = _metadata_type_candidates(metadata)
         type_slots = [inspect_static_slot(args.module, image, slot)
                       for slot in (0x033EB300, 0x033EF3E8)]
