@@ -3,7 +3,7 @@ import sys
 import unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
-from verify_playmaker_gui_aot import check_edges, inspect, SPEC, INPUT_ACTION_SPEC
+from verify_playmaker_gui_aot import check_edges, inspect, SPEC, INPUT_ACTION_SPEC, REWIRED_EDGE, REWIRED_ACTION_FIELDS
 
 
 class PrecompiledGuiAotTests(unittest.TestCase):
@@ -33,6 +33,15 @@ class PrecompiledGuiAotTests(unittest.TestCase):
                          ('OnEnter', 0x023D7FE0, 30))
         self.assertEqual(set(INPUT_ACTION_SPEC),
                          {'GetButtonDown','GetKeyDown','EnableGUI','SendEvent'})
+
+    def test_rewired_existing_player_button_down_call_is_pinned(self):
+        self.assertEqual(REWIRED_EDGE, {0x0253757B:0x00A25720})
+        self.assertEqual(REWIRED_ACTION_FIELDS['GetButtonDown'],
+                         {'buttonName':0x40,'sendEvent':0x48,'storeResult':0x50})
+        real_call_site, destination=next(iter(REWIRED_EDGE.items()))
+        code=b'\\xe8'+struct.pack('<i',destination-real_call_site-5)
+        self.assertEqual(check_edges(lambda at,n: code, REWIRED_EDGE)[0]['target'],
+                         hex(destination))
 
     def test_gui_action_coverage(self):
         self.assertEqual(len(SPEC),7)
