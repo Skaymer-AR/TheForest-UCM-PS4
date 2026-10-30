@@ -46,6 +46,9 @@ DISASM_RE = re.compile(
 )
 HEX_BYTE_RE = re.compile(r"^[0-9A-Fa-f]{2}$")
 IMMEDIATE_RE = re.compile(r"^(?:0x)?([0-9A-Fa-f]+)\b")
+ON_GUI_CONFIRMED_PREFIX = bytes.fromhex(
+    "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 E4")
+ON_GUI_REL32_STOLEN_PREFIX = bytes.fromhex("55 48 89 E5 41 57")
 
 
 @dataclass(frozen=True)
@@ -326,6 +329,39 @@ def _candidate_status(candidate: Candidate, local_bytes: bytes | None) -> str:
     return "user-confirmed historically; local ELF first bytes MISMATCH"
 
 
+def assess_local_imgui_detour(candidate: Candidate | None) -> dict[str, object]:
+    """Read-only preflight for a method-local OnGUI detour; never emits a patch."""
+    if candidate is None or candidate.name != "TheForest.DebugConsole.OnGUI":
+        return {"anchor_match": False, "install_go": False,
+                "reason": "TheForest.DebugConsole.OnGUI anchor is unavailable."}
+    prefix = candidate.confirmed_bytes
+    if prefix != ON_GUI_CONFIRMED_PREFIX:
+        return {"anchor_match": False, "install_go": False,
+                "reason": "The recorded PS4Debug entry prefix does not match the pinned anchor."}
+
+    # The first six bytes are three complete, position-independent instructions.
+    # A five-byte E9 transfer would therefore displace six bytes, if a relay
+    # could be allocated within signed-rel32 range and patching were quiesced.
+    # The 14-byte absolute-jump case needs 17 complete prologue bytes because
+    # byte 13 starts a four-byte `and rsp, imm8` instruction; only 16 are known.
+    return {
+        "anchor_match": True,
+        "method_scope_only": True,
+        "rel32_transfer_bytes": 5,
+        "rel32_stolen_bytes": len(ON_GUI_REL32_STOLEN_PREFIX),
+        "rel32_stolen_instructions": ("push rbp", "mov rbp,rsp", "push r15"),
+        "rel32_stolen_prefix": ON_GUI_REL32_STOLEN_PREFIX,
+        "rel32_near_relay_required": True,
+        "absolute_transfer_bytes": 14,
+        "absolute_stolen_bytes_required": 17,
+        "absolute_stolen_window_verified": False,
+        "runtime_callback_active": "unverified; prior PS4Debug Instance read was NULL",
+        "install_go": False,
+        "reason": ("No runtime callback proof, Unity GUI call ABI, thread quiescence, "
+                   "or safe teardown contract; this is analysis only."),
+    }
+
+
 def render_report(candidates: list[Candidate], image: Elf64Image | None = None,
                   focused: dict[str, tuple[bytes | None, list[Instruction]]] | None = None,
                   xrefs: dict[int, list[int]] | None = None,
@@ -418,6 +454,17 @@ def render_report(candidates: list[Candidate], image: Elf64Image | None = None,
             "confirmed displacement; its method identity and full ABI still "
             "need local disassembly. Never call this on a NULL object."
         )
+
+    local_hook = assess_local_imgui_detour(ongui)
+    output.extend([
+        "",
+        "## Localized IMGUI callback preflight",
+        "",
+        "- Best identified graphics candidate: `TheForest.DebugConsole.OnGUI` at `0x005C37B0`; its PS4 body calls Unity IMGUI, but runtime invocation is **unverified** and the previously read `Instance` was NULL.",
+        "- A method-only detour would preserve the PKG and avoid global GNM/VideoOut/ScePad hooks. The confirmed entry prefix supports a 5-byte relative transfer over six complete prologue bytes (`push rbp; mov rbp,rsp; push r15`), conditional on a nearby relay. The 16-byte anchor does not verify the 17-byte window needed for a 14-byte absolute transfer.",
+        f"- Installation verdict: **{'GO' if local_hook['install_go'] else 'NO-GO'}**. {local_hook['reason']}",
+        "- A title-local patch remains insufficient to draw UCM until the callback is observed active and a Unity GUI renderer/ABI and nonblocking quiescent teardown are validated.",
+    ])
 
     if focused is not None:
         output.extend([

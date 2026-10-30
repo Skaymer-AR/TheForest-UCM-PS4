@@ -66,6 +66,36 @@ class RecoveredPs4EvidenceTests(unittest.TestCase):
             analysis.verify_confirmed_anchors(
                 candidates, AnchorImage("TheForest.DebugConsole.OnGUI"))
 
+    def test_local_imgui_detour_preflight_is_scoped_and_fails_closed_for_installation(self):
+        candidates = analysis.parse_evidence(analysis.DEFAULT_EVIDENCE)
+        ongui = next(c for c in candidates
+                     if c.name == "TheForest.DebugConsole.OnGUI")
+        preflight = analysis.assess_local_imgui_detour(ongui)
+        self.assertTrue(preflight["anchor_match"])
+        self.assertTrue(preflight["method_scope_only"])
+        self.assertEqual(preflight["rel32_transfer_bytes"], 5)
+        self.assertEqual(preflight["rel32_stolen_bytes"], 6)
+        self.assertEqual(preflight["rel32_stolen_prefix"],
+                         bytes.fromhex("55 48 89 E5 41 57"))
+        self.assertTrue(preflight["rel32_near_relay_required"])
+        self.assertFalse(preflight["absolute_stolen_window_verified"])
+        self.assertIn("unverified", preflight["runtime_callback_active"])
+        self.assertFalse(preflight["install_go"])
+
+        report = analysis.render_report(candidates)
+        self.assertIn("Localized IMGUI callback preflight", report)
+        self.assertIn("preserve the PKG", report)
+        self.assertIn("runtime invocation is **unverified**", report)
+        self.assertIn("Installation verdict: **NO-GO**", report)
+
+    def test_local_imgui_detour_preflight_rejects_a_changed_anchor(self):
+        bad = analysis.Candidate(
+            "TheForest.DebugConsole.OnGUI", 0x005C37B0,
+            "tampered evidence", bytes.fromhex("CC 48 89 E5 41 57 41 56"))
+        preflight = analysis.assess_local_imgui_detour(bad)
+        self.assertFalse(preflight["anchor_match"])
+        self.assertFalse(preflight["install_go"])
+
     def test_elf64_rva_maps_through_link_image_base_not_runtime_base(self):
         with tempfile.TemporaryDirectory() as temp:
             binary = Path(temp) / "synthetic.prx.elf"

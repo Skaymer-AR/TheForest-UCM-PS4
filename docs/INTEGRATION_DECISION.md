@@ -20,7 +20,7 @@ inserte en el ciclo Unity. El PRX actual no ofrece ese bootstrap.
 | `DllModLoader` / `AppDomain.Load` | **Candidato no validado** | El PS4 nativo confirma la ruta `DllModLoader.Awake → LoadDllMod` y llamadas a `File.ReadAllBytes`/`AppDomain.Load`. Eso demuestra una carga solicitada por el código compilado, no que IL2CPP ejecute IL arbitrario, que los métodos nuevos estén AOT compilados, ni que se registre un `MonoBehaviour`. No contamos el ModAPI de PC como evidencia. |
 | Unity native plug-in / `UnityRenderingEvent` | **NO-GO** | Unity debe cargar el módulo como plugin Unity y llamar su inicializador `UnityPluginLoad` con `IUnityInterfaces`; el título debe encolar el evento de render. El loader GoldHEN observado carga un PRX y llama `plugin_load` (resuelve `plugin_unload`, pero eso no forma un ciclo Unity); no proporciona la inicialización Unity ni se encontró un caller del título para encolar un evento. Un evento de render nativo tampoco habilita por sí solo IMGUI. |
 | Llamar `GUI`/`GUILayout` desde hilo o notificación del PRX | **NO-GO** | No es un evento IMGUI de Unity. `GUIUtility.CheckOnGUI` dentro del callback existente refuerza que las funciones GUI dependen de ese contexto. |
-| Hook title-scoped de un `OnGUI` activo | **NO-GO ahora** | Sería un parche al código del juego, no un host AOT. `DebugConsole.OnGUI` no tiene instancia confirmada; no se identificó otro callback IMGUI activo. El SDK de detours usado no acredita relocación RIP general ni quiescencia/handoff seguro. No se acepta un hook experimental para suplir evidencia faltante. |
+| Detour title-scoped de `DebugConsole.OnGUI` | **NO-GO para instalar** | Es la única función identificada con GUI IMGUI real y puede conservar el PKG sin tocar GNM/VideoOut/ScePad. El preflight offline encuentra un prefijo de 6 bytes apto para un salto relativo con relay cercano. La invocación runtime sigue sin comprobarse (singleton leído NULL), faltan ABI del renderer, quiescencia de hilos y teardown seguro. El preflight no genera ni aplica parche. |
 | Hook global GNM/VideoOut/ScePad | **PROHIBIDO** | Las versiones v0.5/v0.6 causaron pantalla negra y bloqueo de consola. Se mantienen deshabilitadas. |
 
 ### Qué aporta cada callback
@@ -89,9 +89,10 @@ Para obtener un primer panel **sin hooks**, la vía defendible es añadir un hos
 AOT propio del título. Eso requiere cambiar la restricción **“no modificar
 PKG”** y además disponer de un proyecto/build IL2CPP compatible (o un loader
 PS4 documentado que registre código AOT nuevo). El host debe compilar sus
-métodos para esta versión, incluirlos en el registro IL2CPP y crear una
-instancia desde el título. Permitir modificar el PKG sin poder producir ese
-build/registro no alcanza.
+métodos para esta versión, incluirlos en el registro IL2CPP, actualizar en
+conjunto `Il2CppUserAssemblies.prx` y `global-metadata.dat`, y crear una
+instancia desde una escena/bootstrap del título. Permitir modificar el PKG sin
+poder producir ese build/registro no alcanza.
 
 Como alternativa distinta, se podría cambiar la prohibición de hooks globales
 por autorización explícita de un **hook limitado a un callback IMGUI activo del
