@@ -68,3 +68,36 @@ If the originals remain unavailable, preserve this verified derived
 evidence, continue the independent graphical host ABI/ownership analysis,
 and make only a narrowly scoped read-only transfer request if it unlocks
 a specific remaining check. No new PRX or console test is implied.
+
+## New ZIP-first option (no FTP required when originals are present)
+
+The standalone read-only archive checker `scripts/verify_unity_assets_in_archives.py`
+inspects only whitelisted `Media/<filename>` members (including nested
+`<prefix>/Media/<filename>` entries), checks the **original six file hashes**
+without creating new files, and prints a metadata-only JSON report:
+
+```sh
+python3 scripts/verify_unity_assets_in_archives.py \
+  /private/Archivo.zip '/private/Archivo(1).zip'
+```
+
+The default has no file write, console operation or connection. If matches
+are verified, run the *separately authorized local* extraction mode:
+
+```sh
+python3 scripts/verify_unity_assets_in_archives.py \
+  /private/Archivo.zip '/private/Archivo(1).zip' \
+  --extract-dir /private/PS4_CUSA12398_UnityAssets
+```
+
+Only exact six-file SHA-256 matches may be published to the private output.
+Malformed ZIPs, path traversal, mismatched hashes and oversized entries
+fail without publishing an unverified asset. Tests use synthetic ZIP fixtures.
+No commercial binary is stored in this repository.
+
+**Status of user-supplied ZIPs:** They were received in the conversation,
+but due to local container execution failure their ZIP entries have not yet
+been inspected by this assistant. CI validates the scanner against synthetic
+fixtures only. Work can execute this scanner directly on the actual private
+attachments, if they are available in its cloud computer. Do not conflate
+simulated tests with actual archive inspection.
