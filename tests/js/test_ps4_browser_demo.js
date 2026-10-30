@@ -25,6 +25,6 @@ assert(!/fetch\s*\(|XMLHttpRequest|localStorage|document\.cookie|navigator\.getG
 assert(!/scePad|GoldHEN|il2cpp_runtime_invoke/i.test(html),'not a game or PS4 hook');
 var original=fs.readFileSync(path.resolve(__dirname,'../../src/overlay.c'),'utf8');
 var srcIds=Array.from(original.matchAll(/\(MenuItem\)\{"([^"]+)"/g)).map(function(m){return m[1]});
-var webIds=Core.presets.map(function(p){return p[0]});
+var webIds=Array.from(Core.presets, function(p){return p[0]}); // Normalize array created in vm context
 assert.deepStrictEqual(webIds,srcIds,'browser item IDs match existing C menu in order');
 console.log('PS4 browser menu: PASS (13 core entries mirrored, no gameplay or network APIs)');
