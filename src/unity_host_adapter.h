@@ -10,12 +10,23 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define UCM_UNITY_HOST_ABI_V1 1u
+/* V2 refuses unverified raw ScePad/Orbis input.
+ * No commercial-game provider has been demonstrated. */
+#define UCM_UNITY_HOST_ABI_V2 2u
 
+/* Input is normalized only after the *title-owned* Rewired Player
+ * and active ControllerMap have been checked by the Unity-side provider.
+ * Flags are assertions the future provider MUST derive from live runtime
+ * ownership, not from serialized assets or guessed action IDs.
+ * Unknown bits or any absent verification fail closed. */
 typedef struct {
     bool connected;
-    uint32_t orbis_buttons;
-} UcmPadSnapshot;
+    bool assigned_to_local_player;
+    bool controller_map_verified;
+    bool input_focus_verified;
+    bool scene_owner_verified;
+    uint32_t normalized_buttons;  /* PAD_* from overlay.h, not ScePad bits */
+} UcmRewiredSnapshot;
 
 typedef enum {
     UCM_HOST_DETACH_PENDING = 0,
@@ -39,8 +50,11 @@ typedef struct {
     UcmHostDetachResult (*try_unregister_frame_callback)(void *context,
                                                          uintptr_t token);
     bool (*is_render_context)(void *context, const void *render_context);
-    /* Reads a previously published snapshot; must not call ScePad or block. */
-    bool (*try_read_pad_snapshot)(void *context, UcmPadSnapshot *snapshot);
+    /* Nonblocking atomic snapshot of the scene-owned active Rewired Player,
+     * DS4 controller map and focus. Does NOT consume gameplay input. Must
+     * not read ScePad or guess map IDs. No retail implementation exists yet. */
+    bool (*try_read_rewired_snapshot)(void *context,
+                                      UcmRewiredSnapshot *snapshot);
     OverlayRenderer renderer;
 } UcmUnityHostApi;
 

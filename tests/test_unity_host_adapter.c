@@ -34,7 +34,7 @@ typedef struct {
     void *callback_context;
     uintptr_t token;
     void *valid_render_context;
-    UcmPadSnapshot sample;
+    UcmRewiredSnapshot sample;
     UcmHostDetachResult detach_result;
     bool registration_ok;
     bool invoke_during_registration;
@@ -90,7 +90,7 @@ static bool fake_is_render(void *context, const void *render_context) {
     return render_context == fake->valid_render_context;
 }
 
-static bool fake_read_snapshot(void *context, UcmPadSnapshot *snapshot) {
+static bool fake_read_snapshot(void *context, UcmRewiredSnapshot *snapshot) {
     FakeHost *fake = context;
     atomic_fetch_add(&fake->read_count, 1u);
     if (fake->block_read) {
@@ -109,6 +109,10 @@ static void fake_init(FakeHost *fake, UcmUnityHostApi *api) {
     fake->registration_ok = true;
     fake->connected_sample_ok = true;
     fake->sample.connected = true;
+    fake->sample.assigned_to_local_player = true;
+    fake->sample.controller_map_verified = true;
+    fake->sample.input_focus_verified = true;
+    fake->sample.scene_owner_verified = true;
     atomic_init(&fake->read_entered, false);
     atomic_init(&fake->release_read, false);
     atomic_init(&fake->read_count, 0u);
@@ -116,13 +120,13 @@ static void fake_init(FakeHost *fake, UcmUnityHostApi *api) {
     atomic_init(&fake->rect_count, 0u);
     atomic_init(&fake->text_count, 0u);
     memset(api, 0, sizeof(*api));
-    api->abi_version = UCM_UNITY_HOST_ABI_V1;
+    api->abi_version = UCM_UNITY_HOST_ABI_V2;
     api->struct_size = sizeof(*api);
     api->context = fake;
     api->register_frame_callback = fake_register;
     api->try_unregister_frame_callback = fake_unregister;
     api->is_render_context = fake_is_render;
-    api->try_read_pad_snapshot = fake_read_snapshot;
+    api->try_read_rewired_snapshot = fake_read_snapshot;
     api->renderer.context = fake;
     api->renderer.rect = fake_rect;
     api->renderer.text = fake_text;
@@ -178,21 +182,21 @@ static int test_render_context_navigation_and_stop(void) {
     CHECK(atomic_load(&fake.read_count) == 0u);
     CHECK(atomic_load(&fake.rect_count) == 0u);
 
-    fake.sample.orbis_buttons = 0u;
+    fake.sample.normalized_buttons = 0u;
     invoke_frame(&fake, fake.valid_render_context); /* neutral attach sample */
-    fake.sample.orbis_buttons = ORBIS_L1 | ORBIS_R1;
+    fake.sample.normalized_buttons = PAD_L1 | PAD_R1;
     invoke_frame(&fake, fake.valid_render_context);
     CHECK(ucm_unity_adapter_state(&adapter) == UCM_ADAPTER_RUNNING);
     CHECK(fake.title_seen);
     CHECK(atomic_load(&fake.rect_count) > 0u);
 
-    fake.sample.orbis_buttons = ORBIS_DOWN;
+    fake.sample.normalized_buttons = PAD_DOWN;
     invoke_frame(&fake, fake.valid_render_context);
     CHECK(adapter.overlay.menu.selected[CAT_CHEATS] == 1);
-    fake.sample.orbis_buttons = ORBIS_R1;
+    fake.sample.normalized_buttons = PAD_R1;
     invoke_frame(&fake, fake.valid_render_context);
     CHECK(adapter.overlay.menu.category == CAT_ENVIRONMENT);
-    fake.sample.orbis_buttons = ORBIS_CIRCLE;
+    fake.sample.normalized_buttons = PAD_CIRCLE;
     invoke_frame(&fake, fake.valid_render_context);
     CHECK(!adapter.overlay.menu.visible);
 
@@ -250,6 +254,68 @@ static int test_inflight_callback_is_not_waited_on_or_detached(void) {
     CHECK(ucm_unity_adapter_try_stop(&adapter) == UCM_ADAPTER_OK);
     CHECK(ucm_unity_adapter_state(&adapter) == UCM_ADAPTER_DETACHED);
     CHECK(atomic_load(&fake.unregister_count) == 1u);
+    return 0;
+}
+
+
+static int test_rewired_ownership_and_input_focus_fail_closed(void) {
+    FakeHost fake;
+    UcmUnityHostApi api;
+    UcmUnityAdapter adapter;
+    unsigned int mode;
+    fake_init(&fake, &api);
+    ucm_unity_adapter_init(&adapter);
+
+    /* V1 is rejected: the raw-pad ABI cannot masquerade as verified Rewired. */
+    api.abi_version = 1u;
+    CHECK(ucm_unity_adapter_start(&adapter, &api) == UCM_ADAPTER_INVALID);
+    api.abi_version = UCM_UNITY_HOST_ABI_V2;
+    CHECK(ucm_unity_adapter_start(&adapter, &api) == UCM_ADAPTER_OK);
+
+    for (mode = 0; mode < 6u; ++mode) {
+        /* Reacquire with a neutral frame after a prior invalidation. */
+        fake.sample.normalized_buttons = 0u;
+        invoke_frame(&fake, fake.valid_render_context);
+        fake.sample.normalized_buttons = PAD_L1 | PAD_R1;
+        invoke_frame(&fake, fake.valid_render_context);
+        CHECK(adapter.overlay.menu.visible);
+
+        switch (mode) {
+        case 0: fake.sample.assigned_to_local_player = false; break;
+        case 1: fake.sample.controller_map_verified = false; break;
+        case 2: fake.sample.input_focus_verified = false; break;
+        case 3: fake.sample.scene_owner_verified = false; break;
+        case 4: fake.sample.connected = false; break;
+        default: fake.sample.normalized_buttons |= (1u << 30); break;
+        }
+        invoke_frame(&fake, fake.valid_render_context);
+        CHECK(!adapter.overlay.menu.visible);
+        CHECK(!adapter.overlay.input_ready);
+
+        fake.sample.assigned_to_local_player = true;
+        fake.sample.controller_map_verified = true;
+        fake.sample.input_focus_verified = true;
+        fake.sample.scene_owner_verified = true;
+        fake.sample.connected = true;
+        fake.sample.normalized_buttons = PAD_L1 | PAD_R1;
+
+        /* Held chord after focus/map recovery may not reopen automatically. */
+        invoke_frame(&fake, fake.valid_render_context);
+        CHECK(!adapter.overlay.menu.visible);
+    }
+
+    /* An unsuccessful read must reset, not reuse the last verified buttons. */
+    fake.sample.normalized_buttons = 0u;
+    invoke_frame(&fake, fake.valid_render_context);
+    fake.sample.normalized_buttons = PAD_L1 | PAD_R1;
+    invoke_frame(&fake, fake.valid_render_context);
+    CHECK(adapter.overlay.menu.visible);
+    fake.connected_sample_ok = false;
+    invoke_frame(&fake, fake.valid_render_context);
+    CHECK(!adapter.overlay.menu.visible);
+    CHECK(!adapter.overlay.input_ready);
+    fake.connected_sample_ok = true;
+    CHECK(ucm_unity_adapter_try_stop(&adapter) == UCM_ADAPTER_OK);
     return 0;
 }
 
@@ -312,6 +378,7 @@ int main(void) {
     if (test_pad_mapping() || test_start_validation_and_registration_failure() ||
         test_render_context_navigation_and_stop() ||
         test_inflight_callback_is_not_waited_on_or_detached() ||
+        test_rewired_ownership_and_input_focus_fail_closed() ||
         test_concurrent_gui_frames_are_dropped_nonblocking() ||
         test_failed_detach_retains_adapter())
         return 1;

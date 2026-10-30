@@ -1,16 +1,14 @@
 #include "unity_host_adapter.h"
 
-#include "pad_input_map.h"
-
 #include <stddef.h>
 #include <string.h>
 
 static bool valid_host(const UcmUnityHostApi *host) {
-    return host && host->abi_version == UCM_UNITY_HOST_ABI_V1 &&
+    return host && host->abi_version == UCM_UNITY_HOST_ABI_V2 &&
            host->struct_size >= sizeof(*host) &&
            host->register_frame_callback &&
            host->try_unregister_frame_callback &&
-           host->is_render_context && host->try_read_pad_snapshot &&
+           host->is_render_context && host->try_read_rewired_snapshot &&
            host->renderer.rect && host->renderer.text;
 }
 
@@ -26,9 +24,10 @@ void ucm_unity_adapter_init(UcmUnityAdapter *adapter) {
 static void unity_frame_callback(void *opaque,
                                  const void *render_context) {
     UcmUnityAdapter *adapter = (UcmUnityAdapter *)opaque;
-    UcmPadSnapshot snapshot;
+    UcmRewiredSnapshot snapshot;
     UcmUnityAdapterState state;
-    uint32_t buttons = 0u;
+    const uint32_t allowed = PAD_L1 | PAD_R1 | PAD_UP | PAD_DOWN |
+                             PAD_LEFT | PAD_RIGHT | PAD_CROSS | PAD_CIRCLE;
     bool frame_owned = false;
 
     if (!adapter) return;
@@ -50,14 +49,20 @@ static void unity_frame_callback(void *opaque,
                                          render_context))
         goto done;
 
-    if (!adapter->host.try_read_pad_snapshot(adapter->host.context,
-                                             &snapshot)) {
+    if (!adapter->host.try_read_rewired_snapshot(adapter->host.context,
+                                                  &snapshot) ||
+        !snapshot.connected ||
+        !snapshot.assigned_to_local_player ||
+        !snapshot.controller_map_verified ||
+        !snapshot.input_focus_verified ||
+        !snapshot.scene_owner_verified ||
+        (snapshot.normalized_buttons & ~allowed) != 0u) {
+        /* Ownership/mapping/focus loss closes UI and demands a fresh
+         * neutral sample on recovery. Never forward untrusted input. */
         overlay_frame(&adapter->overlay, false, 0u);
         goto done;
     }
-    buttons = ps4_pad_map_buttons(snapshot.orbis_buttons,
-                                  snapshot.connected);
-    overlay_frame(&adapter->overlay, snapshot.connected, buttons);
+    overlay_frame(&adapter->overlay, true, snapshot.normalized_buttons);
 
 done:
     if (frame_owned)
