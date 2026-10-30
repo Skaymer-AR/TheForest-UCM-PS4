@@ -57,10 +57,15 @@ The tail-target of `ToggleConsole` is not an anonymous helper: metadata resolves
 
 ## Safety and next steps
 
-1. Focus next analysis on **why `DebugConsole` is instantiated/registered or destroyed**, using bounded offline xrefs to `Awake`, `GetInstance`, `OnGUI`, and Unity object creation/destruction. Do not modify flags or instantiate objects experimentally. In the `Awake` window, calls to `UnityEngine.Object.op_Implicit` and `UnityEngine.Object.Destroy` appear; their exact branch conditions need control-flow analysis before drawing conclusions.
-2. Investigate the **Unity IMGUI lifecycle**, not merely the GPU frame submit path. The original compiled DebugConsole uses `GUI.*` / `GUILayout.*`, but no external callback registration was found.
-3. Resolve **Rewired virtual dispatch and input ownership** through metadata/target xrefs before proposing direct input polling. A method name alone is insufficient to show a callable in-process plugin path.
-4. Keep experimental hooks disabled. A prior GNM/VideoOut/Pad build black-screened the game and another detour build locked the console. No on-console PRX trial is justified by these findings.
-5. The previous public report `docs/PS4_IL2CPP_ANALYSIS.md` can now be amended with **these resolved symbols** rather than treating them as unnamed. The original binaries and metadata must remain private.
+### Update from the later private analysis (2026-10-30)
 
-**Confidence:** Static method names / direct call sites / 42 matching offline prefixes are confirmed by the exact supplied PS4 PRX. Live object lifecycle, callable IL2CPP ABI, safe render/input integration and plugin unloading remain **unverified**.
+- `DebugConsole.Awake` (`0x005C1C30`) reads the `Cheats.DebugConsole` field at native static storage `+0x10`; the zero branch reaches `UnityEngine.Object.Destroy` (`0x02176930`). It stores `this` into `DebugConsole.Instance` at native static storage `+0x10` (`0x005C1EA2`) only after its guards. The live flag value is unknown.
+- `GetInstance` (`0x005CB690`) reads that same singleton and returns it; it does not construct or activate the component.
+- The other `Awake` guard at `0x005C1C92` references data RVA `0x33EB300` plus static byte `+0x01`. `CoopPeerStarter.DedicatedHost` remains only a candidate name; its PS4 metadata class registration has not been independently resolved.
+- The static metadata field names `Cheats.DebugConsole` and `DebugConsole.Instance` were matched against the reported PS4 metadata v23. `scripts/verify_il2cpp_static_fields.py` now checks field identity/static declaration against a local `dump.cs`, and requires the recorded metadata SHA-256 when using the repository manifest. The checker cannot prove a native type-reference RVA or runtime field value.
+- `ProcessGamePads` has an IL2CPP interface lookup/vtable dispatch sequence at `0x00476279..0x004762D6` and again at `0x004762F0..0x00476315`, keyed by a static type reference at `0x033EF3E8`. The type, methods, and physical ScePad relationship remain unresolved.
+- `DebugConsole.OnDestroy` was not in the available native windows. Its RVA/body and singleton-clear behavior remain unknown; see [`DEBUGCONSOLE_LIFECYCLE.md`](DEBUGCONSOLE_LIFECYCLE.md) for the local workflow and no-go decision.
+
+**Architecture decision: no-go for a GoldHEN-only Unity IMGUI adapter under the evidence and restrictions currently established.** The compiled callback is not a registration API, and no AOT-capable title-scoped loader or callback has been demonstrated. Continue only with private offline resolution of `OnDestroy`, native type-reference initializers, and Rewired interface targets. Do not modify flags, instantiate objects, invoke game methods, or enable hooks. The earlier v0.5 black screen and v0.6 console lock remain reasons not to request another hook-enabled PRX test.
+
+**Confidence:** Static method names, direct call sites, field identities, and 42 matching offline prefixes are recorded from the exact supplied PS4 PRX/metadata. The `Awake` flow is partially recovered, but live flag values, `OnDestroy`, complete ABI, type-name resolution of the Rewired dispatch, safe render/input integration and plugin unloading remain **unverified**.

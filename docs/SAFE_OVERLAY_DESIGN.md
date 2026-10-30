@@ -114,10 +114,18 @@ entrypoint detours as generic startup hooks.
 
 The focused lifecycle and Rewired dispatch map is in
 [DEBUGCONSOLE_LIFECYCLE.md](DEBUGCONSOLE_LIFECYCLE.md). It confirms a compiled
-IMGUI path and `ProcessGamePads → ReInput.get_players`, but the `Awake` and
-`GetInstance` windows are not in the bounded dump. The two Rewired virtual
-dispatch targets remain unresolved, so this evidence adds no active game
-provider or callback registration API.
+IMGUI path, the guarded singleton registration in `Awake`, and
+`ProcessGamePads → ReInput.get_players`. `GetInstance` returns that same
+static field and does not instantiate a component. The `OnDestroy` body is not
+present in the available source evidence, so singleton cleanup remains
+unknown. The Rewired calls use an IL2CPP interface/vtable dispatch pattern,
+but their metadata type and method targets are unresolved. These findings
+support a **no-go** decision for connecting this GoldHEN PRX to Unity IMGUI:
+no live title-owned callback registration route has been demonstrated.
+`DllModLoader.AppDomain.Load` is not proof of a working IL2CPP/AOT component
+loader. See the linked lifecycle document for the title-scoped architecture
+requirements and offline commands to resolve `OnDestroy` from private local
+files.
 
 Official references:
 
@@ -215,14 +223,15 @@ required platform proof exists. ASan/UBSan are not target-hardware evidence.
 
 ## Remaining questions before any future console experiment
 
-1. Can any identified Unity callback, especially `DebugConsole.OnGUI`, be
-   reached in this PS4 build without patching shared system entrypoints? The
-   local IL2CPP dump must first establish exact PS4 methods/RVAs.
+1. Can an existing title-owned loader introduce a Unity callback in this PS4
+   build without editing PKG or patching shared system entrypoints? The
+   compiled `DebugConsole.OnGUI` path by itself is not a registration API.
 2. Can GoldHEN or the loader keep a PRX resident until a real callback and GPU
    quiescence proof is available, or is unloading unsupported for this use?
-3. Can a verified non-patching registration mechanism expose a title-scoped
-   callback with correct IL2CPP ABI/thread context? No guessed addresses or
-   DebugConsole flags are acceptable.
+3. What does this build's `DebugConsole.OnDestroy` do to `Instance`, and can a
+   verified non-patching title-scoped callback be provided with correct
+   IL2CPP ABI/thread context? No guessed addresses or DebugConsole flags are
+   acceptable.
 4. Can a separately opened DS4 handle coexist with the game's handle without
    stealing input or requiring interception?
 5. Can target module exports and instruction bytes be captured for offline

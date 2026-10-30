@@ -56,6 +56,57 @@ PS4Controller.ProcessGamePads — RVA 0x004761A0 — ventana 0x20 bytes
         self.assertFalse(any("ScePad" in name for item in refs
                              for name in item.target_names))
 
+    def test_il2cpp_interface_dispatch_is_classified_but_not_named_without_type_map(self):
+        text = """\
+PS4Controller.ProcessGamePads — RVA 0x004761A0 — ventana 0x180 bytes
+  4761a0: 90                            nop
+  476279: 48 8b 35 00 00 00 00          mov rsi, qword ptr [rip + 0x0] # 0x33ef3e8
+  4762a0: 48 39 72 f8                   cmp qword ptr [rdx - 0x8], rsi
+  4762a4: 8b 0a                         mov ecx, dword ptr [rdx]
+  4762a6: 48 c1 e1 04                   shl rcx, 0x4
+  4762aa: 48 8d 8c 08 10 01 00 00       lea rcx, [rax + rcx + 0x110]
+  4762b2: 48 8b 71 08                   mov rsi, qword ptr [rcx + 0x8]
+  4762b6: ff 11                         call qword ptr [rcx]
+  4762d0: 31 d2                         xor edx, edx
+  4762d2: 4c 89 ff                      mov rdi, r15
+  4762d5: e8 86 09 bc ff                call 0x36c80
+  4762da: 48 89 c1                      mov rcx, rax
+  4762dd: eb 0f                         jmp 0x4762ee
+  4762e0: 8b 0a                         mov ecx, dword ptr [rdx]
+  4762e2: 48 c1 e1 04                   shl rcx, 0x4
+  4762e6: 48 8d 8c 08 10 01 00 00       lea rcx, [rax + rcx + 0x110]
+  4762ee: 48 8b 71 08                   mov rsi, qword ptr [rcx + 0x8]
+  4762f2: 4c 89 ff                      mov rdi, r15
+  4762f5: ff 11                         call qword ptr [rcx]
+"""
+        windows = resolver.parse_windows(text)
+        symbols, _ = resolver.load_symbols()
+        refs = resolver.resolve_references(windows, symbols)
+        indirect = [item for item in refs if item.kind == "indirect call/jump"]
+        self.assertEqual([item.site_rva for item in indirect], [0x004762B6, 0x004762F5])
+        self.assertTrue(all("IL2CPP interface/vtable dispatch" in item.detail
+                            for item in indirect))
+        self.assertTrue(all("0x033EF3E8" in item.detail for item in indirect))
+        self.assertTrue(all("unresolved metadata type" in item.detail
+                            for item in indirect))
+
+        mapped = resolver.resolve_references(
+            windows, symbols, {0x033EF3E8: {"Rewired.IPlayer"}})
+        mapped_indirect = [item for item in mapped if item.kind == "indirect call/jump"]
+        self.assertEqual(len(mapped_indirect), 2)
+        self.assertTrue(all("Rewired.IPlayer" in item.detail
+                            for item in mapped_indirect))
+
+    def test_type_map_parser_rejects_malformed_entries(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "private-types.tsv"
+            path.write_text("0x33EF3E8 Rewired.IPlayer\n", encoding="utf-8")
+            self.assertEqual(resolver.load_type_symbols(path),
+                             {0x033EF3E8: {"Rewired.IPlayer"}})
+            path.write_text("IPlayer 0x33EF3E8\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "expected '0xRVA Namespace.Type'"):
+                resolver.load_type_symbols(path)
+
     def test_full_image_scan_finds_incoming_method_xrefs_without_fabricating_caller(self):
         text = """\
   1000: e8 2b 0c 5c 00                call 0x5c1c30 <PT_LOAD#0+0x5c1c30>

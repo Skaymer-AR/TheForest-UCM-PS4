@@ -34,6 +34,7 @@ DEFAULT_PRIOR = ROOT / "docs/PS4_IL2CPP_PRIOR_EVIDENCE.md"
 RESOLVED_ROW_RE = re.compile(r"^\|\s*`(0x[0-9A-Fa-f]+)`\s*\|\s*`([^`]+)`\s*\|")
 RIP_COMMENT_RE = re.compile(r"\[rip(?:\s*[+-]\s*(?:0x)?[0-9a-f]+)?\].*?#\s*(?:0x)?([0-9a-f]+)", re.I)
 EXTRA_SYMBOL_RE = re.compile(r"^(0x[0-9A-Fa-f]+)\s+(.+?)\s*$")
+TYPE_SYMBOL_RE = re.compile(r"^(0x[0-9A-Fa-f]+)\s+(.+?)\s*$")
 BRANCH_TARGET_RE = re.compile(r"^(?:0x)?([0-9A-Fa-f]+)\b")
 BRANCH_MNEMONICS = {"jmp", "jmpq", "je", "jz", "jne", "jnz", "ja", "jae",
                      "jb", "jbe", "jc", "jcxz", "jecxz", "jrcxz", "jg",
@@ -42,6 +43,7 @@ BRANCH_MNEMONICS = {"jmp", "jmpq", "je", "jz", "jne", "jnz", "ja", "jae",
                      "jns", "jnz", "jo", "jp", "jpe", "jpo", "js"}
 METHODS_OF_INTEREST = (
     "TheForest.DebugConsole.Awake",
+    "TheForest.DebugConsole.OnDestroy",
     "TheForest.DebugConsole.GetInstance",
     "TheForest.DebugConsole.ShowConsole",
     "TheForest.DebugConsole.OnGUI",
@@ -144,8 +146,63 @@ def _data_access_kind(instruction: Instruction) -> str:
     return "read"
 
 
-def resolve_references(windows: list[Window], symbols: dict[int, set[str]]) -> list[Reference]:
+def load_type_symbols(path: Path | None) -> dict[int, set[str]]:
+    """Load local mappings from a native IL2CPP type-reference slot RVA to type name."""
+    result: dict[int, set[str]] = {}
+    if path is None:
+        return result
+    for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        match = TYPE_SYMBOL_RE.match(line)
+        if not match:
+            raise ValueError(f"invalid type map on line {line_number}; expected '0xRVA Namespace.Type'")
+        rva_text, type_name = match.groups()
+        result.setdefault(int(rva_text, 16), set()).add(type_name)
+    return result
+
+
+def _indirect_call_detail(window: Window, instruction_index: int,
+                          type_symbols: dict[int, set[str]]) -> str:
+    instruction = window.instructions[instruction_index]
+    detail = instruction.operands
+    if instruction.mnemonic not in {"call", "callq"}:
+        return detail
+    if "[rcx]" not in instruction.operands.lower():
+        return detail
+    lookback = window.instructions[max(0, instruction_index - 64):instruction_index]
+    has_interface_vtable_entry = any(
+        item.mnemonic.startswith("lea")
+        and "[rax + rcx + 0x110]" in item.operands.lower()
+        for item in lookback
+    )
+    has_method_info_slot = any(
+        item.mnemonic.startswith("mov")
+        and item.operands.lower().replace(" ", "").startswith("rsi,qwordptr[rcx+0x8]")
+        for item in lookback
+    )
+    if not (has_interface_vtable_entry and has_method_info_slot):
+        return detail
+
+    type_ref = None
+    for item in reversed(lookback):
+        if (item.mnemonic.startswith("mov")
+                and item.operands.lower().replace(" ", "").startswith("rsi,qwordptr[rip")
+                and (target := _rip_data_target(item)) is not None):
+            type_ref = target
+            break
+    if type_ref is None:
+        return "IL2CPP interface/vtable dispatch; interface type reference not present in this window"
+    names = type_symbols.get(type_ref, set())
+    type_label = ", ".join(sorted(names)) if names else "unresolved metadata type"
+    return f"IL2CPP interface/vtable dispatch; type-ref slot 0x{type_ref:08X} ({type_label})"
+
+
+def resolve_references(windows: list[Window], symbols: dict[int, set[str]],
+                       type_symbols: dict[int, set[str]] | None = None) -> list[Reference]:
     references: list[Reference] = []
+    type_symbols = type_symbols or {}
     method_starts = sorted(set(symbols) | {window.rva for window in windows})
     for window in windows:
         source_name = _window_symbol(window, symbols)
@@ -154,7 +211,7 @@ def resolve_references(windows: list[Window], symbols: dict[int, set[str]]) -> l
                          if window.rva < rva < end_rva]
         if later_methods:
             end_rva = min(later_methods)
-        for instruction in window.instructions:
+        for instruction_index, instruction in enumerate(window.instructions):
             if instruction.address >= end_rva:
                 continue
             target = direct_target(instruction)
@@ -162,7 +219,8 @@ def resolve_references(windows: list[Window], symbols: dict[int, set[str]]) -> l
                 if target is None:
                     references.append(Reference(source_name, window.rva,
                                                 instruction.address, "indirect call/jump",
-                                                None, (), instruction.operands))
+                                                None, (), _indirect_call_detail(
+                                                    window, instruction_index, type_symbols)))
                 else:
                     names = tuple(sorted(symbols.get(target, set())))
                     references.append(Reference(source_name, window.rva,
@@ -251,8 +309,9 @@ def _fmt_rva(rva: int | None) -> str:
 
 def render_report(source: Path, windows: list[Window],
                   symbols: dict[int, set[str]],
-                  provenance: dict[int, set[str]]) -> str:
-    references = resolve_references(windows, symbols)
+                  provenance: dict[int, set[str]],
+                  type_symbols: dict[int, set[str]] | None = None) -> str:
+    references = resolve_references(windows, symbols, type_symbols)
     names_at_start = {window.rva: _window_symbol(window, symbols) for window in windows}
     lines = [
         "# Offline IL2CPP reference map — bounded windows",
@@ -339,6 +398,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--prior", type=Path, default=DEFAULT_PRIOR)
     parser.add_argument("--symbols", type=Path,
                         help="optional private TSV-like file: '0xRVA Fully.Qualified.Method'")
+    parser.add_argument("--types", type=Path,
+                        help="optional private TSV-like map: '0xTYPE_REF_SLOT_RVA Fully.Qualified.Type'")
     parser.add_argument("--full-image", action="store_true",
                         help="treat input as a raw complete objdump stream and find incoming direct xrefs")
     parser.add_argument("--output", type=Path,
@@ -352,12 +413,14 @@ def main(argv: list[str] | None = None) -> int:
         input_text = args.disassembly.read_text(encoding="utf-8")
         symbols, provenance = load_symbols(args.evidence, args.resolved,
                                            args.prior, args.symbols)
+        type_symbols = load_type_symbols(args.types)
         if args.full_image:
             instructions = parse_full_image_disassembly(input_text)
             report = render_full_image_report(args.disassembly, instructions, symbols)
         else:
             windows = parse_windows(input_text)
-            report = render_report(args.disassembly, windows, symbols, provenance)
+            report = render_report(args.disassembly, windows, symbols, provenance,
+                                   type_symbols)
         if args.output:
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(report, encoding="utf-8")

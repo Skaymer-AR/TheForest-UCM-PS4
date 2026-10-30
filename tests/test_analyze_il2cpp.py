@@ -51,6 +51,8 @@ public class DebugConsole : MonoBehaviour
 {
     // RVA: 0x5500 Offset: 0x54F0 VA: 0x6500
     private void OnGUI() { }
+    // RVA: 0x5560 Offset: 0x5550 VA: 0x6560
+    private void OnDestroy() { }
 }
 """
 
@@ -89,6 +91,7 @@ class AnalyzerTests(unittest.TestCase):
         self.assertIn(("TheForest.Tools.DllModLoader", "private void Awake()", 0x1010), found)
         self.assertIn(("Cheats.CheatsBridge", "public void SetGodMode(bool onoff)", 0x3300), found)
         self.assertIn(("TheForest.DebugConsole", "private void OnGUI()", 0x5500), found)
+        self.assertIn(("TheForest.DebugConsole", "private void OnDestroy()", 0x5560), found)
 
     def test_report_marks_missing_ps4_candidates_and_omits_input_path(self):
         with tempfile.TemporaryDirectory(prefix="private-game-path-") as temp:

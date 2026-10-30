@@ -1,0 +1,24 @@
+{
+  "metadata_version": 23,
+  "metadata_sha256": "238c400de31e28ed4f7f14e7781ea3b33de0d0bd6964ded680d78fce1d85a6c3",
+  "fields": [
+    {
+      "type_suffix": "Cheats",
+      "field": "DebugConsole",
+      "static": true,
+      "native_evidence": "Awake stores this field at static_fields+0x10 (native disassembly RVA 0x005C1EA2)"
+    },
+    {
+      "type_suffix": "DebugConsole",
+      "field": "Instance",
+      "static": true,
+      "native_evidence": "Awake reads/sets this field at static_fields+0x10; metadata field identity and native storage offset are separate evidence"
+    }
+  ],
+  "unresolved_native_type_reference": {
+    "rva": "0x33EB300",
+    "candidate_type": "CoopPeerStarter",
+    "candidate_field": "DedicatedHost",
+    "status": "requires independent PS4 metadata type-registration match"
+  }
+}
