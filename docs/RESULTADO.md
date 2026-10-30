@@ -22,20 +22,21 @@ etapa.
   assemblies por reflection, `ModList.OnEnable/Refresh` como ciclo de vida de
   UI, `CheatsBridge` como puente de gameplay y `VirtualCursor.LateUpdate` como
   lógica de cursor.
-- Se recuperaron 42 RVA candidatos de PS4 CUSA12398 v1.15; PS4Debug confirmó
-  físicamente prefijos de 16 bytes para `DebugConsole.OnGUI` y
-  `DebugConsole.ToggleConsole`. Los demás RVA no tienen firma de bytes
-  confirmada. La tabla y su procedencia están en
+- Se recuperaron 42 RVA de PS4 CUSA12398 v1.15. El reporte adjunto declara que
+  los 42 prefijos coinciden offline con el PRX original; PS4Debug confirmó
+  físicamente solo `DebugConsole.OnGUI` y `DebugConsole.ToggleConsole`. La tabla
+  y su procedencia están en
   [PS4_IL2CPP_PRIOR_EVIDENCE.md](PS4_IL2CPP_PRIOR_EVIDENCE.md).
 - `DebugConsole.OnGUI` es el candidato más cercano al ciclo GUI de Unity, pero
   la instancia observada en PS4 estaba en `NULL`. No se demostró una forma de
   registrar un callback propio desde el PRX.
-- El análisis de `PS4Controller.Update`, `VirtualCursor.LateUpdate`,
-  `DllModLoader.Awake` y `ModList.OnEnable`, el decode del tailcall confirmado,
-  y el analizador offline están en
+- El desensamblado confirma `PS4Controller.Update → ProcessGamePads` y
+  `DllModLoader.Awake → LoadDllMod`; `ModList.OnEnable/Refresh` empiezan con
+  `ret`. El destino `0x005CA800` actualiza el mismo campo que `OnGUI` consulta.
+  El análisis ampliado y los analizadores offline están en
   [PS4_IL2CPP_ANALYSIS.md](PS4_IL2CPP_ANALYSIS.md). El checkout no contiene el
-  ELF privado, por lo que las xrefs adicionales y los ABI de esos candidatos
-  quedan pendientes de reanálisis local.
+  ELF privado; los demás xrefs, imports y ABI completos quedan pendientes de
+  resolución con metadata y el módulo original.
 - `src/unity_host_adapter.*` es un contrato host-only. Recibe un proveedor
   explícito de frame/render e input, se cierra sin espera y retiene estado si
   no hay prueba de quiescencia. No existe todavía un proveedor para Unity PS4.

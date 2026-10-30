@@ -1,16 +1,16 @@
 # Investigación de integración Unity IL2CPP
 
-La evidencia PS4 original fue recuperada en [PS4_IL2CPP_PRIOR_EVIDENCE.md](PS4_IL2CPP_PRIOR_EVIDENCE.md): contiene 42 RVA candidatos de The Forest CUSA12398 v1.15 y dos prefijos de 16 bytes confirmados por el usuario con PS4Debug. La tabla no equivale a 42 firmas confirmadas ni aporta por sí sola un ABI invocable.
+La evidencia PS4 original está en [PS4_IL2CPP_PRIOR_EVIDENCE.md](PS4_IL2CPP_PRIOR_EVIDENCE.md): contiene 42 RVA, cuyos prefijos coinciden con el PRX privado según el reporte del usuario; dos también se verificaron físicamente por PS4Debug. Esta coincidencia no equivale a 42 verificaciones de RAM ni aporta por sí sola un ABI invocable.
 
-El análisis aplicado a los candidatos y sus límites está en [PS4_IL2CPP_ANALYSIS.md](PS4_IL2CPP_ANALYSIS.md). El script [analyze_ps4_il2cpp_candidates.py](../scripts/analyze_ps4_il2cpp_candidates.py) puede validar los dos anclajes contra un ELF privado, producir ventanas de desensamblado y encontrar llamadas/saltos directos. Rehúsa continuar si no coinciden ambos anclajes. Los binarios, metadatos y dumps originales permanecen fuera del repositorio.
+El análisis aplicado a los candidatos y sus límites está en [PS4_IL2CPP_ANALYSIS.md](PS4_IL2CPP_ANALYSIS.md). `analyze_ps4_il2cpp_candidates.py` procesa un ELF local y `analyze_disassembly_report.py` resume texto de ventanas privadas; ambos son herramientas offline. Los binarios, metadatos y dumps originales permanecen fuera del repositorio.
 
 ## Conclusión de integración
 
 `DebugConsole.OnGUI` es el candidato PS4 más próximo a un callback de GUI y su entrada tiene una firma confirmada. `DebugConsole` fue observado con su singleton en `NULL`; no hay una instancia confirmada que reutilizar. Además, `OnGUI` pertenece al ciclo IMGUI de Unity, no es por sí mismo un registro para plugins nativos ni evidencia de que un PRX pueda añadir un segundo callback.
 
-`VirtualCursor.LateUpdate`, `PS4Controller.Update`, `DllModLoader.Awake` y `ModList.OnEnable` tienen RVA extraídos del análisis PS4 previo, pero no bytes, cuerpos, ABI ni referencias cruzadas verificadas en el material disponible en Cloud. Sus nombres/firmas administradas de PC sirven como hipótesis de ciclo de vida, no como prueba para PS4. Las distancias entre RVA tampoco prueban que un método llame a otro.
+Las ventanas privadas muestran una llamada y un tail-jump de `PS4Controller.Update` a `ProcessGamePads`, además de una llamada directa de `DllModLoader.Awake` a `LoadDllMod`. `ModList.OnEnable` y `Refresh` comienzan con `ret`. `VirtualCursor.LateUpdate` contiene código no trivial pero su ventana no identifica una API de render. Los argumentos y nombres de métodos no sustituyen el ABI completo ni prueban que el runtime llame a estas funciones en una sesión actual.
 
-La única arista que se puede derivar ahora de bytes confirmados es el salto relativo de `DebugConsole.ToggleConsole` (RVA `0x005CB6D0`) a `0x005CA800`. El nombre del destino y su prototipo no se han establecido. El detalle está en el informe PS4.
+`DebugConsole.ToggleConsole` (RVA `0x005CB6D0`) salta directamente a `0x005CA800`. La ventana del destino confirma que recibe el objeto en `RDI`, el valor de estado en `ESI` y escribe ese valor en `[this+0x5A]`, el campo que `OnGUI` comprueba. El nombre y prototipo completo del destino siguen sin establecerse. El detalle está en el informe PS4.
 
 ## Entrada y renderizado
 

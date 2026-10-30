@@ -19,17 +19,18 @@ implementación comprobada.
 
 ## Investigación IL2CPP offline
 
-La evidencia recuperada contiene 42 RVA candidatos de PS4 para CUSA12398
-v1.15. PS4Debug confirmó las firmas de entrada de `DebugConsole.OnGUI` y
-`DebugConsole.ToggleConsole`; las otras entradas no tienen bytes confirmados.
-El análisis de candidatos y ABI, más instrucciones para generar xrefs directas
-contra un ELF local, está en
-[`docs/PS4_IL2CPP_ANALYSIS.md`](docs/PS4_IL2CPP_ANALYSIS.md). El analizador es
-[`scripts/analyze_ps4_il2cpp_candidates.py`](scripts/analyze_ps4_il2cpp_candidates.py).
+La evidencia contiene 42 RVA para CUSA12398 v1.15. El reporte del usuario dice
+que los 42 prefijos coinciden con el PRX privado; PS4Debug confirmó en RAM dos:
+`DebugConsole.OnGUI` y `DebugConsole.ToggleConsole`. El análisis de las llamadas,
+ABI y contexto Unity está en
+[`docs/PS4_IL2CPP_ANALYSIS.md`](docs/PS4_IL2CPP_ANALYSIS.md). Los analizadores
+[`scripts/analyze_ps4_il2cpp_candidates.py`](scripts/analyze_ps4_il2cpp_candidates.py)
+y [`scripts/analyze_disassembly_report.py`](scripts/analyze_disassembly_report.py)
+procesan copias locales sin subirlas.
 
 El ELF original, metadatos y dumps generados deben permanecer fuera del
-repositorio. El script compara primero las dos firmas PS4 conocidas y se niega
-a desensamblar si no coinciden. Nunca usa direcciones RAM de una sesión previa.
+repositorio. Las herramientas no escriben en el juego ni habilitan hooks. Nunca
+usan direcciones RAM de una sesión previa.
 
 ## Pruebas host
 

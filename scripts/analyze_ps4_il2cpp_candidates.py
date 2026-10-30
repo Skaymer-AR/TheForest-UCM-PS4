@@ -306,6 +306,10 @@ def _hex(data: bytes | None) -> str:
 
 def _candidate_status(candidate: Candidate, local_bytes: bytes | None) -> str:
     if candidate.confirmed_bytes is None:
+        if "offline PRX prefix match reported" in candidate.status:
+            if local_bytes is None:
+                return "offline PRX prefix match reported; not confirmed by live PS4Debug"
+            return "local bytes extracted; report claims PRX match; no per-method reference bytes stored"
         return "offline RVA candidate; no PS4 byte confirmation in evidence"
     if local_bytes is None:
         return "user-confirmed on PS4Debug; not re-read from a local ELF here"
@@ -362,7 +366,14 @@ def render_report(candidates: list[Candidate], image: Elf64Image | None = None,
         offset = image.file_offset(candidate.rva) if image else None
         local_bytes = image.read_rva(candidate.rva, 32) if image else None
         if candidate.confirmed_bytes is None:
-            signature_status = "RVA candidate only; no verified bytes"
+            if "offline PRX prefix match reported" in candidate.status:
+                signature_status = (
+                    "reported PRX prefix match; not live-verified"
+                    if local_bytes is None else
+                    "local bytes extracted; expected per-method bytes not stored"
+                )
+            else:
+                signature_status = "RVA candidate only; no verified bytes"
         elif local_bytes is None:
             signature_status = "historical PS4Debug 16-byte confirmation; no local comparison"
         elif local_bytes[:16] == candidate.confirmed_bytes:

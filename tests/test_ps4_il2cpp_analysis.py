@@ -31,6 +31,8 @@ class RecoveredPs4EvidenceTests(unittest.TestCase):
         self.assertEqual(by_name["TheForest.DebugConsole.ToggleConsole"].rva, 0x005CB6D0)
         self.assertEqual(len(by_name["TheForest.DebugConsole.OnGUI"].confirmed_bytes), 16)
         self.assertEqual(len(by_name["TheForest.DebugConsole.ToggleConsole"].confirmed_bytes), 16)
+        self.assertIn("offline PRX prefix match reported",
+                      by_name["PS4Controller.Update"].status)
         self.assertIsNone(by_name["PS4Controller.Update"].confirmed_bytes)
         self.assertIsNone(by_name["TheForest.UI.VirtualCursor.LateUpdate"].confirmed_bytes)
         self.assertIsNone(by_name["TheForest.Tools.DllModLoader.Awake"].confirmed_bytes)
