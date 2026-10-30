@@ -2,6 +2,14 @@
 
 Status: the PKG/PFS extraction produced the three requested targets, and the read-only extract checker has now been run against the files currently in Google Drive. Native Unity integration remains **NO-GO under the current constraints**. Private game binaries and generated decompilation output are never committed.
 
+**Follow-up: the header-only limitation below is resolved offline.** Segment
+inspection found unencrypted, uncompressed payloads. The new plaintext SELF
+reader reconstructs both ELF analysis copies, including version trailers and
+normalizing stale fields of an absent section table. Their complete hashes
+match the retained earlier ELFs; all 42 method prefixes also match. See
+[the AOT proposal](AOT_INTEGRATION_PROPOSAL.md) for hashes, registration results,
+tool limits and the remaining build-pipeline blocker. No console dump was needed.
+
 ## Provenance reported from Google Colab
 
 - Source filename: `The.Forest_CUSA12398_v1.15_BACKPORT_[5.05-6.72]_OPOISSO893.pkg`
@@ -53,7 +61,14 @@ A separate read-only header inspection returned:
 | `eboot.bin` | `4f 15 3d 1d 00 01 01 12 01 01 00 00 80 04 70 04` |
 | `Il2CppUserAssemblies.prx` | `4f 15 3d 1d 00 01 01 12 01 01 00 00 40 04 70 04` |
 
-The first four bytes match the SCE/SELF container marker used by the checker. This is **format identification from the header**, not cryptographic verification of the Sony signature, the outer PKG signature, or the extracted PFS. Since the PRX is SELF rather than a decrypted ELF64, the two known entry-byte signatures at `DebugConsole.OnGUI` and `DebugConsole.ToggleConsole` were **not** compared against this current file. The prior PS4Debug reads remain evidence from the earlier running build; they do not establish that the current different-hash PRX has the same code bytes. A decrypted ELF or current-build read-only memory capture is needed to verify those anchors. The existing analyzer correctly refuses to infer RVA bytes from the SELF wrapper.
+The first four bytes identify the SELF format; this is not cryptographic
+signature verification. The original checker correctly skipped RVA comparisons
+because it did not parse SELF entries. The follow-up reader now maps the actual
+plaintext payloads with bounds checks, so the current reconstruction has been
+compared in full with the previous ELF and the 42 candidate prefixes. A SELF
+marker alone is not evidence that the payloads are encrypted. The original
+stdout above is retained as the result of that limited checker, not as the
+final state of the binary comparison.
 
 ## Integration feasibility gate
 

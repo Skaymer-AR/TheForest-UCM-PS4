@@ -19,14 +19,22 @@ implementación comprobada.
 
 ## Investigación IL2CPP offline
 
-La evidencia contiene 42 RVA para CUSA12398 v1.15. El reporte del usuario dice
-que los 42 prefijos coinciden con el PRX privado; PS4Debug confirmó en RAM dos:
-`DebugConsole.OnGUI` y `DebugConsole.ToggleConsole`. El análisis de las llamadas,
-ABI y contexto Unity está en
+Los SELF de la extracción actual se pudieron recuperar offline: sus payloads
+no están cifrados/comprimidos. Ambos ELF reconstruidos coinciden íntegramente
+con los anteriores y los 42 prefijos se comprobaron independientemente contra
+el módulo actual. Las dos confirmaciones históricas de RAM siguen separadas
+de esta comparación offline. El análisis de las llamadas, ABI y contexto está en
 [`docs/PS4_IL2CPP_ANALYSIS.md`](docs/PS4_IL2CPP_ANALYSIS.md). Los analizadores
 [`scripts/analyze_ps4_il2cpp_candidates.py`](scripts/analyze_ps4_il2cpp_candidates.py)
 y [`scripts/analyze_disassembly_report.py`](scripts/analyze_disassembly_report.py)
 procesan copias locales sin subirlas.
+
+La [propuesta AOT](docs/AOT_INTEGRATION_PROPOSAL.md) identifica el registro
+nativo real y el pipeline necesario para crear un componente propio en Unity.
+`scripts/unwrap_plain_self.py` recupera únicamente layouts plaintext soportados;
+`scripts/inspect_aot_registration.py` comprueba tablas v23 y presencia del host.
+El build original todavía no incluye nuestro componente. Falta un pipeline
+reproducible del título antes de poder proponer una integración de paquete.
 
 El ELF original, metadatos y dumps generados deben permanecer fuera del
 repositorio. Las herramientas no escriben en el juego ni habilitan hooks. Nunca

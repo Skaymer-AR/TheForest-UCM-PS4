@@ -92,7 +92,7 @@ class TypeDefinition:
     index: int
     name: str
     namespace: str
-    declaring_type: int
+    declaring_type: int  # native Il2CppType index, NOT a TypeDefinition index
     flags: int
     field_start: int
     field_count: int
@@ -222,7 +222,8 @@ def parse_metadata_v23(data: bytes) -> MetadataV23:
               for index, row in enumerate(raw_fields)]
     field_owners: list[FieldDefinition] = list(fields)
     for type_def in types:
-        if type_def.field_start < 0 or type_def.field_count < 0:
+        absent_fields = type_def.field_count == 0 and type_def.field_start == -1
+        if not absent_fields and (type_def.field_start < 0 or type_def.field_count < 0):
             raise ValueError(f"type {type_def.full_name} has invalid field range")
         end = type_def.field_start + type_def.field_count
         if end > len(field_owners):
@@ -233,14 +234,16 @@ def parse_metadata_v23(data: bytes) -> MetadataV23:
                 raise ValueError(f"field index {index} belongs to multiple metadata types")
             field_owners[index] = FieldDefinition(previous.index, previous.name, type_def.index)
 
-        if type_def.method_start < 0 or type_def.method_count < 0:
+        absent_methods = type_def.method_count == 0 and type_def.method_start == -1
+        if not absent_methods and (type_def.method_start < 0 or type_def.method_count < 0):
             raise ValueError(f"type {type_def.full_name} has invalid method range")
         if type_def.method_start + type_def.method_count > len(methods):
             raise ValueError(f"type {type_def.full_name} method range exceeds metadata table")
 
     for type_def in types:
-        if type_def.declaring_type >= len(types):
-            raise ValueError(f"type {type_def.full_name} has invalid declaring type")
+        # v23 TypeDefinition.declaringTypeIndex indexes the native Il2CppType
+        # table. Its upper bound cannot be checked against len(type_definitions).
+        # MethodDefinition.declaringType below uses a different index domain.
         if type_def.declaring_type < -1:
             raise ValueError(f"type {type_def.full_name} has invalid declaring type")
     for method in methods:
@@ -764,9 +767,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         metadata_bytes = args.metadata.read_bytes()
         metadata = parse_metadata_v23(metadata_bytes)
-        # Reject encrypted SCE/SELF containers before hash comparison so the
+        # Reject unconverted SCE/SELF containers before hash comparison so the
         # caller gets the actionable format limitation, not a misleading
-        # historical-image hash mismatch. This parses headers only.
+        # historical-image hash mismatch. A supported plaintext SELF can first
+        # be recovered with unwrap_plain_self.py. This parses ELF headers only.
         image = Elf64Image(args.module)
         module_sha = _hash_file(args.module)
         expected_metadata_sha = args.expected_metadata_sha256.lower()

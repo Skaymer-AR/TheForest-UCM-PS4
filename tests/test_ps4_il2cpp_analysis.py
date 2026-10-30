@@ -24,14 +24,20 @@ def make_synthetic_elf(path: Path) -> None:
 
 
 class RecoveredPs4EvidenceTests(unittest.TestCase):
-    def test_new_dump_provenance_keeps_historical_rvas_unmapped(self):
+    def test_provenance_distinguishes_raw_container_and_recovered_elf(self):
         manifest_path = Path(__file__).resolve().parents[1] / "docs/PS4_DUMP_PROVENANCE.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         module = manifest["current_dump"]["il2cpp_module"]
         self.assertEqual(module["container"], "SCE/SELF")
         self.assertFalse(module["historical_sha256_match"])
         self.assertFalse(module["rva_mapping_possible"])
-        self.assertEqual(manifest["anchor_checks"], "skipped_non_decrypted_elf64")
+        self.assertEqual(manifest["initial_container_only_checker"], "skipped_non_decrypted_elf64")
+        derived = manifest["derived_elf_analysis"]
+        self.assertTrue(derived["il2cpp_module"]["historical_reference_identical"])
+        self.assertEqual(derived["il2cpp_module"]["sha256"],
+                         manifest["historical_reference"]["il2cpp_module_sha256"])
+        self.assertEqual(derived["candidate_prefixes_compared"], 42)
+        self.assertEqual(derived["candidate_prefixes_matched"], 42)
         for metadata in manifest["current_dump"]["metadata"]:
             self.assertTrue(metadata["historical_sha256_match"])
             self.assertEqual(metadata["sha256"],

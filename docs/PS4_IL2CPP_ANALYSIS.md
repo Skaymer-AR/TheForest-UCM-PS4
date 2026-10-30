@@ -6,7 +6,13 @@ Los 42 RVA originales se recuperaron de la tabla de punteros IL2CPP en el offset
 
 El reporte adjunto declara que los 42 prefijos coinciden con el PRX original `Il2CppUserAssemblies.prx`, SHA-256 `0159ff61c99d25c8f0a821070e3d8b24aff58dbbe5429b8f29561f9960d02969`. Ese PRX no se adjuntó al workspace, así que esta sesión no volvió a calcular las 42 comparaciones. El desensamblado adjunto sí se procesó como texto y sus prefijos de `DebugConsole.OnGUI` y `DebugConsole.ToggleConsole` coinciden con las dos firmas que el usuario confirmó físicamente con PS4Debug. Las otras 40 funciones tienen coincidencia offline reportada, pero no lectura física en RAM.
 
-El reporte privado más reciente identifica el módulo del dump actual como contenedor SCE/SELF (`f7e59035…8777b6`), no como ELF64 mapeable, y registra que su hash difiere del módulo histórico. La metadata conserva el hash histórico, pero eso no valida RVA nativos. El hash diferente tampoco demuestra por sí solo que el código descifrado haya cambiado. Hasta obtener una imagen ELF64 local correspondiente a este dump, los RVA de abajo siguen ligados únicamente a la evidencia histórica; las comprobaciones de anclas del dump actual fueron omitidas. Detalle reproducible sin binarios en [PS4_DUMP_PROVENANCE.json](PS4_DUMP_PROVENANCE.json).
+**Actualización comprobada 2026-10-30:** se recuperó el ELF del contenedor actual
+desde sus payloads plaintext y su SHA-256 coincide íntegramente con la imagen
+histórica. Los 42 prefijos se compararon independientemente con esa copia
+actual. Esto resuelve la limitación de disponibilidad del binario indicada en
+el informe original; no añade confirmaciones de ejecución en RAM. Procedencia
+en [PS4_DUMP_PROVENANCE.json](PS4_DUMP_PROVENANCE.json) y nuevo trabajo de
+[registro AOT](AOT_INTEGRATION_PROPOSAL.md).
 
 El desensamblado contiene 12 ventanas acotadas; una ventana no representa necesariamente el límite de una función. Se procesó con [analyze_disassembly_report.py](../scripts/analyze_disassembly_report.py), sin guardar el dump adjunto en Git. El analizador ELF [analyze_ps4_il2cpp_candidates.py](../scripts/analyze_ps4_il2cpp_candidates.py) sigue disponible para una comparación byte a byte privada.
 

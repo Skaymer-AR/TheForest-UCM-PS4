@@ -128,6 +128,33 @@ PS4Controller.ProcessGamePads — RVA 0x004761A0 — ventana 0x180 bytes
 
 
 class Ps4Il2CppPipelineTests(unittest.TestCase):
+    def test_absent_field_and_method_tables_use_minus_one_with_zero_count(self):
+        blob = bytearray(metadata_fixture())
+        types_offset = struct.unpack_from("<I", blob,
+            8 + pipeline.HEADER_PAIR_INDEX["type_definitions"] * 8)[0]
+        # ReInput has no fields/methods. Real <Module> definitions use this
+        # same sentinel layout; the previous parser rejected the actual file.
+        row = types_offset + 2 * pipeline.TYPE_RECORD.size
+        struct.pack_into("<ii", blob, row + 12 * 4, -1, -1)
+        metadata = pipeline.parse_metadata_v23(blob)
+        empty = metadata.find_types("Rewired.ReInput")[0]
+        self.assertEqual((empty.field_start, empty.method_start), (-1, -1))
+        self.assertEqual(metadata.owned_fields(empty), [])
+        struct.pack_into("<i", blob, row + 12 * 4, -2)
+        with self.assertRaisesRegex(ValueError, "invalid field range"):
+            pipeline.parse_metadata_v23(blob)
+
+    def test_type_declaring_index_is_not_a_type_definition_index(self):
+        blob = bytearray(metadata_fixture())
+        types_offset = struct.unpack_from("<I", blob,
+            8 + pipeline.HEADER_PAIR_INDEX["type_definitions"] * 8)[0]
+        struct.pack_into("<i", blob, types_offset + 5 * 4, 100)
+        metadata = pipeline.parse_metadata_v23(blob)
+        self.assertEqual(metadata.types[0].declaring_type, 100)
+        struct.pack_into("<i", blob, types_offset + 5 * 4, -2)
+        with self.assertRaisesRegex(ValueError, "invalid declaring type"):
+            pipeline.parse_metadata_v23(blob)
+
     def test_v23_metadata_and_method_index_map_to_executable_rva(self):
         metadata = pipeline.parse_metadata_v23(metadata_fixture())
         with tempfile.TemporaryDirectory() as temp_dir:

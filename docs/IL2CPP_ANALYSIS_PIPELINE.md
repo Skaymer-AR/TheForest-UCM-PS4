@@ -24,13 +24,14 @@ una asociación exacta con registro de tipos PS4. Las llamadas
 `0x004762D6`/`0x00476315` permanecen indirectas y sin nombre de interfaz o
 método destino.
 
-El último dump privado reportado contiene eboot y módulo como contenedores
-SCE/SELF: sus hashes son `fac03b64…99adcd2a` y `f7e59035…8777b6`. No sirven
-como imágenes de RVA hasta disponer de ELF64 descifrado. El módulo reportado
-tampoco coincide por hash con la imagen histórica que fija este pipeline; no
-se puede inferir de ello si el código descifrado difiere. La metadata sí
-coincide (`238c400d…d85a6c3`). La provenance está en
-[`PS4_DUMP_PROVENANCE.json`](PS4_DUMP_PROVENANCE.json).
+Los contenedores actuales siguen siendo SCE/SELF y no se pasan directamente al
+mapper de RVA. La inspección de sus entradas permitió recuperar sus payloads
+plaintext offline con `scripts/unwrap_plain_self.py`. Ambos ELF reconstruidos
+coinciden íntegramente con los anteriores; el módulo recuperado sí satisface
+el hash fijado por este pipeline y los 42 prefijos fueron comprobados. La
+metadata también coincide. La procedencia distingue contenedor y copia ELF en
+[`PS4_DUMP_PROVENANCE.json`](PS4_DUMP_PROVENANCE.json); la investigación nueva
+se concentra en [registro e integración AOT](AOT_INTEGRATION_PROPOSAL.md).
 
 ## Una sola ejecución reproducible
 

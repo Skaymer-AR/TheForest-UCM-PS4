@@ -6,11 +6,13 @@ las restricciones actuales. No se encontró ni se demostró un host AOT
 propiedad del título que el PRX GoldHEN pueda cargar o registrar. No se añade
 un proveedor ficticio al adaptador existente.
 
-El último dump reportado contiene un módulo SCE/SELF con hash distinto de la
-imagen ELF64 histórica que respalda los RVA del análisis. La metadata coincide,
-pero no hay ELF descifrado para mapear esos RVA contra el dump actual; esto no
-demuestra que el código descifrado haya cambiado. La procedencia está en
-[`PS4_DUMP_PROVENANCE.json`](PS4_DUMP_PROVENANCE.json).
+El ELF actual ya se recuperó offline desde los payloads plaintext del SELF y
+coincide íntegramente con la imagen histórica; los 42 prefijos fueron
+comprobados. Queda resuelta la comparación binaria, según
+[`PS4_DUMP_PROVENANCE.json`](PS4_DUMP_PROVENANCE.json). La nueva
+[propuesta AOT](AOT_INTEGRATION_PROPOSAL.md) localiza el registro real y detalla
+el pipeline/insumos necesarios para crear un host propio. El estudio está
+autorizado; el PKG, hooks y despliegue siguen sin autorización.
 
 La decisión no significa que el objetivo sea imposible en cualquier
 arquitectura. Identifica la pieza concreta que falta: un componente ejecutable
