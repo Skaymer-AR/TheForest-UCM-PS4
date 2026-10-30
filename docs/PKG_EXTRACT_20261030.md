@@ -1,14 +1,16 @@
-# Private CUSA12398 1.15 update PKG extraction — 2026-10-30
+# Private CUSA12398 1.15 update PKG extraction and read-only verification — 2026-10-30
 
-Status: **PKG read / decrypted PFS / three targets extracted successfully**, but native Unity integration remains **NO-GO**. Private game binaries are never committed.
+Status: the PKG/PFS extraction produced the three requested targets, and the read-only extract checker has now been run against the files currently in Google Drive. Native Unity integration remains **NO-GO under the current constraints**. Private game binaries and generated decompilation output are never committed.
 
 ## Provenance reported from Google Colab
 
 - Source filename: `The.Forest_CUSA12398_v1.15_BACKPORT_[5.05-6.72]_OPOISSO893.pkg`
-- SHA256 of complete package: **not measured yet**; size `1609170944` bytes reconstructed as 8 fragments, each present. Equal size alone is **not** an end-to-end integrity check.
+- SHA-256 of the complete package: **not measured**; size `1609170944` bytes reconstructed as 8 fragments, each present. Equal size alone is **not** an end-to-end integrity check.
 - PKG magic `0x7f434e54`; Content ID `EP0238-CUSA12398_00-THEFOREST0000000`; `APP_VER=01.15`, `CATEGORY=gp`; `SYSTEM_VER=0x05508000`; `sdk_ver=05050000`.
-- PFS flags `0xa0000000000003cc`, includes `0x2000000000000000` (new crypt flag). Initial unpacker `qequ/ps4-pkg-unpacker` exit code 4: `inode 0 is corrupt`. **Read-only tool-only workaround:** force old key derivation in both `PfsReader.cs` and `ReaderChain.cs`. Rebuild passed; resulting `--list` exit 0.
-- Outer PFS: `block=0x10000`, Signed/Encrypted. Inner PFSC v2: 1,599,909,642 stored bytes -> 2,105,344,000 logical bytes, 32,125 blocks of which 18,030 compressed. Inner PFS: 201 inodes, 170 files; 21 PKG entry files. This confirms directory readability; no full PFSC verification reported.
+- PFS flags `0xa0000000000003cc`, including `0x2000000000000000` (new crypt flag). Initial unpacker `qequ/ps4-pkg-unpacker` exited 4 with `inode 0 is corrupt`. The reported read-only tool workaround forced old key derivation in `PfsReader.cs` and `ReaderChain.cs`; the rebuilt tool's `--list` exited 0.
+- Outer PFS: `block=0x10000`, reported Signed/Encrypted. Inner PFSC v2: 1,599,909,642 stored bytes -> 2,105,344,000 logical bytes, 32,125 blocks of which 18,030 compressed. Inner PFS: 201 inodes, 170 files; 21 PKG entry files. These figures establish directory readability, not full PFSC or PKG-signature verification.
+
+## Extracted-file fingerprints
 
 | Extracted private file | Bytes | SHA-256 |
 | --- | ---: | --- |
@@ -17,18 +19,52 @@ Status: **PKG read / decrypted PFS / three targets extracted successfully**, but
 | `Media/Metadata/global-metadata.dat` | 15400780 | `238c400de31e28ed4f7f14e7781ea3b33de0d0bd6964ded680d78fce1d85a6c3` |
 | `Media/Native/Data/Metadata/global-metadata.dat` | 15400780 | `238c400de31e28ed4f7f14e7781ea3b33de0d0bd6964ded680d78fce1d85a6c3` |
 
-The metadata SHA-256 **matches the prior private metadata** exactly: identical bytes, not just compatible schema. The newly extracted PRX SHA **differs** from the earlier private PRX SHA `0159ff61c99d25c8f0a821070e3d8b24aff58dbbe5429b8f29561f9960d02969`. **A hash difference does not prove changed IL2CPP methods:** container format, signing, backport patches, or executable code may differ. No new `eboot.bin` baseline has been established.
+Both current metadata copies are byte-for-byte identical by SHA-256, and match the prior private metadata hash. The current PRX SHA-256 differs from the earlier private PRX SHA-256 `0159ff61c99d25c8f0a821070e3d8b24aff58dbbe5429b8f29561f9960d02969`. The current eboot hash is now recorded as a baseline; no earlier eboot hash was available for comparison. A PRX hash difference alone does not establish that IL2CPP method bodies changed: signing/container bytes, backport changes, or executable code could account for it.
 
-## Next discriminating check (read-only)
+## Read-only checker run
 
-The repo now provides `scripts/check_private_pkg_extract.py`: classify ELF vs SELF/OELF, compare private sizes + SHA256, and **only if** it is a decrypted ELF64, check two known PS4Debug entry-byte anchors using the repo's `PT_LOAD` RVA mapper. It neither patches nor exports binaries. Run locally or in Colab against the user's private Drive folder.
+The branch's `scripts/check_private_pkg_extract.py` was run on a temporary copy of the current Drive files. The copies remained outside GitHub. Full stdout:
 
-```bash
-python3 scripts/check_private_pkg_extract.py --root /content/drive/MyDrive/TheForest_Extraidos
+```text
+The Forest PS4 CUSA12398 1.15 | private read-only evidence
+eboot: eboot.bin
+  size=21830618 sha256=fac03b6402a7659f0efd0c133aea2252e4218a6be7f23cf84b6af82099adcd2a
+  type=SCE/SELF container (RVA mapping not possible without a decrypted ELF)
+IL2CPP PRX: Media/Modules/Il2CppUserAssemblies.prx
+  size=63934584 sha256=f7e590358efbfb68dc5a61bf51b070b2b85eb223070b82a31e3fd5e5118777b6
+  type=SCE/SELF container (RVA mapping not possible without a decrypted ELF)
+  historical PRX SHA: DIFFERENT
+metadata: Media/Metadata/global-metadata.dat
+  size=15400780 sha256=238c400de31e28ed4f7f14e7781ea3b33de0d0bd6964ded680d78fce1d85a6c3
+  historical metadata SHA: SAME
+metadata: Media/Native/Data/Metadata/global-metadata.dat
+  size=15400780 sha256=238c400de31e28ed4f7f14e7781ea3b33de0d0bd6964ded680d78fce1d85a6c3
+  historical metadata SHA: SAME
+anchor checks: SKIPPED (input is not a decrypted ELF64)
+VERDICT: evidence only; does not validate a live callback, ABI, or hook.
 ```
 
-- If the PRX is SELF/OELF: obtain a legally accessible decrypted ELF or game memory dump for a byte-for-byte RVA comparison **before** adopting earlier offsets. Do not infer offsets from a wrapped file.
-- If decrypted ELF: compare the two anchors; a match only supports limited code-location stability, not a call ABI, live callback, overlay or safe hook.
-- The existing IL2CPP AOT registration/bootstrap and live Unity render context are **still missing**. Do not generate an installable PRX or revive the global hooks that previously froze the console.
+Checker exit code: `0` (the report is informational; it does not mean the anchors were verified).
 
-This is **not** a pivot to GoldHEN cheat JSON. Goal remains a native in-game graphical mod menu controlled by DualShock 4.
+A separate read-only header inspection returned:
+
+| File | First 16 bytes |
+| --- | --- |
+| `eboot.bin` | `4f 15 3d 1d 00 01 01 12 01 01 00 00 80 04 70 04` |
+| `Il2CppUserAssemblies.prx` | `4f 15 3d 1d 00 01 01 12 01 01 00 00 40 04 70 04` |
+
+The first four bytes match the SCE/SELF container marker used by the checker. This is **format identification from the header**, not cryptographic verification of the Sony signature, the outer PKG signature, or the extracted PFS. Since the PRX is SELF rather than a decrypted ELF64, the two known entry-byte signatures at `DebugConsole.OnGUI` and `DebugConsole.ToggleConsole` were **not** compared against this current file. The prior PS4Debug reads remain evidence from the earlier running build; they do not establish that the current different-hash PRX has the same code bytes. A decrypted ELF or current-build read-only memory capture is needed to verify those anchors. The existing analyzer correctly refuses to infer RVA bytes from the SELF wrapper.
+
+## Integration feasibility gate
+
+The extraction result does not supply a new Unity/IL2CPP integration route:
+
+- No title-owned AOT component, IL2CPP method-registration pipeline, or scene bootstrap that a GoldHEN PRX can use has been demonstrated.
+- `DebugConsole.OnGUI` remains a static GUI candidate, not a proven live gameplay callback; its singleton was previously observed as NULL.
+- `DllModLoader.AppDomain.Load` does not prove that new native AOT methods are registered or that a `MonoBehaviour` is created.
+- A Unity native rendering callback still needs a Unity-loaded plug-in and a title-owned caller to enqueue it; GoldHEN's `plugin_load` alone does not provide either.
+- The global GNM/VideoOut/ScePad detour prototypes remain prohibited after the prior black-screen and console-lock incidents. No PRX is generated or installed.
+
+The existing `docs/INTEGRATION_DECISION.md` remains the architecture decision. The viable no-hook Unity direction would require a documented PS4 AOT loader/registration/bootstrap or a build pipeline that integrates and registers a title-owned component. The latter changes the PKG/build architecture and is not authorized by this task, so it was not attempted. The alternative title-local detour would require separate authorization and a safe relocation, synchronized patching, rollback, and quiescence design; it is not a current implementation path.
+
+This is not a pivot to GoldHEN cheat JSON. The target remains a native in-game graphical mod menu controlled by DualShock 4. No PKG, save, or architecture was changed.
