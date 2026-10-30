@@ -67,3 +67,7 @@ console test just because an offline script passed. A final PS4 hardware test,
 hook activation and any PKG modification are **not authorized by this
 handoff alone** and require explicit user approval after a bounded rollback
 plan. The user must not be asked to compile or test things you can do yourself.
+
+## New alternate path: precompiled PlayMaker GUI classes
+
+See `PLAYMAKER_PRECOMPILED_GUI_EVIDENCE.md`, `PLAYMAKER_PRECOMPILED_GUI_PROOF.json`, and `PLAYMAKER_ACTIONDATA_LAYOUT.json`. The original game already contains native OnGUI overrides for `GUIBox`, `GUIButton`, `GUILabel`, and GUILayout controls. GUIButton calls the game-linked GUI.Button and Fsm.Event. A separate scene-owned PlayMakerFSM using these existing actions might avoid adding an IL2CPP class and avoid a native render detour. Its serialized ActionData and references need investigation first. The existing CutSceneController FSM components must remain unchanged. No change to the original game files or installation is authorized. Finish read-only/synthetic tests before proposing a reversible integration experiment.
