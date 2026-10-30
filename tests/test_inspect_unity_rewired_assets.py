@@ -102,12 +102,13 @@ class UnityRewiredInspectorTests(unittest.TestCase):
                 (3035, 115, monoscript("RewiredSpawner", "TheForest.Utils", "Assembly-CSharp.dll")),
                 (3715, 115, monoscript("HardwareJoystickMap", "Rewired.Data.Mapping", "Rewired_Core.dll")),
             ], [])
+            hardware_guids = b"83b427e4-086f-47f3-bb06-be266abd1ca5;cd9718bf-a87a-44bc-8716-60a0def28a9f"
             build_asset(root / "sharedassets0.assets", [
                 (21, 1, gameobject("Rewired Input Manager VR", [(0, 192)])),
                 (22, 1, gameobject("Rewired Input Manager XInput", [(0, 193)])),
-                (192, 114, mono(21, 1352, b"\0" * 16 + action_bytes(57))),
-                (193, 114, mono(22, 1352, b"\0" * 16 + action_bytes(58))),
-                (133, 114, mono(0, 3715, b"SonyDualShock4")),
+                (192, 114, mono(21, 1352, b"\0" * 16 + action_bytes(57) + hardware_guids)),
+                (193, 114, mono(22, 1352, b"\0" * 16 + action_bytes(58) + hardware_guids)),
+                (133, 114, mono(0, 3715, b"SonyDualShock4" + hardware_guids)),
             ], ["globalgamemanagers.assets"])
             for scene, go_id, mb_id in (
                 ("level0", 8, 38),
@@ -132,6 +133,11 @@ class UnityRewiredInspectorTests(unittest.TestCase):
             self.assertEqual(vr["components"][0]["script"], "Rewired.InputManager")
             self.assertTrue(vr["components"][0]["enabled"])
             self.assertEqual(report["generic_hardware_profiles"][0]["profile"], "SonyDualShock4")
+            self.assertEqual(
+                len(report["input_manager_prefabs"]["21"]["matching_hardware_identifiers"]), 2)
+            self.assertEqual(
+                report["input_manager_prefabs"]["21"]["matching_hardware_identifiers"],
+                report["input_manager_prefabs"]["22"]["matching_hardware_identifiers"])
             self.assertIn("Select", report["varying_action_name_ids"])
             self.assertIn("not a physical DualShock", report["limitations"][1])
 
