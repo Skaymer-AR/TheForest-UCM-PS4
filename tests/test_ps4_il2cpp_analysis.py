@@ -84,6 +84,8 @@ class RecoveredPs4EvidenceTests(unittest.TestCase):
         self.assertTrue(preflight["rel32_near_relay_required"])
         self.assertFalse(preflight["absolute_stolen_window_verified"])
         self.assertIn("unverified", preflight["runtime_callback_active"])
+        self.assertIn("prior PS4Debug Instance read was NULL",
+                      preflight["runtime_callback_active"])
         self.assertEqual(len(preflight["blockers"]), 4)
         self.assertFalse(preflight["patch_write_performed"])
         self.assertIn("require platform quiescence", preflight["release_policy"])
