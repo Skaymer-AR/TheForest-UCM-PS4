@@ -109,3 +109,12 @@ loading in The Forest, a runtime registration path, or DualShock 4 input. A
 Unity `5.6.6f2` Editor round-trip using an authorized, compatible PlayMaker
 package is still required before claiming editor-importable PlayMaker data.
 Even that would not prove runtime loading in the game.
+
+The separate project-authored Unity Editor probe and its AssetBundle reader
+are documented in [`UNITY_EDITOR_566F2_SERIALIZATION_PROBE.md`](UNITY_EDITOR_566F2_SERIALIZATION_PROBE.md).
+CI compiles that Editor script against nonfunctional API stubs only; the stubs
+do not write Unity files. A real run requires a locally licensed Unity
+5.6.6f2 Editor. The result is accepted only after the actual Unity report,
+ForceText scene/prefab files, and Editor-built AssetBundles pass the Python
+and AssetsTools.NET checks. No Editor output has been produced in this
+workspace.

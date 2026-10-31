@@ -22,6 +22,10 @@ internal static class Program
         string stage = "argument validation";
         try
         {
+            if (args.Length > 0 && args[0] == "editor-bundle")
+            {
+                return UnityEditorBundleProbe.Run(args.Skip(1).ToArray());
+            }
             if (args.Length != 3)
             {
                 throw new ArgumentException(
