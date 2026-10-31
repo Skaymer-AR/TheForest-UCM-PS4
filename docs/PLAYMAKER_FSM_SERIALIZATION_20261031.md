@@ -163,13 +163,20 @@ metadata field names and types for every supplied field, AOT virtual slots,
 and the explicit symbolic status of the `SendEvent` target. It rejects
 malformed typed fields, unresolved transitions and invalid event routes.
 
-This graph is **not** valid Unity ActionData output. The full-asset scan now
-provides real `FsmEventTarget` and `GetButtonDown` serialization examples, but
-the graph builder remains a normalized model and does not consume them to
-emit a serialized FSM. GUI metadata fields remain unmodeled
-(`FsmTexture`, `FsmRect`, Unity `GUIContent`/`Rect`, layout-option arrays and
-runtime `DelayedEvent`). Therefore it is a structural prototype only; it
-cannot yet be inserted into an asset.
+This graph is **not** valid Unity ActionData output. The full-asset scans now
+provide real `FsmEventTarget`, `GetButtonDown`, and `GetEventInfo` instances.
+The two decoded `GetEventInfo` blocks witness the shared `FsmTexture` (type
+code 33, `fsmObjectParams`) and `FsmRect` (type code 30, 17-byte `byteData`)
+formats; their references are null placeholders. These are not GUI action
+instances. The graph builder remains a normalized model and does not consume
+the observed encodings to emit a serialized FSM. `GUIContent`, direct
+`UnityEngine.Rect`, the serialized GUILayout option arrays, and runtime
+`DelayedEvent` remain unmodeled. Their AOT array element types resolve to
+`HutongGames.PlayMaker.LayoutOption[]` and `UnityEngine.GUILayoutOption[]`,
+but no such action is serialized in the scanned assets. The per-instance parameter records are in
+[`PLAYMAKER_GRAPHIC_PARAMETER_EXAMPLES_20261031.jsonl`](PLAYMAKER_GRAPHIC_PARAMETER_EXAMPLES_20261031.jsonl).
+Therefore the graph is still a structural prototype and cannot yet be
+inserted into an asset.
 
 ## Rewired and graphics limits
 
@@ -201,9 +208,12 @@ with a new `PlayMakerFSM`, never a modification of either `CutSceneController`
 FSM. Follow-up results, full-scan counts, per-instance data, ActionData parser
 coverage and the remaining GUI serialization gaps are in
 [`PLAYMAKER_ACTIONDATA_GRAPHIC_SCAN_20261031.md`](PLAYMAKER_ACTIONDATA_GRAPHIC_SCAN_20261031.md).
-Before any asset integration is considered, the encodings for the actual GUI
-fields (`FsmTexture`, `FsmRect`, Unity `GUIContent`/`Rect`, and GUILayout
-option arrays) and the scene/prefab reference graph must be completed offline.
+Before any asset integration is considered, obtain a graphical ActionData
+witness or verify the field-specific serializer for the GUI action parameter
+arrays. `FsmTexture`/`FsmRect` wrapper encodings are now witnessed in
+`GetEventInfo`, but the GUI actions' own fields, `GUIContent`, direct
+`UnityEngine.Rect`, GUILayout option arrays, and complete scene/prefab
+reference graph still need offline validation.
 Delivery would then require rebuilding the affected Unity asset files and a
 valid game-package installation path; this is outside the present
 authorization. A runtime path would need an independently proven
@@ -239,12 +249,21 @@ still pending**. We are not ready to test an Ultimate Mod Menu on PS4.
 
 ## Verification and limits
 
-Seventeen synthetic-only tests cover serialized component parsing, ActionData
+Twenty-six synthetic-only tests cover serialized component parsing, ActionData
 boundaries and same-size semantic round-trips, variable/event/state references,
-FsmTemplate headers, malformed tails, typed graph fields and event routes. The exact-source inspector also
+FsmTemplate headers, malformed tails, typed graph fields, event routes,
+`FsmTexture`/`FsmRect` payloads, and decode/encode/re-decode structural
+equivalence. The exact-source inspector also
 verifies all five input hashes, both scene-to-template references, the
 cameraFade component/template semantic match, the 13 inline prefab components,
 and the extended native lifecycle audit.
+
+`ASAN_OPTIONS=detect_leaks=0 SANITIZE=1 sh scripts/test.sh` passed 184 Python
+tests and the native C, ASan, and UBSan suites. `scripts/assert-safe-build.py`,
+the JavaScript check, and the targeted AOT/lifecycle unit tests passed. The
+local Unity C# fixture could not run because `mcs` and `mono` are absent; the
+GitHub Actions run for the resulting commit is the available Mono-backed
+check.
 
 These checks establish the static serialized relationships and native
 method path described above. They do not prove that a newly serialized

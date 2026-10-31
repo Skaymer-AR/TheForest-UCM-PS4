@@ -49,8 +49,10 @@ def _ascii_text(value: str, maximum: int, *, allow_empty: bool = False) -> bool:
             all(" " <= char <= "~" for char in value))
 
 
-def parse_actiondata_prefix(data: bytes, offset: int) -> dict | None:
+def parse_actiondata_prefix(data: bytes, offset: int, *,
+                            target_actions: set[str] | None = None) -> dict | None:
     """Validate ActionData's action-name and per-action arrays at one offset."""
+    target_actions = TARGET_ACTIONS if target_actions is None else target_actions
     if offset < 0 or offset % 4 or len(data) > MAX_COMPONENT_BYTES:
         return None
     try:
@@ -70,7 +72,7 @@ def parse_actiondata_prefix(data: bytes, offset: int) -> dict | None:
             action_names.append(name)
             name_offsets.append(name_offset)
         matching = [index for index, name in enumerate(action_names)
-                    if name in TARGET_ACTIONS]
+                    if name in target_actions]
         if not matching:
             return None
 
@@ -233,9 +235,23 @@ def _decode_full_action_data(blob: bytes, prefix: dict) -> tuple[dict | None, st
         encoded = encode_action_data(action_data)
         if encoded != blob[prefix["offset"]:reader.pos]:
             return None, "ActionData encode/decode round-trip mismatch"
+        reparsed = parse_action_data(Reader(encoded), salvage_unknown_parameters=True)
+        if _round_trip_structure(reparsed) != _round_trip_structure(action_data):
+            return None, "ActionData re-decode structural mismatch"
         return action_data, None
     except (ValueError, struct.error) as exc:
         return None, str(exc)
+
+
+def _round_trip_structure(value):
+    """Normalize only absolute reader offsets before comparing decoded models."""
+    if isinstance(value, dict):
+        absolute_offsets = {"offset", "byte_data_offset", "specialized_array_offset"}
+        return {key: _round_trip_structure(item) for key, item in value.items()
+                if key not in absolute_offsets}
+    if isinstance(value, list):
+        return [_round_trip_structure(item) for item in value]
+    return value
 
 
 def _target_action_parameters(action_data: dict | None, prefix: dict,
@@ -252,15 +268,39 @@ def _target_action_parameters(action_data: dict | None, prefix: dict,
 
 
 def scan(globalgamemanagers: Path, asset_paths: list[Path], *,
-         module_path: Path | None = None, metadata_path: Path | None = None) -> dict:
+         module_path: Path | None = None, metadata_path: Path | None = None,
+         action_names: list[str] | None = None) -> dict:
     if (module_path is None) != (metadata_path is None):
         raise ValueError("module and metadata must be supplied together")
+    selected_names = TARGET_ACTION_NAMES if action_names is None else tuple(action_names)
+    if (not selected_names or len(selected_names) > MAX_ACTIONS or
+            len(set(selected_names)) != len(selected_names)):
+        raise ValueError("action target list is empty, oversized, or duplicated")
+    selected_full_names = set()
+    selected_short_names = []
+    for value in selected_names:
+        if not isinstance(value, str) or not value:
+            raise ValueError("invalid action target name")
+        full_name = value if value.startswith(ACTION_PREFIX) else ACTION_PREFIX + value
+        short_name = full_name[len(ACTION_PREFIX):]
+        if (not _ascii_text(short_name, MAX_STRING_BYTES) or
+                "." in short_name or " " in short_name):
+            raise ValueError("action targets must be PlayMaker action names")
+        selected_full_names.add(full_name)
+        selected_short_names.append(short_name.rsplit(".", 1)[-1])
     ggm = Asset(globalgamemanagers)
     global_scripts = {path_id: monoscript(ggm.obj(path_id))
                       for path_id in ggm.ids(115)}
     resolver = None
+    provenance = {"aot_module_sha256": None, "metadata_sha256": None}
     if module_path and metadata_path:
-        resolver = TypeResolver(module_path.read_bytes(), metadata_path.read_bytes())
+        module_bytes = module_path.read_bytes()
+        metadata_bytes = metadata_path.read_bytes()
+        provenance = {
+            "aot_module_sha256": hashlib.sha256(module_bytes).hexdigest(),
+            "metadata_sha256": hashlib.sha256(metadata_bytes).hexdigest(),
+        }
+        resolver = TypeResolver(module_bytes, metadata_bytes)
 
     rows = []
     object_counts: Counter[str] = Counter()
@@ -288,7 +328,7 @@ def scan(globalgamemanagers: Path, asset_paths: list[Path], *,
                     continue
                 identity = _object_identity(asset, path_id, script, mono, blob)
                 object_counts[script["class_name"]] += 1
-                for name in TARGET_ACTION_NAMES:
+                for name in selected_short_names:
                     raw_string_counts[name] += blob.count((ACTION_PREFIX + name).encode("ascii"))
 
                 candidates = []
@@ -301,7 +341,8 @@ def scan(globalgamemanagers: Path, asset_paths: list[Path], *,
                         continue
                     if blob[offset + 8:offset + 8 + len(ACTION_PREFIX)] != ACTION_PREFIX.encode("ascii"):
                         continue
-                    prefix = parse_actiondata_prefix(blob, offset)
+                    prefix = parse_actiondata_prefix(
+                        blob, offset, target_actions=selected_full_names)
                     if prefix is not None:
                         candidates.append(prefix)
 
@@ -311,7 +352,7 @@ def scan(globalgamemanagers: Path, asset_paths: list[Path], *,
                     for prefix in candidates
                     for index in prefix["matching_action_indices"]
                 }
-                for name in TARGET_ACTION_NAMES:
+                for name in selected_short_names:
                     encoded_name = (ACTION_PREFIX + name).encode("ascii")
                     offset = blob.find(encoded_name)
                     while offset >= 0:
@@ -337,7 +378,7 @@ def scan(globalgamemanagers: Path, asset_paths: list[Path], *,
                     action_data, full_error = _decode_full_action_data(blob, prefix)
                     if action_data is not None and resolver is not None:
                         for index, action_name in enumerate(prefix["action_names"]):
-                            if action_name not in TARGET_ACTIONS:
+                            if action_name not in selected_full_names:
                                 continue
                             fields = resolver.action_fields(action_name)
                             params = _target_action_parameters(action_data, prefix, index)
@@ -417,7 +458,7 @@ def scan(globalgamemanagers: Path, asset_paths: list[Path], *,
     aot_fields = None
     if resolver is not None:
         aot_fields = {}
-        for name in TARGET_ACTION_NAMES:
+        for name in selected_short_names:
             try:
                 aot_fields[name] = resolver.action_fields(ACTION_PREFIX + name)
             except ValueError as exc:
@@ -437,6 +478,8 @@ def scan(globalgamemanagers: Path, asset_paths: list[Path], *,
             "aot_fields_are_metadata_only": True,
         },
         "aot_action_fields": aot_fields,
+        "selected_action_types": sorted(selected_full_names),
+        "provenance": provenance,
         "source_files": [
             {"name": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
             for path in files
@@ -453,6 +496,78 @@ def scan(globalgamemanagers: Path, asset_paths: list[Path], *,
     }
 
 
+def compact_index_records(report: dict) -> list[dict]:
+    """Project a full JSON scan into a compact, one-record-per-action index."""
+    source_hashes = {item["name"]: item["sha256"]
+                     for item in report.get("source_files", [])}
+    header = {
+        "record_type": "scan_summary",
+        "title": report["title"],
+        "selected_action_types": report.get("selected_action_types", []),
+        "provenance": {
+            **report.get("provenance", {}),
+            "files_scanned": len(source_hashes),
+            "asset_hashes": source_hashes,
+        },
+        "summary": report["scope"],
+        "parse_errors": report.get("parse_errors", []),
+        "unmapped_raw": report.get("unmapped_raw_action_name_occurrences", []),
+        "wire_schemas": {
+            "FsmEventTarget": "target:i32, excludeSelf:FsmBool, gameObject:FsmOwnerDefault, fsmName:FsmString, sendToChildren:FsmBool, fsmComponent:PPtr",
+            "FsmObject": "useVariable:i32, name:string, tooltip:string, showInInspector:i32, networkSync:i32, typeName:string, value:PPtr",
+            "FsmRect": "xywh:4*f32, useVariable:u8",
+            "FsmString": "useVariable:i32, name:string, tooltip:string, showInInspector:i32, networkSync:i32, value:string",
+            "byte_data": "position and size are relative to ActionData.byteData; component_offset is absolute within the PlayMaker object. Nested specialized offsets are absolute within that object.",
+        },
+    }
+    records = [header]
+    for row in report.get("instances", []):
+        records.append({
+            "record_type": "action_instance",
+            "asset": row["asset"],
+            "object": {
+                "class": row["object_class"],
+                "path_id": row["path_id"],
+                "game_object_path_id": row["game_object_path_id"],
+                "game_object_name": row["game_object_name"],
+            },
+            "fsm_name": row["fsm_name"],
+            "template_name": row["template_name"],
+            "template_header_status": row["template_header_status"],
+            "state": {"name": row["state_name"],
+                      "object_offset": row["state_path_offset"]},
+            "actiondata": {
+                "object_offset": row["actiondata_offset"],
+                "prefix_size": row["actiondata_prefix_size"],
+                "total_size": row["actiondata_total_size"],
+                "action_count": row["action_count"],
+                "parameter_count": row["actiondata_parameter_count"],
+                "action_names": row["actiondata_action_names"],
+                "custom_names": row["actiondata_custom_names"],
+                "decode_status": row["actiondata_decode_status"],
+                "decode_error": row["actiondata_decode_error"],
+            },
+            "action": {
+                "index": row["action_name_index"],
+                "name": row["action_name"].rsplit(".", 1)[-1],
+                "name_field_offset": row["action_name_offset"],
+                "name_content_offset": row["action_name_content_offset"],
+                "hash_u32": row["action_hash_code_u32"],
+                "custom_name": row["custom_name"],
+                "enabled": row["enabled"],
+                "is_open": row["is_open"],
+                "parameter_start_index": row["action_start_index"],
+            },
+            "parameters": row["parameters"],
+        })
+    return records
+
+
+def render_jsonl(report: dict) -> str:
+    return "".join(json.dumps(item, sort_keys=True, separators=(",", ":")) + "\n"
+                   for item in compact_index_records(report))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--globalgamemanagers", type=Path, required=True)
@@ -460,12 +575,18 @@ def main(argv: list[str] | None = None) -> int:
                         help="asset, scene, prefab container or resources.assets; repeatable")
     parser.add_argument("--module", type=Path)
     parser.add_argument("--metadata", type=Path)
+    parser.add_argument("--action", action="append",
+                        help="action class name to match; repeatable (default: graphics/input targets)")
+    parser.add_argument("--format", choices=("json", "jsonl"), default="json",
+                        help="write full JSON or compact JSONL action records")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     try:
         report = scan(args.globalgamemanagers, args.asset,
-                      module_path=args.module, metadata_path=args.metadata)
-        rendered = json.dumps(report, indent=2, sort_keys=True) + "\n"
+                      module_path=args.module, metadata_path=args.metadata,
+                      action_names=args.action)
+        rendered = (render_jsonl(report) if args.format == "jsonl" else
+                    json.dumps(report, indent=2, sort_keys=True) + "\n")
         if args.output:
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(rendered, encoding="utf-8")

@@ -47,6 +47,7 @@ MAX_EVENTS = 256
 MAX_ACTIONS = 64
 MAX_PARAMETERS = 4096
 MAX_ACTION_DATA_BYTES = 1 << 18
+MAX_NATIVE_TYPE_NESTING = 16
 
 ACTIONDATA_SPECIAL_ARRAYS = (
     "unityObjectParams", "fsmGameObjectParams", "fsmOwnerDefaultParams",
@@ -62,9 +63,17 @@ PARAM_DATA_TYPES = {
     19: "HutongGames.PlayMaker.FsmGameObject",
     20: "HutongGames.PlayMaker.FsmOwnerDefault",
     15: "HutongGames.PlayMaker.FsmFloat",
+    16: "HutongGames.PlayMaker.FsmInt",
     23: "HutongGames.PlayMaker.FsmEvent",
+    24: "HutongGames.PlayMaker.FsmObject",
     25: "HutongGames.PlayMaker.FsmColor",
+    28: "HutongGames.PlayMaker.FsmVector3",
+    30: "HutongGames.PlayMaker.FsmRect",
+    32: "HutongGames.PlayMaker.FsmMaterial",
     31: "HutongGames.PlayMaker.FsmEventTarget",
+    33: "HutongGames.PlayMaker.FsmTexture",
+    35: "HutongGames.PlayMaker.FsmQuaternion",
+    37: "HutongGames.PlayMaker.FsmVector2",
 }
 
 IL2CPP_PRIMITIVES = {
@@ -165,6 +174,13 @@ class TypeResolver:
         if not 0 <= type_index < self.type_count:
             raise ValueError("field type index outside native type table")
         pointer = struct.unpack("<Q", self.image.read(self.type_table + type_index * 8, 8))[0]
+        return self._resolve_type_pointer(pointer, depth=0)
+
+    def _resolve_type_pointer(self, pointer: int, *, depth: int) -> str:
+        if depth > MAX_NATIVE_TYPE_NESTING:
+            raise ValueError("nested IL2CPP type exceeds the recursion limit")
+        if type(pointer) is not int or pointer <= 0:
+            raise ValueError("invalid IL2CPP type pointer")
         data = struct.unpack("<Q", self.image.read(pointer, 8))[0]
         flags = struct.unpack("<I", self.image.read(pointer + 8, 4))[0]
         kind = (flags >> 16) & 0xFF
@@ -175,6 +191,11 @@ class TypeResolver:
             return definition.full_name
         if kind in IL2CPP_PRIMITIVES:
             return IL2CPP_PRIMITIVES[kind]
+        if kind == 0x1D:  # IL2CPP_TYPE_SZARRAY; data points to its element Il2CppType.
+            if data <= 0:
+                raise ValueError("SZARRAY element type pointer is invalid")
+            element = self._resolve_type_pointer(data, depth=depth + 1)
+            return element + "[]"
         raise ValueError(f"unsupported IL2CPP field type kind 0x{kind:02X}")
 
     def action_fields(self, full_name: str) -> list[dict[str, str]]:
@@ -245,6 +266,22 @@ def _read_pptr(reader: Reader, label: str) -> dict[str, int]:
     if file_id < 0 or path_id < 0:
         raise ValueError(f"negative serialized PPtr: {label}")
     return {"file_id": file_id, "path_id": path_id}
+
+
+def _read_fsm_object(reader: Reader, label: str = "FsmObject") -> dict:
+    """Read the common FsmObject payload used by object-backed parameters."""
+    use_variable = reader.bool32(label + ".useVariable")
+    name, _ = reader.aligned_string()
+    tooltip, _ = reader.aligned_string()
+    show_in_inspector = reader.bool32(label + ".showInInspector")
+    network_sync = reader.bool32(label + ".networkSync")
+    type_name, _ = reader.aligned_string()
+    value_pointer = _read_pptr(reader, label + ".value")
+    return {
+        "use_variable": use_variable, "name": name, "tooltip": tooltip,
+        "show_in_inspector": show_in_inspector, "network_sync": network_sync,
+        "type_name": type_name, "value_pointer": value_pointer,
+    }
 
 
 def _read_fsm_game_object(reader: Reader) -> dict:
@@ -345,6 +382,13 @@ def parse_action_data(reader: Reader, *, salvage_unknown_parameters: bool = Fals
                 values.append(_read_fsm_game_object(reader))
                 offsets.append({"offset": item_start, "size": reader.pos - item_start})
             specialized[field_name], specialized_offsets[field_name] = values, offsets
+        elif field_name == "fsmObjectParams":
+            values, offsets = [], []
+            for _ in range(count):
+                item_start = reader.pos
+                values.append(_read_fsm_object(reader))
+                offsets.append({"offset": item_start, "size": reader.pos - item_start})
+            specialized[field_name], specialized_offsets[field_name] = values, offsets
         elif field_name == "fsmOwnerDefaultParams":
             values, offsets = [], []
             for _ in range(count):
@@ -410,7 +454,9 @@ def parse_action_data(reader: Reader, *, salvage_unknown_parameters: bool = Fals
 
     specialized_type_arrays = {
         18: "fsmStringParams", 19: "fsmGameObjectParams",
-        20: "fsmOwnerDefaultParams", 31: "fsmEventTargetParams",
+        20: "fsmOwnerDefaultParams", 24: "fsmObjectParams",
+        31: "fsmEventTargetParams", 32: "fsmObjectParams",
+        33: "fsmObjectParams",
     }
     spans = []
     unknown_parameter_types = []
@@ -457,11 +503,76 @@ def parse_action_data(reader: Reader, *, salvage_unknown_parameters: bool = Fals
                      "payload_size": size}
         elif type_name == "HutongGames.PlayMaker.FsmColor":
             if size != 17:
-                raise ValueError("unsupported FsmColor ActionData encoding")
-            color = struct.unpack("<4f", payload[:16])
-            if not all(math.isfinite(item) for item in color) or payload[16] not in (0, 1):
-                raise ValueError("invalid FsmColor ActionData payload")
-            value = {"rgba": list(color), "use_variable": bool(payload[16])}
+                if salvage_unknown_parameters:
+                    value = {"decoded": False, "serialized_type_code": code,
+                             "payload_size": size}
+                else:
+                    raise ValueError("unsupported FsmColor ActionData encoding")
+            else:
+                color = struct.unpack("<4f", payload[:16])
+                if not all(math.isfinite(item) for item in color) or payload[16] not in (0, 1):
+                    if salvage_unknown_parameters:
+                        value = {"decoded": False, "serialized_type_code": code,
+                                 "payload_size": size}
+                    else:
+                        raise ValueError("invalid FsmColor ActionData payload")
+                else:
+                    value = {"rgba": list(color), "use_variable": bool(payload[16])}
+        elif type_name == "HutongGames.PlayMaker.FsmInt":
+            if size != 5 or payload[4] not in (0, 1):
+                if salvage_unknown_parameters:
+                    value = {"decoded": False, "serialized_type_code": code,
+                             "payload_size": size}
+                else:
+                    raise ValueError("unsupported FsmInt ActionData encoding")
+            else:
+                value = {"value": struct.unpack("<i", payload[:4])[0],
+                         "use_variable": bool(payload[4])}
+        elif type_name == "HutongGames.PlayMaker.FsmRect":
+            if size != 17 or payload[16] not in (0, 1):
+                if salvage_unknown_parameters:
+                    value = {"decoded": False, "serialized_type_code": code,
+                             "payload_size": size}
+                else:
+                    raise ValueError("unsupported FsmRect ActionData encoding")
+            else:
+                rect = struct.unpack("<4f", payload[:16])
+                if not all(math.isfinite(item) for item in rect):
+                    if salvage_unknown_parameters:
+                        value = {"decoded": False, "serialized_type_code": code,
+                                 "payload_size": size}
+                    else:
+                        raise ValueError("non-finite FsmRect ActionData value")
+                else:
+                    value = {"rect": list(rect), "use_variable": bool(payload[16])}
+        elif type_name in {
+                "HutongGames.PlayMaker.FsmVector2",
+                "HutongGames.PlayMaker.FsmVector3",
+                "HutongGames.PlayMaker.FsmQuaternion"}:
+            component_count = {
+                "HutongGames.PlayMaker.FsmVector2": 2,
+                "HutongGames.PlayMaker.FsmVector3": 3,
+                "HutongGames.PlayMaker.FsmQuaternion": 4,
+            }[type_name]
+            expected_size = component_count * 4 + 1
+            if size != expected_size or payload[-1] not in (0, 1):
+                if salvage_unknown_parameters:
+                    value = {"decoded": False, "serialized_type_code": code,
+                             "payload_size": size}
+                else:
+                    raise ValueError("unsupported vector ActionData encoding")
+            else:
+                components = struct.unpack("<" + "f" * component_count,
+                                           payload[:component_count * 4])
+                if not all(math.isfinite(item) for item in components):
+                    if salvage_unknown_parameters:
+                        value = {"decoded": False, "serialized_type_code": code,
+                                 "payload_size": size}
+                    else:
+                        raise ValueError("non-finite vector ActionData value")
+                else:
+                    value = {"components": list(components),
+                             "use_variable": bool(payload[-1])}
         elif type_name == "HutongGames.PlayMaker.FsmFloat":
             if size < 5 or payload[4] not in (0, 1):
                 if salvage_unknown_parameters:
@@ -477,6 +588,16 @@ def parse_action_data(reader: Reader, *, salvage_unknown_parameters: bool = Fals
                 raise ValueError("unsupported FsmFloat ActionData encoding")
             variable = payload[5:].decode("ascii") if payload[4] else None
             if payload[4] and not variable:
+                if salvage_unknown_parameters:
+                    value = {"decoded": False, "serialized_type_code": code,
+                             "payload_size": size}
+                    parameters.append({
+                        "name": name, "serialized_type_code": code, "type": type_name,
+                        "byte_data_position": position,
+                        "byte_data_offset": byte_data_offset + position,
+                        "byte_data_size": size, "value": value,
+                    })
+                    continue
                 raise ValueError("empty FsmFloat variable link")
             if payload[4] and any(not (32 <= char < 127) for char in payload[5:]):
                 raise ValueError("invalid FsmFloat variable name")
@@ -601,6 +722,16 @@ def _encode_fsm_game_object(value: dict) -> bytes:
             _encode_pptr(value["value_pointer"]))
 
 
+def _encode_fsm_object(value: dict) -> bytes:
+    return (_encode_bool32(value["use_variable"], "FsmObject.useVariable") +
+            _encode_aligned_string(value["name"]) +
+            _encode_aligned_string(value["tooltip"]) +
+            _encode_bool32(value["show_in_inspector"], "FsmObject.showInInspector") +
+            _encode_bool32(value["network_sync"], "FsmObject.networkSync") +
+            _encode_aligned_string(value["type_name"]) +
+            _encode_pptr(value["value_pointer"]))
+
+
 def _encode_fsm_owner_default(value: dict) -> bytes:
     option = value.get("owner_option")
     if type(option) is not int or option not in (0, 1):
@@ -642,8 +773,9 @@ def _encode_parameter_payload(parameter: dict) -> bytes | None:
     """Encode a semantically decoded byteData parameter, or preserve it raw.
 
     ``None`` means that this parameter is intentionally opaque and its bytes
-    must be retained from the original byteData buffer. The title's native
-    FsmTexture/FsmRect and unknown/custom parameter encodings are not guessed.
+    must be retained from the original byteData buffer. FsmTexture and FsmRect
+    use formats verified from serialized GetEventInfo fields; GUIContent,
+    UnityEngine.Rect and unknown/custom encodings remain unsupported.
     """
     code = parameter.get("serialized_type_code")
     value = parameter.get("value")
@@ -713,6 +845,35 @@ def _encode_parameter_payload(parameter: dict) -> bytes | None:
                     for item in rgba)):
             raise ValueError("invalid FsmColor ActionData fields")
         return struct.pack("<4fB", *rgba, int(use_variable))
+    if code == 16:  # FsmInt
+        if (not isinstance(value, dict) or type(value.get("value")) is not int or
+                not -(1 << 31) <= value["value"] < (1 << 31) or
+                not isinstance(value.get("use_variable"), bool)):
+            raise ValueError("invalid FsmInt ActionData fields")
+        return struct.pack("<iB", value["value"], int(value["use_variable"]))
+    if code == 30:  # FsmRect
+        rect = value.get("rect") if isinstance(value, dict) else None
+        use_variable = value.get("use_variable") if isinstance(value, dict) else None
+        if (not isinstance(rect, list) or len(rect) != 4 or
+                not isinstance(use_variable, bool) or
+                any(type(item) not in (int, float) or not math.isfinite(item)
+                    for item in rect)):
+            raise ValueError("invalid FsmRect ActionData fields")
+        return struct.pack("<4fB", *rect, int(use_variable))
+    vector_shapes = {
+        28: 3, 35: 4, 37: 2,
+    }
+    if code in vector_shapes:
+        components = value.get("components") if isinstance(value, dict) else None
+        use_variable = value.get("use_variable") if isinstance(value, dict) else None
+        count = vector_shapes[code]
+        if (not isinstance(components, list) or len(components) != count or
+                not isinstance(use_variable, bool) or
+                any(type(item) not in (int, float) or not math.isfinite(item)
+                    for item in components)):
+            raise ValueError("invalid vector ActionData fields")
+        return struct.pack("<" + "f" * count + "B",
+                           *components, int(use_variable))
     # Unknown, unsupported, and specialized-array parameters carry no
     # independently verified byteData encoder.
     return None
@@ -733,7 +894,9 @@ def _encode_action_byte_data(action_data: dict) -> bytes:
     spans = []
     specialized_type_arrays = {
         18: "fsmStringParams", 19: "fsmGameObjectParams",
-        20: "fsmOwnerDefaultParams", 31: "fsmEventTargetParams",
+        20: "fsmOwnerDefaultParams", 24: "fsmObjectParams",
+        31: "fsmEventTargetParams", 32: "fsmObjectParams",
+        33: "fsmObjectParams",
     }
     specialized = action_data.get("specialized_parameter_arrays")
     if not isinstance(specialized, dict):
@@ -753,6 +916,8 @@ def _encode_action_byte_data(action_data: dict) -> bytes:
                     not isinstance(array_values, list) or
                     not 0 <= index < len(array_values)):
                 raise ValueError("ActionData specialized parameter reference is invalid")
+            if parameter.get("value") != array_values[index]:
+                raise ValueError("ActionData specialized parameter value disagrees with its array entry")
             continue
         if (type(position) is not int or type(size) is not int or
                 position < 0 or size < 0 or position + size > len(result)):
@@ -845,6 +1010,8 @@ def encode_action_data(action_data: dict) -> bytes:
         result += struct.pack("<i", len(values))
         if field_name == "fsmGameObjectParams":
             result += b"".join(_encode_fsm_game_object(value) for value in values)
+        elif field_name == "fsmObjectParams":
+            result += b"".join(_encode_fsm_object(value) for value in values)
         elif field_name == "fsmOwnerDefaultParams":
             result += b"".join(_encode_fsm_owner_default(value) for value in values)
         elif field_name == "fsmEventTargetParams":
@@ -1510,7 +1677,7 @@ def inspect(level2_data: bytes, global_data: bytes, sharedassets2_data: bytes,
         "synthetic_menu_graph_model": build_synthetic_menu_graph(),
         "limitations": [
             "the parser supports the pinned zero-action sentinel and verified multi-action ActionData subsets",
-            "nonempty animationCurveParams, functionCallParams, fsmTemplateControlParams, fsmPropertyParams, layoutOptionParams, fsmObjectParams, fsmVarParams and unityObjectParams are rejected",
+            "nonempty animationCurveParams, functionCallParams, fsmTemplateControlParams, fsmPropertyParams, layoutOptionParams, fsmVarParams and unityObjectParams are rejected",
             "ActionData encoding is limited to the decoded arrays and parameter type codes; it is not a Unity asset writer",
             "cameraFadeFSM floatVariables are decoded narrowly; 40 remaining Fsm bytes are opaque",
             "PlayMakerFSM.fsmTemplate is decoded as a trailing PPtr; it does not prove runtime loading or registration",

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import struct
 import sys
 import unittest
@@ -14,6 +15,21 @@ import scan_playmaker_action_instances as scan_actions
 
 def i32(value: int) -> bytes:
     return struct.pack("<i", value)
+
+
+def il2cpp_type_record(data: int, kind: int) -> bytes:
+    return struct.pack("<QI", data, kind << 16) + bytes(4)
+
+
+class SyntheticNativeImage:
+    def __init__(self, regions: dict[int, bytes]):
+        self.regions = regions
+
+    def read(self, address: int, size: int) -> bytes:
+        for start, data in self.regions.items():
+            if start <= address and address + size <= start + len(data):
+                return data[address - start:address - start + size]
+        raise ValueError("synthetic native address is outside mapped regions")
 
 
 def string(value: str) -> bytes:
@@ -49,6 +65,25 @@ def action_data_generic(action_name: str) -> bytes:
     data += bytes(4 * 4)                 # array/custom type arrays
     data += i32(0)                       # customTypeNames
     data += bytes(4 * 4)                 # parameter arrays
+    return bytes(data)
+
+
+def action_data_one_parameter(action_name: str, parameter_name: str,
+                              type_code: int, payload: bytes) -> bytes:
+    data = bytearray()
+    data += i32(1) + string(action_name)
+    data += i32(1) + string("")
+    data += i32(1) + b"\x01\0\0\0"
+    data += i32(1) + b"\x01\0\0\0"
+    data += i32(1) + i32(0)
+    data += i32(1) + i32(123)
+    data += bytes(len(audit.ACTIONDATA_SPECIAL_ARRAYS) * 4)
+    data += i32(len(payload)) + payload + bytes(-len(payload) % 4)
+    data += bytes(4 * 4)                 # array/custom type arrays
+    data += i32(1) + i32(type_code)
+    data += i32(1) + string(parameter_name)
+    data += i32(1) + i32(0)
+    data += i32(1) + i32(len(payload))
     return bytes(data)
 
 
@@ -127,6 +162,41 @@ def synthetic_send_event_action_data() -> bytes:
         "param_names": ["eventTarget", "sendEvent", "delay", "everyFrame"],
         "param_data_positions": [0, 0, 3, 8],
         "param_byte_data_sizes": [0, 3, 5, 1], "parameters": parameters,
+    }
+    return audit.encode_action_data(model)
+
+
+def synthetic_graphic_field_action_data() -> bytes:
+    texture = {
+        "use_variable": True, "name": "texture", "tooltip": "",
+        "show_in_inspector": False, "network_sync": False,
+        "type_name": "UnityEngine.Texture2D",
+        "value_pointer": {"file_id": 0, "path_id": 77},
+    }
+    specialized = {name: [] for name in audit.ACTIONDATA_SPECIAL_ARRAYS}
+    specialized["fsmObjectParams"] = [texture]
+    byte_data = struct.pack("<4fB", 24.0, 36.0, 320.0, 180.0, 0)
+    parameters = [
+        {"name": "getTextureData", "serialized_type_code": 33,
+         "type": "HutongGames.PlayMaker.FsmTexture",
+         "specialized_array": "fsmObjectParams", "specialized_array_index": 0,
+         "value": texture},
+        {"name": "getRectData", "serialized_type_code": 30,
+         "type": "HutongGames.PlayMaker.FsmRect",
+         "byte_data_position": 0, "byte_data_size": 17,
+         "value": {"rect": [24.0, 36.0, 320.0, 180.0], "use_variable": False}},
+    ]
+    model = {
+        "action_names": ["HutongGames.PlayMaker.Actions.GetEventInfo"],
+        "custom_names": [""], "enabled": [True], "is_open": [True],
+        "start_indices": [0], "hash_codes_u32": [0x13572468],
+        "specialized_parameter_arrays": specialized, "_byte_data": byte_data,
+        "array_param_sizes": [], "array_param_types": [],
+        "custom_type_sizes": [], "custom_type_names": [],
+        "param_data_types": [33, 30],
+        "param_names": ["getTextureData", "getRectData"],
+        "param_data_positions": [0, 0], "param_byte_data_sizes": [0, 17],
+        "parameters": parameters,
     }
     return audit.encode_action_data(model)
 
@@ -241,6 +311,53 @@ def graph_schema():
 
 
 class PlayMakerFsmAssetInspectorTests(unittest.TestCase):
+    def test_type_resolver_follows_bounded_szarray_element_types(self):
+        regions = {
+            0x1000: struct.pack("<Q", 0x2000),
+            0x2000: il2cpp_type_record(0x3000, 0x1D),
+            0x3000: il2cpp_type_record(0x4000, 0x1D),
+            0x4000: il2cpp_type_record(42, 0x12),
+        }
+        resolver = audit.TypeResolver.__new__(audit.TypeResolver)
+        resolver.type_count = 1
+        resolver.type_table = 0x1000
+        resolver.image = SyntheticNativeImage(regions)
+        resolver.type_defs_by_index = {
+            42: type("MetadataType", (), {"full_name": "Example.LayoutOption"})()
+        }
+        self.assertEqual(resolver.resolve(0), "Example.LayoutOption[][]")
+
+        regions = {
+            0x1000: struct.pack("<Q", 0x2000),
+            0x2000: il2cpp_type_record(0x3000, 0x1D),
+            0x3000: il2cpp_type_record(0x05, 0x05),
+        }
+        resolver.image = SyntheticNativeImage(regions)
+        resolver.type_defs_by_index = {}
+        self.assertEqual(resolver.resolve(0), "System.Byte[]")
+
+    def test_type_resolver_rejects_bad_szarray_pointer_and_depth(self):
+        resolver = audit.TypeResolver.__new__(audit.TypeResolver)
+        resolver.type_count = 1
+        resolver.type_table = 0x1000
+        resolver.type_defs_by_index = {}
+        resolver.image = SyntheticNativeImage({
+            0x1000: struct.pack("<Q", 0x2000),
+            0x2000: il2cpp_type_record(0, 0x1D),
+        })
+        with self.assertRaisesRegex(ValueError, "element type pointer is invalid"):
+            resolver.resolve(0)
+
+        regions = {0x1000: struct.pack("<Q", 0x2000)}
+        for depth in range(audit.MAX_NATIVE_TYPE_NESTING + 2):
+            current = 0x2000 + depth * 0x20
+            next_pointer = current + 0x20
+            regions[current] = il2cpp_type_record(next_pointer, 0x1D)
+        regions[next_pointer] = il2cpp_type_record(0x05, 0x05)
+        resolver.image = SyntheticNativeImage(regions)
+        with self.assertRaisesRegex(ValueError, "recursion limit"):
+            resolver.resolve(0)
+
     def test_parses_synthetic_state_graph_and_actiondata(self):
         parsed = audit.parse_fsm_component(fsm_component())
         self.assertEqual(parsed["name"], "SyntheticFSM")
@@ -295,6 +412,88 @@ class PlayMakerFsmAssetInspectorTests(unittest.TestCase):
         self.assertEqual(decoded["parameters"][2]["value"]["value"], 1.25)
         self.assertTrue(decoded["parameters"][3]["value"])
 
+    def test_actiondata_fsmtexture_and_fsmrect_round_trip_and_edit(self):
+        original = synthetic_graphic_field_action_data()
+        parsed = audit.parse_action_data(audit.Reader(original))
+        self.assertEqual(audit.encode_action_data(parsed), original)
+        texture = parsed["parameters"][0]
+        self.assertEqual(texture["type"], "HutongGames.PlayMaker.FsmTexture")
+        self.assertEqual(texture["specialized_array"], "fsmObjectParams")
+        self.assertEqual(texture["value"]["type_name"], "UnityEngine.Texture2D")
+        self.assertEqual(parsed["parameters"][1]["value"]["rect"],
+                         [24.0, 36.0, 320.0, 180.0])
+        parsed["specialized_parameter_arrays"]["fsmObjectParams"][0][
+            "value_pointer"]["path_id"] = 99
+        parsed["parameters"][1]["value"]["rect"][2] = 400.0
+        edited = audit.encode_action_data(parsed)
+        decoded = audit.parse_action_data(audit.Reader(edited))
+        self.assertEqual(decoded["parameters"][0]["value"]["value_pointer"]["path_id"], 99)
+        self.assertEqual(decoded["parameters"][1]["value"]["rect"][2], 400.0)
+
+    def test_actiondata_fsmtexture_rejects_a_detached_parameter_value(self):
+        parsed = audit.parse_action_data(
+            audit.Reader(synthetic_graphic_field_action_data()))
+        parsed["parameters"][0]["value"] = copy.deepcopy(
+            parsed["parameters"][0]["value"])
+        parsed["parameters"][0]["value"]["type_name"] = "UnityEngine.Material"
+        with self.assertRaisesRegex(ValueError, "disagrees with its array entry"):
+            audit.encode_action_data(parsed)
+
+    def test_actiondata_fsmtexture_rejects_negative_object_reference(self):
+        raw = bytearray(synthetic_graphic_field_action_data())
+        parsed = audit.parse_action_data(audit.Reader(bytes(raw)))
+        record = parsed["specialized_parameter_array_offsets"][
+            "fsmObjectParams"][0]
+        struct.pack_into("<q", raw, record["offset"] + record["size"] - 8, -1)
+        with self.assertRaisesRegex(ValueError, "negative serialized PPtr"):
+            audit.parse_action_data(audit.Reader(bytes(raw)))
+
+    def test_actiondata_fsmrect_malformed_payloads_reject_or_round_trip_opaque(self):
+        malformed = (
+            b"\0" * 16,
+            struct.pack("<4fB", float("nan"), 0.0, 10.0, 20.0, 0),
+            struct.pack("<4fB", 0.0, 0.0, 10.0, 20.0, 2),
+        )
+        for payload in malformed:
+            with self.subTest(payload=payload):
+                raw = action_data_one_parameter(
+                    "HutongGames.PlayMaker.Actions.GetEventInfo",
+                    "getRectData", 30, payload)
+                with self.assertRaises(ValueError):
+                    audit.parse_action_data(audit.Reader(raw))
+                recovered = audit.parse_action_data(
+                    audit.Reader(raw), salvage_unknown_parameters=True)
+                self.assertFalse(recovered["parameters"][0]["value"]["decoded"])
+                self.assertEqual(audit.encode_action_data(recovered), raw)
+
+    def test_full_actiondata_round_trip_redecodes_graphic_and_event_models(self):
+        samples = (
+            (synthetic_graphic_field_action_data(), "GetEventInfo"),
+            (synthetic_send_event_action_data(), "SendEvent"),
+        )
+        for raw, action in samples:
+            with self.subTest(action=action):
+                prefix = scan_actions.parse_actiondata_prefix(
+                    raw, 0, target_actions={
+                        scan_actions.ACTION_PREFIX + action})
+                self.assertIsNotNone(prefix)
+                decoded, error = scan_actions._decode_full_action_data(
+                    raw, prefix)
+                self.assertIsNone(error)
+                self.assertIsNotNone(decoded)
+                self.assertEqual(audit.encode_action_data(decoded), raw)
+
+    def test_actiondata_empty_fsmfloat_variable_is_rejected_or_retained_opaque(self):
+        raw = action_data_one_parameter(
+            "HutongGames.PlayMaker.Actions.GetEventInfo", "getFloatData", 15,
+            struct.pack("<fB", 0.0, 1))
+        with self.assertRaisesRegex(ValueError, "empty FsmFloat variable link"):
+            audit.parse_action_data(audit.Reader(raw))
+        decoded = audit.parse_action_data(
+            audit.Reader(raw), salvage_unknown_parameters=True)
+        self.assertFalse(decoded["parameters"][0]["value"]["decoded"])
+        self.assertEqual(audit.encode_action_data(decoded), raw)
+
     def test_actiondata_encoder_rejects_changed_payload_size_and_invalid_pointer(self):
         parsed = audit.parse_action_data(audit.Reader(synthetic_send_event_action_data()))
         parsed["parameters"][1]["value"]["event_name"] = "longer"
@@ -332,12 +531,57 @@ class PlayMakerFsmAssetInspectorTests(unittest.TestCase):
             "HutongGames.PlayMaker.Actions.GUIBox", "CustomActionTest"])
         matches = scan_actions.find_state_header(blob, offset)
         self.assertEqual([match["name"] for match in matches], ["draw"])
+        self.assertIsNone(scan_actions.parse_actiondata_prefix(
+            blob, offset,
+            target_actions={scan_actions.ACTION_PREFIX + "GetEventInfo"}))
 
         truncated = blob[:offset] + action_data[:-2]
         self.assertIsNone(scan_actions.parse_actiondata_prefix(truncated, offset))
         malformed = bytearray(action_data)
         struct.pack_into("<i", malformed, 0, 65)
         self.assertIsNone(scan_actions.parse_actiondata_prefix(bytes(malformed), 0))
+
+    def test_compact_jsonl_index_keeps_provenance_offsets_and_parameters(self):
+        report = {
+            "title": "Synthetic title",
+            "selected_action_types": [
+                "HutongGames.PlayMaker.Actions.GUIBox"],
+            "provenance": {"aot_module_sha256": "a" * 64,
+                           "metadata_sha256": "b" * 64},
+            "scope": {"files_scanned": 1, "validated_serialized_action_instances": 1},
+            "source_files": [{"name": "synthetic.assets", "sha256": "c" * 64}],
+            "parse_errors": [], "unmapped_raw_action_name_occurrences": [],
+            "instances": [{
+                "asset": "synthetic.assets", "object_class": "FsmTemplate",
+                "path_id": 99, "game_object_path_id": 0, "game_object_name": None,
+                "fsm_name": "SyntheticFSM", "template_name": "SyntheticTemplate",
+                "template_header_status": "decoded", "state_name": "draw",
+                "state_path_offset": 120, "actiondata_offset": 180,
+                "actiondata_prefix_size": 72, "actiondata_total_size": 144,
+                "action_count": 1, "actiondata_parameter_count": 2,
+                "actiondata_action_names": ["HutongGames.PlayMaker.Actions.GUIBox"],
+                "actiondata_custom_names": [""],
+                "actiondata_decode_status": "round-trip verified",
+                "actiondata_decode_error": None, "action_name_index": 0,
+                "action_name_offset": 200, "action_name_content_offset": 204,
+                "action_name": "HutongGames.PlayMaker.Actions.GUIBox",
+                "action_hash_code_u32": 123, "custom_name": "", "enabled": True,
+                "is_open": True, "action_start_index": 0,
+                "parameters": [{"name": "screenRect", "type": "FsmRect",
+                                "byte_data_position": 0, "byte_data_size": 17,
+                                "value": {"rect": [1.0, 2.0, 3.0, 4.0],
+                                          "use_variable": False}}],
+            }],
+        }
+        lines = scan_actions.render_jsonl(report).splitlines()
+        header, row = (json.loads(line) for line in lines)
+        self.assertEqual(header["selected_action_types"],
+                         ["HutongGames.PlayMaker.Actions.GUIBox"])
+        self.assertEqual(header["provenance"]["asset_hashes"]["synthetic.assets"], "c" * 64)
+        self.assertEqual(row["object"]["path_id"], 99)
+        self.assertEqual(row["actiondata"]["object_offset"], 180)
+        self.assertEqual(row["action"]["name"], "GUIBox")
+        self.assertEqual(row["parameters"][0]["value"]["rect"], [1.0, 2.0, 3.0, 4.0])
 
     def test_rejects_nonzero_empty_action_sentinel(self):
         data = bytearray(fsm_component())
