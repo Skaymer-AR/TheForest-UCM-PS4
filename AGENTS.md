@@ -73,6 +73,9 @@ DebugConsole or web demo work.
   PRX build. The archived unsafe backends are for source review only.
 - Do not modify save files or unknown game flags, install packages, or commit
   game binaries/assets. Do not claim CI is hardware verification.
+- **Offline-first PS4 testing:** follow the promotion rules below and in
+  `docs/PS4_OFFLINE_FIRST_TEST_POLICY.md`; do not use installations for generic
+  tooling or compatibility exploration.
 
 ## Verification
 
@@ -80,6 +83,19 @@ Run python3 scripts/assert-safe-build.py and SANITIZE=1 sh scripts/test.sh.
 The tests simulate lifecycle errors and concurrency; they do not prove the
 PS4/GoldHEN platform supplies the quiescence primitive required for safe
 unload or an in-game Unity callback.
+
+## Offline-first PS4 test promotion
+
+Follow [`docs/PS4_OFFLINE_FIRST_TEST_POLICY.md`](docs/PS4_OFFLINE_FIRST_TEST_POLICY.md).
+Do not use physical PKG installations to explore packaging tools or generic
+compatibility. A PS4 test may only be proposed for explicit owner review after
+the first graphical UCM package passes its offline gates, or for a demonstrably
+indispensable intermediate result whose direct next step is an already-built
+and audited graphical-menu package. `scripts/check_ps4_test_eligibility.py`
+checks this proposal gate; its result is never installation authorization.
+Before proposing any test, state the package function, offline evidence,
+PS4-only question, expected result, failure recovery, and whether the next step
+is the graphical menu. Never propose blank or notification-only packages.
 
 ## Alternate implementation evidence
 

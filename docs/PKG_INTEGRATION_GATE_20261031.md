@@ -139,3 +139,14 @@ The nearest fallback is to first produce a **noncommercial Unity 5.6.6f2 +
 licensed PlayMaker 1** FSM sample with the correct serialized tail and GUI/input
 actions. Then port only that validated object graph into a private copy of
 `level2`; this does not require compiling a new IL2CPP class.
+
+## Physical-test policy update
+
+Physical PKG tests now follow [`PS4_OFFLINE_FIRST_TEST_POLICY.md`](PS4_OFFLINE_FIRST_TEST_POLICY.md).
+This project has no modified scene, no menu-containing PKG, and no audited
+menu candidate ready to follow an intermediate test. No PS4 installation is
+eligible to propose at this point. Continue with complete authorized source
+trees, Unity/PlayMaker serialization validation, scene/reference auditing,
+and reproducible package checks offline. A future package must pass
+`scripts/check_ps4_test_eligibility.py` for explicit owner review; a passing
+result is not permission to install.
