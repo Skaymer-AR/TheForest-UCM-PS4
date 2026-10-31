@@ -130,6 +130,10 @@ internal static class Program
         if (!ReferenceEquals(dependency.file, library.file))
             throw new InvalidDataException("external dependency resolved to the wrong file");
         Console.WriteLine("Deserializing external MonoScript");
+        AssetTypeTemplateField scriptTemplate = manager.GetTemplateBaseField(dependency, scriptInfo)
+            ?? throw new InvalidDataException("classdata.tpk has no MonoScript template");
+        Console.WriteLine($"MonoScript object bytes: {scriptInfo.ByteSize}");
+        PrintTemplate(scriptTemplate, 0);
         AssetTypeValueField script = manager.GetBaseField(dependency, scriptInfo);
         string scriptClass = Field(script, "m_ClassName").AsString;
         string scriptNamespace = Field(script, "m_Namespace").AsString;
@@ -225,5 +229,13 @@ internal static class Program
     {
         if (MathF.Abs(actual - expected) > 0.0001f)
             throw new InvalidDataException($"{label} mismatch: {actual} != {expected}");
+    }
+
+    private static void PrintTemplate(AssetTypeTemplateField field, int depth)
+    {
+        Console.WriteLine($"{new string(' ', depth * 2)}{field.Name}: {field.Type}; " +
+            $"value={field.ValueType}; array={field.IsArray}; aligned={field.IsAligned}");
+        foreach (AssetTypeTemplateField child in field.Children)
+            PrintTemplate(child, depth + 1);
     }
 }
