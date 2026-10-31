@@ -1,0 +1,72 @@
+{
+  "schema_version": 2,
+  "title": "The Forest PS4 CUSA12398 v1.15",
+  "evidence_source": "independent private read-only comparison of current Drive containers with retained historical ELF inputs; proprietary inputs remain outside Git",
+  "historical_reference": {
+    "il2cpp_module_sha256": "0159ff61c99d25c8f0a821070e3d8b24aff58dbbe5429b8f29561f9960d02969",
+    "metadata_sha256": "238c400de31e28ed4f7f14e7781ea3b33de0d0bd6964ded680d78fce1d85a6c3"
+  },
+  "current_dump": {
+    "eboot": {
+      "path": "eboot.bin",
+      "size": 21830618,
+      "sha256": "fac03b6402a7659f0efd0c133aea2252e4218a6be7f23cf84b6af82099adcd2a",
+      "container": "SCE/SELF",
+      "rva_mapping_possible": false
+    },
+    "il2cpp_module": {
+      "path": "Media/Modules/Il2CppUserAssemblies.prx",
+      "size": 63934584,
+      "sha256": "f7e590358efbfb68dc5a61bf51b070b2b85eb223070b82a31e3fd5e5118777b6",
+      "container": "SCE/SELF",
+      "historical_sha256_match": false,
+      "rva_mapping_possible": false
+    },
+    "metadata": [
+      {
+        "path": "Media/Metadata/global-metadata.dat",
+        "size": 15400780,
+        "sha256": "238c400de31e28ed4f7f14e7781ea3b33de0d0bd6964ded680d78fce1d85a6c3",
+        "historical_sha256_match": true
+      },
+      {
+        "path": "Media/Native/Data/Metadata/global-metadata.dat",
+        "size": 15400780,
+        "sha256": "238c400de31e28ed4f7f14e7781ea3b33de0d0bd6964ded680d78fce1d85a6c3",
+        "historical_sha256_match": true
+      }
+    ]
+  },
+  "verdict": "offline_equivalence_and_registration_analysis_only_no_live_execution_validation",
+  "interpretation": "Raw SELF containers are not mapped as ELF. Their supported plaintext payloads were recovered offline, with explicit absent-section-field normalization and zero-filled gaps. Complete reconstructed ELF comparisons match both retained references; 42 module prefixes match. Cryptographic signatures and runtime execution were not verified.",
+  "initial_container_only_checker": "skipped_non_decrypted_elf64",
+  "anchor_checks": "verified_42_prefixes_on_reconstructed_plaintext_elf",
+  "derived_elf_analysis": {
+    "recovery_tool": "scripts/unwrap_plain_self.py",
+    "candidate_prefixes_compared": 42,
+    "candidate_prefixes_matched": 42,
+    "bytes_per_prefix": 16,
+    "il2cpp_module": {
+      "size": 63849064,
+      "sha256": "0159ff61c99d25c8f0a821070e3d8b24aff58dbbe5429b8f29561f9960d02969",
+      "historical_reference_identical": true,
+      "plaintext_uncompressed_payload_count": 5,
+      "version_trailer_bytes": 272,
+      "absent_section_table_source_fields": {
+        "e_shentsize": 64,
+        "e_shstrndx": 33
+      }
+    },
+    "eboot": {
+      "size": 21813434,
+      "sha256": "66b31b4f252b1a70a893685d8b24c8c430c01ada919fa50c34cf66aec8eee185",
+      "historical_reference_identical": true,
+      "plaintext_uncompressed_payload_count": 5,
+      "version_trailer_bytes": 1678,
+      "absent_section_table_source_fields": {
+        "e_shentsize": 64,
+        "e_shstrndx": 34
+      }
+    }
+  }
+}

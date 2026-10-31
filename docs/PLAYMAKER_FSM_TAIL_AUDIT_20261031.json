@@ -1,0 +1,694 @@
+{
+  "all_tail_bytes_equal": false,
+  "distinct_tail_sha256": [
+    "0aa9c4f5586350bb3cf7cce8c2754521137dad8362400bdd5e8b684f16801405",
+    "143eec482f16252bfac07a63d924d81adcca7ea81ff4d58db1d70c948d8b254f",
+    "3876e307c049d436860eeb373fdea013adcca8f9aade0df6bd280cd413dfbb5e",
+    "480581b14908952321fb990e6519c223849a1b0d2aff7c8ad281c77c887e0451",
+    "d3e22db8137fc268a9b53a61ae22fcb92fe1a3524b6b1f62cb85bdc11e098ec7",
+    "f62463715d940474e3ed1496ce1c712b73abc849291f0f35249057da4f8a0a71",
+    "fd31410c401d1624d966bd279d6e3aa6f8ba288610811d85d428772aa9ef7345"
+  ],
+  "distinct_tail_values": 7,
+  "globalgamemanagers_used_for_monoscript_resolution": true,
+  "hash_pinned_files_including_monoscript_source": 62,
+  "hash_pinned_scene_and_sharedassets_scanned": 60,
+  "hash_pinned_source_files_scanned": 61,
+  "interpretation": "Digest groups establish byte equality or difference only; neither equality nor correlation with an FSM identifies tail-field semantics.",
+  "matched_objects_by_asset": [
+    {
+      "FsmTemplate": 0,
+      "PlayMakerFSM": 2,
+      "asset": "level2"
+    },
+    {
+      "FsmTemplate": 0,
+      "PlayMakerFSM": 2,
+      "asset": "level7"
+    },
+    {
+      "FsmTemplate": 2,
+      "PlayMakerFSM": 13,
+      "asset": "sharedassets2.assets"
+    },
+    {
+      "FsmTemplate": 11,
+      "PlayMakerFSM": 27,
+      "asset": "resources.assets"
+    }
+  ],
+  "raw_tail_bytes_emitted": false,
+  "read_only": true,
+  "resources_assets_hash_pinned_but_not_scanned": false,
+  "resources_assets_scanned": true,
+  "resources_assets_sha256": "9b28d330969eaf9f6ae5dc0fa5e83b022174720744c272f80ee887a46e063536",
+  "resources_assets_sha256_verified": true,
+  "samples_by_asset_and_type": [
+    {
+      "asset": "level2",
+      "count": 2,
+      "type": "PlayMakerFSM"
+    },
+    {
+      "asset": "level7",
+      "count": 2,
+      "type": "PlayMakerFSM"
+    },
+    {
+      "asset": "resources.assets",
+      "count": 11,
+      "type": "FsmTemplate"
+    },
+    {
+      "asset": "resources.assets",
+      "count": 27,
+      "type": "PlayMakerFSM"
+    },
+    {
+      "asset": "sharedassets2.assets",
+      "count": 2,
+      "type": "FsmTemplate"
+    },
+    {
+      "asset": "sharedassets2.assets",
+      "count": 13,
+      "type": "PlayMakerFSM"
+    }
+  ],
+  "tail_samples": 57,
+  "tail_sha256_groups": [
+    {
+      "count": 1,
+      "samples": [
+        {
+          "asset": "resources.assets",
+          "fsm_name": "controlFSM",
+          "game_object": "player_BASE",
+          "path_id": 125298,
+          "start_state": "init",
+          "state_count": 75,
+          "type": "PlayMakerFSM"
+        }
+      ],
+      "sha256": "0aa9c4f5586350bb3cf7cce8c2754521137dad8362400bdd5e8b684f16801405"
+    },
+    {
+      "count": 1,
+      "samples": [
+        {
+          "asset": "resources.assets",
+          "fsm_name": "damageFSM",
+          "game_object": "player_BASE",
+          "path_id": 123261,
+          "start_state": "init",
+          "state_count": 6,
+          "type": "PlayMakerFSM"
+        }
+      ],
+      "sha256": "143eec482f16252bfac07a63d924d81adcca7ea81ff4d58db1d70c948d8b254f"
+    },
+    {
+      "count": 1,
+      "samples": [
+        {
+          "asset": "resources.assets",
+          "fsm_name": "tempBlockManagerFSM",
+          "game_object": "player_BASE",
+          "path_id": 124213,
+          "start_state": "start",
+          "state_count": 3,
+          "type": "PlayMakerFSM"
+        }
+      ],
+      "sha256": "3876e307c049d436860eeb373fdea013adcca8f9aade0df6bd280cd413dfbb5e"
+    },
+    {
+      "count": 1,
+      "samples": [
+        {
+          "asset": "resources.assets",
+          "fsm_name": "noiseDetectFSM",
+          "game_object": "player_BASE",
+          "path_id": 122419,
+          "start_state": "trackNoise",
+          "state_count": 7,
+          "type": "PlayMakerFSM"
+        }
+      ],
+      "sha256": "480581b14908952321fb990e6519c223849a1b0d2aff7c8ad281c77c887e0451"
+    },
+    {
+      "count": 1,
+      "samples": [
+        {
+          "asset": "resources.assets",
+          "fsm_name": "rotatePlayerFSM",
+          "game_object": "player_BASE",
+          "path_id": 128615,
+          "start_state": "init",
+          "state_count": 12,
+          "type": "PlayMakerFSM"
+        }
+      ],
+      "sha256": "d3e22db8137fc268a9b53a61ae22fcb92fe1a3524b6b1f62cb85bdc11e098ec7"
+    },
+    {
+      "count": 1,
+      "samples": [
+        {
+          "asset": "resources.assets",
+          "fsm_name": "staminaFSM",
+          "game_object": "player_BASE",
+          "path_id": 128035,
+          "start_state": "init",
+          "state_count": 8,
+          "type": "PlayMakerFSM"
+        }
+      ],
+      "sha256": "f62463715d940474e3ed1496ce1c712b73abc849291f0f35249057da4f8a0a71"
+    },
+    {
+      "count": 51,
+      "samples": [
+        {
+          "asset": "level2",
+          "fsm_name": "FSM",
+          "game_object": "CutSceneController",
+          "path_id": 223934,
+          "start_state": "start",
+          "state_count": 15,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "level2",
+          "fsm_name": "cameraFadeFSM",
+          "game_object": "CutSceneController",
+          "path_id": 223935,
+          "start_state": "wait",
+          "state_count": 3,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "level7",
+          "fsm_name": "FSM_doFade",
+          "game_object": "_CameraFade",
+          "path_id": 4072,
+          "start_state": "init",
+          "state_count": 3,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "level7",
+          "fsm_name": "cameraFadeFSM",
+          "game_object": "_CameraFade",
+          "path_id": 4073,
+          "start_state": "wait",
+          "state_count": 4,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "sharedassets2.assets",
+          "fsm_name": "cameraFadeFSM",
+          "path_id": 12111,
+          "start_state": "wait",
+          "state_count": 3,
+          "template_name": "cameraFadeFSM",
+          "type": "FsmTemplate"
+        },
+        {
+          "asset": "sharedassets2.assets",
+          "fsm_name": "cutFSM",
+          "path_id": 12112,
+          "start_state": "init",
+          "state_count": 20,
+          "template_name": "cutSceneController",
+          "type": "FsmTemplate"
+        },
+        {
+          "asset": "sharedassets2.assets",
+          "fsm_name": "moveFSM",
+          "game_object": "turtleGo",
+          "path_id": 12117,
+          "start_state": "notMoving",
+          "state_count": 5,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "sharedassets2.assets",
+          "fsm_name": "moveFSM",
+          "game_object": "raccoonGo",
+          "path_id": 12195,
+          "start_state": "notMoving",
+          "state_count": 9,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "sharedassets2.assets",
+          "fsm_name": "aiBaseFSM",
+          "game_object": "raccoonGo",
+          "path_id": 12210,
+          "start_state": "init",
+          "state_count": 50,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "sharedassets2.assets",
+          "fsm_name": "moveFSM",
+          "game_object": "squirrelGo",
+          "path_id": 12229,
+          "start_state": "notMoving",
+          "state_count": 10,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "sharedassets2.assets",
+          "fsm_name": "aiBaseFSM",
+          "game_object": "squirrelGo",
+          "path_id": 12239,
+          "start_state": "init",
+          "state_count": 50,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "sharedassets2.assets",
+          "fsm_name": "moveFSM",
+          "game_object": "tortoiseGo",
+          "path_id": 12247,
+          "start_state": "notMoving",
+          "state_count": 5,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "sharedassets2.assets",
+          "fsm_name": "aiBaseFSM",
+          "game_object": "turtleGo",
+          "path_id": 12248,
+          "start_state": "init",
+          "state_count": 26,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "sharedassets2.assets",
+          "fsm_name": "moveFSM",
+          "game_object": "deerGo",
+          "path_id": 12251,
+          "start_state": "notMoving",
+          "state_count": 11,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "sharedassets2.assets",
+          "fsm_name": "aiBaseFSM",
+          "game_object": "tortoiseGo",
+          "path_id": 12253,
+          "start_state": "init",
+          "state_count": 20,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "sharedassets2.assets",
+          "fsm_name": "aiBaseFSM",
+          "game_object": "deerGo",
+          "path_id": 12259,
+          "start_state": "init",
+          "state_count": 48,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "sharedassets2.assets",
+          "fsm_name": "aiBaseFSM",
+          "game_object": "lizardGo",
+          "path_id": 13062,
+          "start_state": "init",
+          "state_count": 38,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "sharedassets2.assets",
+          "fsm_name": "aiBaseFSM",
+          "game_object": "boarGo",
+          "path_id": 13092,
+          "start_state": "init",
+          "state_count": 48,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "sharedassets2.assets",
+          "fsm_name": "aiBaseFSM",
+          "game_object": "crocodileGo",
+          "path_id": 13205,
+          "start_state": "init",
+          "state_count": 61,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "global_motorFSM",
+          "path_id": 116774,
+          "start_state": "init",
+          "state_count": 4,
+          "template_name": "creepy_global_motorFSM",
+          "type": "FsmTemplate"
+        },
+        {
+          "asset": "resources.assets",
+          "identity_status": "header-unresolved",
+          "path_id": 116775,
+          "type": "FsmTemplate"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "action_encounterFSM",
+          "path_id": 116776,
+          "start_state": "wait",
+          "state_count": 73,
+          "template_name": "mutant_action_encounterFSM",
+          "type": "FsmTemplate"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "action_sleepingFSM",
+          "path_id": 116777,
+          "start_state": "init",
+          "state_count": 38,
+          "template_name": "mutant_action_sleepingFSM",
+          "type": "FsmTemplate"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "global_brainFSM",
+          "path_id": 116778,
+          "start_state": "base",
+          "state_count": 32,
+          "template_name": "mutant_global_brainFSM",
+          "type": "FsmTemplate"
+        },
+        {
+          "asset": "resources.assets",
+          "identity_status": "header-unresolved",
+          "path_id": 116779,
+          "type": "FsmTemplate"
+        },
+        {
+          "asset": "resources.assets",
+          "identity_status": "header-unresolved",
+          "path_id": 116780,
+          "type": "FsmTemplate"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "noiseDetectFSM",
+          "path_id": 116781,
+          "start_state": "trackNoise",
+          "state_count": 7,
+          "template_name": "player_noiseDetectFSM",
+          "type": "FsmTemplate"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "rotatePlayerFSM",
+          "path_id": 116782,
+          "start_state": "init",
+          "state_count": 11,
+          "template_name": "player_rotatePlayerFSM",
+          "type": "FsmTemplate"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "staminaFSM",
+          "path_id": 116783,
+          "start_state": "init",
+          "state_count": 8,
+          "template_name": "player_staminaFSM",
+          "type": "FsmTemplate"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "tempBlockManagerFSM",
+          "path_id": 116784,
+          "start_state": "start",
+          "state_count": 4,
+          "template_name": "player_tempBlockManagerFSM",
+          "type": "FsmTemplate"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "global_motorFSM",
+          "game_object": "MaleCreepy_BASE3",
+          "path_id": 118066,
+          "start_state": "State 1",
+          "state_count": 1,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "global_alertManagerFSM",
+          "game_object": "female_creepy_BASE",
+          "path_id": 118703,
+          "start_state": "start",
+          "state_count": 4,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "action_combatFSM",
+          "game_object": "baby_ANIM_base",
+          "path_id": 118918,
+          "start_state": "init",
+          "state_count": 33,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "global_motorFSM",
+          "game_object": "baby_ANIM_base",
+          "path_id": 118989,
+          "start_state": "notMoving",
+          "state_count": 5,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "aiBaseFSM",
+          "game_object": "rabbitGo",
+          "path_id": 119050,
+          "start_state": "init",
+          "state_count": 29,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "action_combatFSM",
+          "game_object": "MaleCreepy_BASE3",
+          "path_id": 119195,
+          "start_state": "init",
+          "state_count": 29,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "global_motorFSM",
+          "game_object": "female_creepy_BASE",
+          "path_id": 119225,
+          "start_state": "init",
+          "state_count": 4,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "action_combatFSM",
+          "game_object": "female_creepy_BASE",
+          "path_id": 119252,
+          "start_state": "init",
+          "state_count": 76,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "action_sleepingFSM",
+          "game_object": "mutant_male_BASE",
+          "path_id": 120445,
+          "start_state": "init",
+          "state_count": 19,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "global_alertManagerFSM",
+          "game_object": "girl_base",
+          "path_id": 120979,
+          "start_state": "start",
+          "state_count": 4,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "global_motorFSM",
+          "game_object": "girl_base",
+          "path_id": 121470,
+          "start_state": "init",
+          "state_count": 5,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "action_combatFSM",
+          "game_object": "fat_creepy_ANIM_base",
+          "path_id": 121643,
+          "start_state": "init",
+          "state_count": 67,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "global_brainFSM",
+          "game_object": "mutant_male_BASE",
+          "path_id": 122029,
+          "start_state": "base",
+          "state_count": 11,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "action_encounterFSM",
+          "game_object": "mutant_female_BASE",
+          "path_id": 122710,
+          "start_state": "State 1",
+          "state_count": 1,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "global_alertManagerFSM",
+          "game_object": "fat_creepy_ANIM_base",
+          "path_id": 124036,
+          "start_state": "start",
+          "state_count": 4,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "action_sleepingFSM",
+          "game_object": "mutant_female_BASE",
+          "path_id": 124742,
+          "start_state": "action_sleepingFSM",
+          "state_count": 1,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "action_combatFSM",
+          "game_object": "girl_base",
+          "path_id": 125926,
+          "start_state": "init",
+          "state_count": 94,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "action_encounterFSM",
+          "game_object": "mutant_male_BASE",
+          "path_id": 126426,
+          "start_state": "wait",
+          "state_count": 37,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "global_brainFSM",
+          "game_object": "mutant_female_BASE",
+          "path_id": 128505,
+          "start_state": "State 1",
+          "state_count": 1,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "FSM",
+          "game_object": "mutant_male_net",
+          "path_id": 131377,
+          "start_state": "State 1",
+          "state_count": 1,
+          "type": "PlayMakerFSM"
+        },
+        {
+          "asset": "resources.assets",
+          "fsm_name": "FSM",
+          "game_object": "mutant_female_net",
+          "path_id": 132588,
+          "start_state": "State 1",
+          "state_count": 1,
+          "type": "PlayMakerFSM"
+        }
+      ],
+      "sha256": "fd31410c401d1624d966bd279d6e3aa6f8ba288610811d85d428772aa9ef7345"
+    }
+  ],
+  "title": "The Forest PS4 CUSA12398 v1.15",
+  "varying_byte_offsets": [
+    {
+      "distinct_byte_values": 2,
+      "offset": 4
+    },
+    {
+      "distinct_byte_values": 2,
+      "offset": 12
+    },
+    {
+      "distinct_byte_values": 2,
+      "offset": 16
+    },
+    {
+      "distinct_byte_values": 4,
+      "offset": 24
+    },
+    {
+      "distinct_byte_values": 7,
+      "offset": 28
+    },
+    {
+      "distinct_byte_values": 5,
+      "offset": 29
+    },
+    {
+      "distinct_byte_values": 4,
+      "offset": 30
+    },
+    {
+      "distinct_byte_values": 4,
+      "offset": 31
+    },
+    {
+      "distinct_byte_values": 6,
+      "offset": 32
+    },
+    {
+      "distinct_byte_values": 7,
+      "offset": 33
+    },
+    {
+      "distinct_byte_values": 6,
+      "offset": 34
+    },
+    {
+      "distinct_byte_values": 7,
+      "offset": 35
+    },
+    {
+      "distinct_byte_values": 5,
+      "offset": 36
+    },
+    {
+      "distinct_byte_values": 4,
+      "offset": 37
+    },
+    {
+      "distinct_byte_values": 3,
+      "offset": 38
+    },
+    {
+      "distinct_byte_values": 3,
+      "offset": 39
+    }
+  ]
+}

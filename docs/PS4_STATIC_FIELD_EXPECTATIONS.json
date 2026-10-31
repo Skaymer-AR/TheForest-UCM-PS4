@@ -1,0 +1,24 @@
+{
+  "metadata_version": 23,
+  "metadata_sha256": "238c400de31e28ed4f7f14e7781ea3b33de0d0bd6964ded680d78fce1d85a6c3",
+  "fields": [
+    {
+      "type_suffix": "Cheats",
+      "field": "DebugConsole",
+      "static": true,
+      "native_evidence": "DebugConsole.Awake reads Cheats.static_fields+0x10 (candidate Cheats.DebugConsole guard) near RVA 0x005C1E13; false path reaches Object.Destroy. It does not write this field at 0x005C1EA2."
+    },
+    {
+      "type_suffix": "DebugConsole",
+      "field": "Instance",
+      "static": true,
+      "native_evidence": "DebugConsole.Awake writes this pointer to DebugConsole.static_fields+0x10 at RVA 0x005C1EA2; DebugConsole.GetInstance reads that same location around RVA 0x005CB6B0-0x005CB6C2."
+    }
+  ],
+  "unresolved_native_type_reference": {
+    "rva": "0x33EB300",
+    "candidate_type": "CoopPeerStarter",
+    "candidate_field": "DedicatedHost",
+    "status": "requires independent PS4 metadata type-registration match"
+  }
+}

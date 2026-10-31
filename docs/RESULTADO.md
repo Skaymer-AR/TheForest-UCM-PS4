@@ -1,27 +1,61 @@
-# The Forest PS4 CUSA12398 v1.15 — DebugConsole findings
+# Estado del proyecto The Forest UCM PS4
 
-## Reproduced console observations
+Actualizado: 2026-10-29. Rama de trabajo: `feature/visual-menu-foundation`.
 
-- IL2CPP module base during this session: `0x8029C000`.
-- `DebugConsole.ToggleConsole` address `0x808676D0`: first 16 bytes matched offline.
-- `DebugConsole.OnGUI` address `0x8085F7B0`: first 16 bytes matched offline.
-- Static `DebugConsole` instance pointer `0x20949AD90` was `0x0` in both the game world and the main menu.
-- `Awake` guard A at `0x2058BE721` read `00` after initialization.
-- `Awake` guard B at `0x201A4F3F0` read `00` after initialization.
+## Estado de seguridad
 
-## Disassembly interpretation to validate further
+The Forest CUSA12398 v1.15 vuelve a iniciar normalmente cuando el PRX
+experimental está retirado. No se solicita otra prueba en PS4 durante esta
+etapa.
 
-- `Awake` RVA: `0x005C1C30`.
-- At RVA `0x005C1C99`, `cmp byte ptr [rax+1], 0`; guard A=0 follows a branch to `0x005C1D2B`.
-- At RVA `0x005C1E13`, `cmp byte ptr [rax+0x10],0`; guard B=0 follows the branch to `0x005C1CA3`.
-- This branch exits without assigning a registered instance **if** those byte values were present during `Awake`.
-- We read the guards **after** startup, so the observations do not prove their values at invocation.
-- The semantic meaning of the guards remains unknown.
+- v0.3 sin hooks cargó y permitió jugar.
+- v0.5 con renderer GNM y hooks de VideoOut/Pad dejó la imagen del juego negra;
+  el menú de PS4 siguió respondiendo.
+- v0.6 `passive_all` produjo un bloqueo completo de PS4.
+- No se capturó la instrucción o el hilo exacto. El análisis de trampolines,
+  ABI, concurrencia y descarga distingue riesgos comprobados de hipótesis en
+  [SAFE_OVERLAY_DESIGN.md](SAFE_OVERLAY_DESIGN.md).
 
-## Development choice
+## Avance de integración Unity
 
-Do not change guard B or call `ToggleConsole` when the instance pointer is NULL.
+- La referencia pública de PC muestra `DllModLoader.Awake` como cargador de
+  assemblies por reflection, `ModList.OnEnable/Refresh` como ciclo de vida de
+  UI, `CheatsBridge` como puente de gameplay y `VirtualCursor.LateUpdate` como
+  lógica de cursor.
+- Se recuperaron 42 RVA de PS4 CUSA12398 v1.15. El reporte adjunto declara que
+  los 42 prefijos coinciden offline con el PRX original; PS4Debug confirmó
+  físicamente solo `DebugConsole.OnGUI` y `DebugConsole.ToggleConsole`. La tabla
+  y su procedencia están en
+  [PS4_IL2CPP_PRIOR_EVIDENCE.md](PS4_IL2CPP_PRIOR_EVIDENCE.md).
+- `DebugConsole.OnGUI` es el candidato más cercano al ciclo GUI de Unity, pero
+  la instancia observada en PS4 estaba en `NULL`. No se demostró una forma de
+  registrar un callback propio desde el PRX.
+- El desensamblado confirma `PS4Controller.Update → ProcessGamePads` y
+  `DllModLoader.Awake → LoadDllMod`; `ModList.OnEnable/Refresh` empiezan con
+  `ret`. El destino `0x005CA800` actualiza el mismo campo que `OnGUI` consulta.
+  El análisis ampliado y los analizadores offline están en
+  [PS4_IL2CPP_ANALYSIS.md](PS4_IL2CPP_ANALYSIS.md). El checkout no contiene el
+  ELF privado; los demás xrefs, imports y ABI completos quedan pendientes de
+  resolución con metadata y el módulo original.
+- `src/unity_host_adapter.*` es un contrato host-only. Recibe un proveedor
+  explícito de frame/render e input, se cierra sin espera y retiene estado si
+  no hay prueba de quiescencia. No existe todavía un proveedor para Unity PS4.
+- `src/pad_input_map.*` solo transforma los bits públicos de OpenOrbis a
+  controles normalizados. Las llamadas `scePadOpen`/`scePadReadState` no se
+  integran porque la propiedad/coexistencia de handles con el juego no está
+  validada.
+- Las opciones de God Mode, stamina, hambre/sed, inventario, construcción,
+  teletransporte, spawn, tiempo y clima permanecen sin implementación real.
 
-First establish that a non-hooking diagnostic PRX loads on the actual game. Only then study a bounded read-only hook for `Awake`, with module-base/ABI verification. A standalone DualShock 4 menu avoids depending entirely on an inactive debug console.
+## Verificación
 
-No original game data, binary or raw memory dump is committed.
+- `python3 scripts/assert-safe-build.py`: bloquea hooks en el backend y
+  confirma que Actions no invoque el build del PRX.
+- `SANITIZE=1 sh scripts/test.sh`: pruebas de menú, UI, draw-list, modelo de
+  lifecycle, adaptador, mapper DS4 y analizador con entradas sintéticas.
+- GitHub Actions corre pruebas offline y no crea un artifact PRX de
+  notificación.
+
+Ninguna prueba host confirma que el menú se muestre dentro del juego ni que un
+callback o handle sea seguro en hardware. No se modifican PKG, partidas,
+framebuffer, flags desconocidos ni binarios originales del juego.

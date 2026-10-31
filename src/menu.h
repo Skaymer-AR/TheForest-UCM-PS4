@@ -11,6 +11,8 @@ typedef struct {
   MenuCategory category;
   MenuKind kind;
   int value, min_value, max_value, step;
+  /* False items remain navigable and visible, but never mutate or dispatch. */
+  bool available;
 } MenuItem;
 typedef struct {
   bool visible;

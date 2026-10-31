@@ -1,0 +1,13 @@
+/Library/
+/Temp/
+/Obj/
+/Logs/
+/UserSettings/
+/Assets/__UcmSerializationProbeGenerated/
+/Assets.meta
+/Assets/Editor.meta
+/Assets/Scripts.meta
+/ProjectSettings/*.asset
+/*.sln
+/Assembly-CSharp.csproj
+/Assembly-CSharp-Editor.csproj

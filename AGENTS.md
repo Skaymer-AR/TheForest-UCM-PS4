@@ -1,27 +1,102 @@
-# Codex implementation instructions — TheForest-UCM-PS4
+# Codex instructions — The Forest UCM PS4 (SAFETY HOLD)
 
-Target: **The Forest on PS4 CUSA12398, update v1.15**, GoldHEN. Local user hardware is an Intel Mac running **macOS Catalina 10.15.7**; do not assume Windows or modern macOS tooling.
+Target: The Forest CUSA12398 v1.15, PS4 GoldHEN. User environment: firmware
+12.02 and GoldHEN 2.4B18.9.
 
-## Scope and priorities
+## Confirmed hardware history
 
-- Build and validate a **game-specific GoldHEN PRX**, with game title/update validation, and start with a **no-hook, no-memory-write** smoke test.
-- A working notification does **not** mean the Ultimate Cheatmenu is implemented.
-- Next: read-only instrumentation of `TheForest.DebugConsole.Awake` at invocation (observe guards and registration) with bounded logs, safe exit/unload, and confirmed ASLR module base.
-- Then implement an **in-game controller-friendly menu** and only wire verified actions. The 10 categories in `src/menu.h` are a UI prototype, not proof of gameplay functionality.
-- Do **not** modify the game PKG/update/saves or embed game binaries. Never commit uploaded `eboot.bin`, `Il2CppUserAssemblies.prx`, `global-metadata.dat`, full memory dumps or third-party game assets.
-- Avoid hard-coded absolute runtime addresses across sessions; validate module base and signed binaries before any hook.
-- A `NULL` `DebugConsole` instance has been observed; do not call its methods on that NULL pointer. The guard values were captured *after* Awake and must not be treated as confirmed values at invocation.
-- Implement and run tests, report PRX build outcome truthfully. Do not claim PS4 hardware behavior without user's confirmation.
-- GitHub Actions uses the official GoldHEN plugin template plus OpenOrbis on Linux. If the first CI build fails, debug the exact job logs, fix the workflow, and re-run.
-- Keep README status and installation instructions accurate. Offline/single-player testing first.
+- v0.3 no-hook probe loaded and allowed normal gameplay.
+- v0.5 GNM/VideoOut/Pad prototype left the game black while the shell stayed
+  responsive.
+- v0.6 passive_all detours caused a full PS4 lockup.
+- The user removed the experimental PRX and confirmed The Forest starts
+  normally again.
 
-## Known observations
+Do not request or recommend another PS4 test during the current architecture
+review. Do not install or publish hook-enabled v0.5/v0.6 PRXs.
 
-Read `docs/RESULTADO.md` for exact 1.15 addresses/offsets and limitations. The observed in-session IL2CPP base was `0x8029C000`; **this is not a universal fixed address**.
+## Primary current task (actual in-game menu, not a demo)
 
-## Deliverables
+The user wants a **real graphical Ultimate Mod Menu in The Forest on PS4**.
+See [`docs/CODEX_ACTUAL_INGAME_PRX_HANDOFF.md`](docs/CODEX_ACTUAL_INGAME_PRX_HANDOFF.md)
+and [`docs/INGAME_PRX_HOST_GATE_20261030.md`](docs/INGAME_PRX_HOST_GATE_20261030.md)
+for the latest scene-native `PlayMakerGUI.OnGUI` candidate, file hashes, safety
+gates and actual required deliverable. Continue authorized offline work
+autonomously; do not stop after each file to ask for confirmation. Avoid
+browser demos, standalone-only mockups, notification-only PRXs and GoldHEN
+cheat alternatives. Never claim a runnable in-game menu before its callback,
+ABI, teardown and platform-build requirements are verified. The PS4 hardware
+test and live hook installation remain subject to an explicit approval gate.
 
-- Reproducible CI that builds `theforest_ucm_probe.prx`.
-- Separate tests for the platform-independent menu state machine.
-- A clearly documented rollback path.
-- An incremental plan to convert the smoke test into a real Unity/IL2CPP overlay and controller menu, not a rebranding of GoldHEN cheats.
+## New offline proof: PlayMaker action vtable
+
+Read [`docs/PLAYMAKER_VIRTUAL_DISPATCH_20261030.md`](docs/PLAYMAKER_VIRTUAL_DISPATCH_20261030.md).
+The real `PlayMakerGUI.OnGUI` calls `CallOnGUI` twice; the method traverses
+existing PlayMaker actions, and the indirect call `*0x320(%rax)` matches
+`FsmStateAction.OnGUI` virtual slot 33. Slot 30 (OnEnter, `*0x2f0`)
+and slot 32 (OnUpdate, `*0x310`) provide independent corroboration.
+**This is NOT a safe external callback registration API or permission to
+patch global class vtables.** Investigate ownership and lifecycle before
+suggesting any PRX/injection architecture. Avoid re-running unrelated
+DebugConsole or web demo work.
+
+## Required engineering approach
+
+- This integration-research branch runs offline checks only. Do not build or
+  publish another notification-only PRX here. Any future hook-enabled PRX is
+  prohibited until the callback and teardown contract are independently proven.
+- The current GoldHEN Detour SDK copies x64 instructions without general
+  RIP-relative relocation, patches executable code without thread quiescence,
+  and exposes the patched entry before v0.6 publishes its original-call
+  pointer. See docs/SAFE_OVERLAY_DESIGN.md; distinguish evidence from
+  hypotheses.
+- No timeout followed by freeing a possibly active trampoline. Restore
+  failure, missing quiescence proof, or active leases must retain resources.
+  Do not use blocking waits on render, input, or teardown paths.
+- Investigate a documented Unity or GoldHEN render callback that avoids
+  patching shared system API entrypoints. Do not use the observed NULL
+  DebugConsole instance or invent addresses/IL2CPP flags.
+- Keep src/menu.*, src/overlay.*, and src/drawlist.* unchanged unless the user
+  asks for UI work. They are host-side menu and renderer logic, not a working
+  in-game overlay.
+- Keep src/unity_host_adapter.* and src/pad_input_map.* host-only. They define
+  and test an adapter boundary but do not implement a Unity or ScePad provider.
+- Keep original game binaries, metadata, and generated decompiler output
+  outside the repository. The offline analyzer must never upload those files.
+- **Authorization update (2026-10-31):** the owner explicitly authorized
+  modifying and rebuilding private working copies of the original CUSA12398
+  1.15 PKG and Unity assets for offline analysis. This does not authorize
+  installing a package, running hooks, writing console memory, or publishing
+  game binaries/assets. Preserve the original source and keep every generated
+  package and commercial asset outside GitHub.
+- src/bridge_lifecycle.* is host-test-only and must not be included in the
+  PRX build. The archived unsafe backends are for source review only.
+- Do not modify save files or unknown game flags, install packages, or commit
+  game binaries/assets. Do not claim CI is hardware verification.
+- **Offline-first PS4 testing:** follow the promotion rules below and in
+  `docs/PS4_OFFLINE_FIRST_TEST_POLICY.md`; do not use installations for generic
+  tooling or compatibility exploration.
+
+## Verification
+
+Run python3 scripts/assert-safe-build.py and SANITIZE=1 sh scripts/test.sh.
+The tests simulate lifecycle errors and concurrency; they do not prove the
+PS4/GoldHEN platform supplies the quiescence primitive required for safe
+unload or an in-game Unity callback.
+
+## Offline-first PS4 test promotion
+
+Follow [`docs/PS4_OFFLINE_FIRST_TEST_POLICY.md`](docs/PS4_OFFLINE_FIRST_TEST_POLICY.md).
+Do not use physical PKG installations to explore packaging tools or generic
+compatibility. A PS4 test may only be proposed for explicit owner review after
+the first graphical UCM package passes its offline gates, or for a demonstrably
+indispensable intermediate result whose direct next step is an already-built
+and audited graphical-menu package. `scripts/check_ps4_test_eligibility.py`
+checks this proposal gate; its result is never installation authorization.
+Before proposing any test, state the package function, offline evidence,
+PS4-only question, expected result, failure recovery, and whether the next step
+is the graphical menu. Never propose blank or notification-only packages.
+
+## Alternate implementation evidence
+
+The original IL2CPP metadata contains precompiled GUIBox, GUIButton, GUILabel, GUILayoutButton and GUILayoutToggle actions. The evidence and serialization limitations are recorded in docs/PLAYMAKER_PRECOMPILED_GUI_EVIDENCE.md and docs/PLAYMAKER_ACTIONDATA_LAYOUT.json. An isolated PlayMaker FSM may provide an in-game graphical host without a new AOT class, but its actual Unity serialization, lifecycle and controller support remain unverified. Existing CutSceneController FSM components must remain untouched. The owner has authorized private offline scene/PKG copies; do not create an installable candidate until the serialized object, dependencies and package audit gates pass. Continue safe offline research and tests autonomously.

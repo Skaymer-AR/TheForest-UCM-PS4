@@ -1,0 +1,1254 @@
+{
+  "action_field_signatures": {
+    "HutongGames.PlayMaker.Actions.GUIBox": [
+      {
+        "name": "image",
+        "type": "HutongGames.PlayMaker.FsmTexture"
+      },
+      {
+        "name": "text",
+        "type": "HutongGames.PlayMaker.FsmString"
+      },
+      {
+        "name": "tooltip",
+        "type": "HutongGames.PlayMaker.FsmString"
+      },
+      {
+        "name": "style",
+        "type": "HutongGames.PlayMaker.FsmString"
+      },
+      {
+        "name": "content",
+        "type": "UnityEngine.GUIContent"
+      },
+      {
+        "name": "screenRect",
+        "type": "HutongGames.PlayMaker.FsmRect"
+      },
+      {
+        "name": "left",
+        "type": "HutongGames.PlayMaker.FsmFloat"
+      },
+      {
+        "name": "top",
+        "type": "HutongGames.PlayMaker.FsmFloat"
+      },
+      {
+        "name": "width",
+        "type": "HutongGames.PlayMaker.FsmFloat"
+      },
+      {
+        "name": "height",
+        "type": "HutongGames.PlayMaker.FsmFloat"
+      },
+      {
+        "name": "normalized",
+        "type": "HutongGames.PlayMaker.FsmBool"
+      },
+      {
+        "name": "rect",
+        "type": "UnityEngine.Rect"
+      }
+    ],
+    "HutongGames.PlayMaker.Actions.GUIButton": [
+      {
+        "name": "sendEvent",
+        "type": "HutongGames.PlayMaker.FsmEvent"
+      },
+      {
+        "name": "storeButtonState",
+        "type": "HutongGames.PlayMaker.FsmBool"
+      },
+      {
+        "name": "image",
+        "type": "HutongGames.PlayMaker.FsmTexture"
+      },
+      {
+        "name": "text",
+        "type": "HutongGames.PlayMaker.FsmString"
+      },
+      {
+        "name": "tooltip",
+        "type": "HutongGames.PlayMaker.FsmString"
+      },
+      {
+        "name": "style",
+        "type": "HutongGames.PlayMaker.FsmString"
+      },
+      {
+        "name": "content",
+        "type": "UnityEngine.GUIContent"
+      },
+      {
+        "name": "screenRect",
+        "type": "HutongGames.PlayMaker.FsmRect"
+      },
+      {
+        "name": "left",
+        "type": "HutongGames.PlayMaker.FsmFloat"
+      },
+      {
+        "name": "top",
+        "type": "HutongGames.PlayMaker.FsmFloat"
+      },
+      {
+        "name": "width",
+        "type": "HutongGames.PlayMaker.FsmFloat"
+      },
+      {
+        "name": "height",
+        "type": "HutongGames.PlayMaker.FsmFloat"
+      },
+      {
+        "name": "normalized",
+        "type": "HutongGames.PlayMaker.FsmBool"
+      },
+      {
+        "name": "rect",
+        "type": "UnityEngine.Rect"
+      }
+    ],
+    "HutongGames.PlayMaker.Actions.GUILabel": [
+      {
+        "name": "image",
+        "type": "HutongGames.PlayMaker.FsmTexture"
+      },
+      {
+        "name": "text",
+        "type": "HutongGames.PlayMaker.FsmString"
+      },
+      {
+        "name": "tooltip",
+        "type": "HutongGames.PlayMaker.FsmString"
+      },
+      {
+        "name": "style",
+        "type": "HutongGames.PlayMaker.FsmString"
+      },
+      {
+        "name": "content",
+        "type": "UnityEngine.GUIContent"
+      },
+      {
+        "name": "screenRect",
+        "type": "HutongGames.PlayMaker.FsmRect"
+      },
+      {
+        "name": "left",
+        "type": "HutongGames.PlayMaker.FsmFloat"
+      },
+      {
+        "name": "top",
+        "type": "HutongGames.PlayMaker.FsmFloat"
+      },
+      {
+        "name": "width",
+        "type": "HutongGames.PlayMaker.FsmFloat"
+      },
+      {
+        "name": "height",
+        "type": "HutongGames.PlayMaker.FsmFloat"
+      },
+      {
+        "name": "normalized",
+        "type": "HutongGames.PlayMaker.FsmBool"
+      },
+      {
+        "name": "rect",
+        "type": "UnityEngine.Rect"
+      }
+    ],
+    "HutongGames.PlayMaker.Actions.GetButtonDown": [
+      {
+        "name": "buttonName",
+        "type": "HutongGames.PlayMaker.FsmString"
+      },
+      {
+        "name": "sendEvent",
+        "type": "HutongGames.PlayMaker.FsmEvent"
+      },
+      {
+        "name": "storeResult",
+        "type": "HutongGames.PlayMaker.FsmBool"
+      }
+    ],
+    "HutongGames.PlayMaker.Actions.SendEvent": [
+      {
+        "name": "eventTarget",
+        "type": "HutongGames.PlayMaker.FsmEventTarget"
+      },
+      {
+        "name": "sendEvent",
+        "type": "HutongGames.PlayMaker.FsmEvent"
+      },
+      {
+        "name": "delay",
+        "type": "HutongGames.PlayMaker.FsmFloat"
+      },
+      {
+        "name": "everyFrame",
+        "type": "System.Boolean"
+      },
+      {
+        "name": "delayedEvent",
+        "type": "HutongGames.PlayMaker.DelayedEvent"
+      }
+    ]
+  },
+  "cut_scene_controller_template_links": [
+    {
+      "component_fsm_name": "FSM",
+      "component_path_id": 223934,
+      "component_size": 14948,
+      "external_asset": "sharedassets2.assets",
+      "fsmTemplate_pointer": {
+        "file_id": 3,
+        "offset": 14936,
+        "path_id": 12112
+      },
+      "game_object_name": "CutSceneController",
+      "game_object_path_id": 40654,
+      "template": {
+        "category": "General",
+        "class_id": 114,
+        "embedded_fsm_name": "cutFSM",
+        "embedded_fsm_used_in_template_pointer": {
+          "file_id": 0,
+          "path_id": 12112
+        },
+        "name": "cutSceneController",
+        "path_id": 12112,
+        "script": "FsmTemplate",
+        "size": 15992,
+        "start_state": "init",
+        "state_count": 20
+      }
+    },
+    {
+      "component_fsm_name": "cameraFadeFSM",
+      "component_path_id": 223935,
+      "component_size": 1272,
+      "external_asset": "sharedassets2.assets",
+      "fsmTemplate_pointer": {
+        "file_id": 3,
+        "offset": 1260,
+        "path_id": 12111
+      },
+      "game_object_name": "CutSceneController",
+      "game_object_path_id": 40654,
+      "template": {
+        "category": "General",
+        "class_id": 114,
+        "embedded_fsm_name": "cameraFadeFSM",
+        "embedded_fsm_used_in_template_pointer": {
+          "file_id": 0,
+          "path_id": 12111
+        },
+        "name": "cameraFadeFSM",
+        "path_id": 12111,
+        "script": "FsmTemplate",
+        "size": 1288,
+        "start_state": "wait",
+        "state_count": 3
+      }
+    }
+  ],
+  "fsm": {
+    "events": [
+      {
+        "is_global": true,
+        "is_system_event": false,
+        "name": "off",
+        "offset": 1100
+      },
+      {
+        "is_global": true,
+        "is_system_event": false,
+        "name": "on",
+        "offset": 1116
+      }
+    ],
+    "fsm_template_pointer": {
+      "file_id": 3,
+      "offset": 1260,
+      "path_id": 12111
+    },
+    "global_transitions_count": 0,
+    "name": "cameraFadeFSM",
+    "name_offset": 44,
+    "opaque_fsm_tail": {
+      "offset": 1220,
+      "size": 40
+    },
+    "start_state": "wait",
+    "start_state_offset": 64,
+    "states": [
+      {
+        "action_data": {
+          "action_names": [],
+          "empty_sentinel_words": 27,
+          "offset": 204,
+          "parameters": [],
+          "size": 108
+        },
+        "breakpoint": false,
+        "color_index": 0,
+        "description": "",
+        "hide_unused": false,
+        "name": "wait",
+        "offset": 76,
+        "rect": [
+          205.0,
+          105.0,
+          100.0,
+          48.0
+        ],
+        "sequence": false,
+        "transitions": [
+          {
+            "color_index": 0,
+            "event": "off",
+            "event_offset": 124,
+            "is_global": true,
+            "is_system_event": false,
+            "link_constraint": 0,
+            "link_style": 0,
+            "to_state": "camOff",
+            "to_state_offset": 140
+          },
+          {
+            "color_index": 0,
+            "event": "on",
+            "event_offset": 164,
+            "is_global": true,
+            "is_system_event": false,
+            "link_constraint": 0,
+            "link_style": 0,
+            "to_state": "camOn",
+            "to_state_offset": 180
+          }
+        ]
+      },
+      {
+        "action_data": {
+          "action_names": [
+            "HutongGames.PlayMaker.Actions.CameraFadeIn"
+          ],
+          "array_param_sizes": [],
+          "array_param_types": [],
+          "byte_data_offset": 548,
+          "byte_data_size": 27,
+          "custom_names": [
+            ""
+          ],
+          "custom_type_names": [],
+          "custom_type_sizes": [],
+          "enabled": [
+            true
+          ],
+          "hash_codes_u32": [
+            3476969478
+          ],
+          "is_open": [
+            true
+          ],
+          "offset": 404,
+          "param_byte_data_sizes": [
+            17,
+            9,
+            0,
+            1
+          ],
+          "param_data_positions": [
+            0,
+            17,
+            26,
+            26
+          ],
+          "param_data_types": [
+            25,
+            15,
+            23,
+            1
+          ],
+          "param_names": [
+            "color",
+            "time",
+            "finishEvent",
+            "realTime"
+          ],
+          "parameters": [
+            {
+              "byte_data_offset": 548,
+              "byte_data_position": 0,
+              "byte_data_size": 17,
+              "name": "color",
+              "serialized_type_code": 25,
+              "type": "HutongGames.PlayMaker.FsmColor",
+              "value": {
+                "rgba": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "use_variable": false
+              }
+            },
+            {
+              "byte_data_offset": 565,
+              "byte_data_position": 17,
+              "byte_data_size": 9,
+              "name": "time",
+              "serialized_type_code": 15,
+              "type": "HutongGames.PlayMaker.FsmFloat",
+              "value": {
+                "use_variable": true,
+                "value": 0.0,
+                "variable_name": "time"
+              }
+            },
+            {
+              "byte_data_offset": 574,
+              "byte_data_position": 26,
+              "byte_data_size": 0,
+              "name": "finishEvent",
+              "serialized_type_code": 23,
+              "type": "HutongGames.PlayMaker.FsmEvent",
+              "value": {
+                "payload": "empty"
+              }
+            },
+            {
+              "byte_data_offset": 574,
+              "byte_data_position": 26,
+              "byte_data_size": 1,
+              "name": "realTime",
+              "serialized_type_code": 1,
+              "type": "System.Boolean",
+              "value": false
+            }
+          ],
+          "size": 300,
+          "specialized_parameter_arrays": {
+            "animationCurveParams": 0,
+            "fsmEventTargetParams": 0,
+            "fsmGameObjectParams": 0,
+            "fsmObjectParams": 0,
+            "fsmOwnerDefaultParams": 0,
+            "fsmPropertyParams": 0,
+            "fsmStringParams": 0,
+            "fsmTemplateControlParams": 0,
+            "fsmVarParams": 0,
+            "functionCallParams": 0,
+            "layoutOptionParams": 0,
+            "unityObjectParams": 0
+          },
+          "start_indices": [
+            0
+          ]
+        },
+        "breakpoint": false,
+        "color_index": 0,
+        "description": "",
+        "hide_unused": false,
+        "name": "camOn",
+        "offset": 312,
+        "rect": [
+          61.0,
+          287.0,
+          100.0,
+          32.0
+        ],
+        "sequence": false,
+        "transitions": [
+          {
+            "color_index": 0,
+            "event": "off",
+            "event_offset": 364,
+            "is_global": true,
+            "is_system_event": false,
+            "link_constraint": 0,
+            "link_style": 0,
+            "to_state": "camOff",
+            "to_state_offset": 380
+          }
+        ]
+      },
+      {
+        "action_data": {
+          "action_names": [
+            "HutongGames.PlayMaker.Actions.CameraFadeOut"
+          ],
+          "array_param_sizes": [],
+          "array_param_types": [],
+          "byte_data_offset": 940,
+          "byte_data_size": 27,
+          "custom_names": [
+            ""
+          ],
+          "custom_type_names": [],
+          "custom_type_sizes": [],
+          "enabled": [
+            true
+          ],
+          "hash_codes_u32": [
+            3476969478
+          ],
+          "is_open": [
+            true
+          ],
+          "offset": 796,
+          "param_byte_data_sizes": [
+            17,
+            9,
+            0,
+            1
+          ],
+          "param_data_positions": [
+            0,
+            17,
+            26,
+            26
+          ],
+          "param_data_types": [
+            25,
+            15,
+            23,
+            1
+          ],
+          "param_names": [
+            "color",
+            "time",
+            "finishEvent",
+            "realTime"
+          ],
+          "parameters": [
+            {
+              "byte_data_offset": 940,
+              "byte_data_position": 0,
+              "byte_data_size": 17,
+              "name": "color",
+              "serialized_type_code": 25,
+              "type": "HutongGames.PlayMaker.FsmColor",
+              "value": {
+                "rgba": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "use_variable": false
+              }
+            },
+            {
+              "byte_data_offset": 957,
+              "byte_data_position": 17,
+              "byte_data_size": 9,
+              "name": "time",
+              "serialized_type_code": 15,
+              "type": "HutongGames.PlayMaker.FsmFloat",
+              "value": {
+                "use_variable": true,
+                "value": 0.0,
+                "variable_name": "time"
+              }
+            },
+            {
+              "byte_data_offset": 966,
+              "byte_data_position": 26,
+              "byte_data_size": 0,
+              "name": "finishEvent",
+              "serialized_type_code": 23,
+              "type": "HutongGames.PlayMaker.FsmEvent",
+              "value": {
+                "payload": "empty"
+              }
+            },
+            {
+              "byte_data_offset": 966,
+              "byte_data_position": 26,
+              "byte_data_size": 1,
+              "name": "realTime",
+              "serialized_type_code": 1,
+              "type": "System.Boolean",
+              "value": false
+            }
+          ],
+          "size": 300,
+          "specialized_parameter_arrays": {
+            "animationCurveParams": 0,
+            "fsmEventTargetParams": 0,
+            "fsmGameObjectParams": 0,
+            "fsmObjectParams": 0,
+            "fsmOwnerDefaultParams": 0,
+            "fsmPropertyParams": 0,
+            "fsmStringParams": 0,
+            "fsmTemplateControlParams": 0,
+            "fsmVarParams": 0,
+            "functionCallParams": 0,
+            "layoutOptionParams": 0,
+            "unityObjectParams": 0
+          },
+          "start_indices": [
+            0
+          ]
+        },
+        "breakpoint": false,
+        "color_index": 0,
+        "description": "",
+        "hide_unused": false,
+        "name": "camOff",
+        "offset": 704,
+        "rect": [
+          384.0,
+          278.0,
+          100.0,
+          32.0
+        ],
+        "sequence": false,
+        "transitions": [
+          {
+            "color_index": 0,
+            "event": "on",
+            "event_offset": 756,
+            "is_global": true,
+            "is_system_event": false,
+            "link_constraint": 0,
+            "link_style": 0,
+            "to_state": "camOn",
+            "to_state_offset": 772
+          }
+        ]
+      }
+    ],
+    "used_in_template_pointer": {
+      "file_id": 0,
+      "path_id": 0
+    },
+    "variables": {
+      "empty_variable_arrays": {
+        "boolVariables": 0,
+        "colorVariables": 0,
+        "gameObjectVariables": 0,
+        "intVariables": 0,
+        "materialVariables": 0,
+        "objectVariables": 0,
+        "quaternionVariables": 0,
+        "rectVariables": 0,
+        "stringVariables": 0,
+        "textureVariables": 0,
+        "vector2Variables": 0,
+        "vector3Variables": 0
+      },
+      "float_variables": [
+        {
+          "name": "time",
+          "name_offset": 1144,
+          "reference_pointer": {
+            "file_id": 0,
+            "path_id": 0
+          },
+          "serialized_leading_word": 1,
+          "value": 2.0
+        }
+      ],
+      "global_variables_synced": false,
+      "offset": 1136,
+      "size": 84
+    }
+  },
+  "fsm_lifecycle_audit": {
+    "interpretation": [
+      "PlayMakerFSM.Awake enters Init; Init passes its embedded Fsm and component this pointer to Fsm.Init, which writes Fsm.owner at +0x10.",
+      "Fsm.Init assigns the owner to each FsmState and enters InitData; InitData calls ActionData.LoadActions and resolves serialized transition events.",
+      "FsmTemplate.OnEnable stores the template object in Fsm.usedInTemplate at +0x18; this field is distinct from Fsm.owner.",
+      "PlayMakerFSM.SetFsmTemplate resets and reinitializes its Fsm; Start, OnEnable, OnDisable and OnDestroy delegate to Fsm lifecycle methods.",
+      "CallOnGUI reads Fsm.activeState and resolves by Fsm.activeStateName if absent.",
+      "FsmState.get_Actions lazily materializes FsmState.actions from serialized actionData.",
+      "CallOnGUI dispatches virtual OnGUI only for existing FsmStateAction objects whose active byte at +0x1A is nonzero.",
+      "FsmState.ActivateActions checks enabled at +0x18, adds enabled actions to activeActions, invokes virtual Init at slot 26 and OnEnter at slot 30, and sets active at +0x1A.",
+      "FsmState.set_Actions is a raw pointer assignment to the actions field; it does not initialize or attach the supplied action array.",
+      "OnDisable can clear PlayMakerGUI singleton; PlayMakerFSM.OnDestroy uses a list-removal call.",
+      "Changing an actions array or class vtable is not a registered external extension mechanism.",
+      "No runnable safe PRX callback or unload protocol was demonstrated."
+    ],
+    "managed_field_offsets": {
+      "FsmTemplate": {
+        "offsets": {
+          "category": 24,
+          "fsm": 32
+        },
+        "type_definition": 4435
+      },
+      "HutongGames.PlayMaker.Fsm": {
+        "offsets": {
+          "activeState": 216,
+          "activeStateName": 208,
+          "handleOnGUI": 255,
+          "owner": 16,
+          "usedInTemplate": 24
+        },
+        "type_definition": 4459
+      },
+      "HutongGames.PlayMaker.FsmState": {
+        "offsets": {
+          "actionData": 104,
+          "actions": 96,
+          "activeActions": 112
+        },
+        "type_definition": 4464
+      },
+      "PlayMakerFSM": {
+        "offsets": {
+          "fsm": 24,
+          "fsmList": 0,
+          "fsmTemplate": 32
+        },
+        "type_definition": 4483
+      },
+      "PlayMakerGUI": {
+        "offsets": {
+          "SortedFsmList": 24,
+          "fsmList": 0,
+          "instance": 48
+        },
+        "type_definition": 4485
+      }
+    },
+    "metadata_sha256": "238c400de31e28ed4f7f14e7781ea3b33de0d0bd6964ded680d78fce1d85a6c3",
+    "module_sha256": "0159ff61c99d25c8f0a821070e3d8b24aff58dbbe5429b8f29561f9960d02969",
+    "native_methods": {
+      "FsmTemplate.OnEnable": {
+        "link_va": "0x10ec780",
+        "method_index": 30651
+      },
+      "HutongGames.PlayMaker.ActionData.CreateAction": {
+        "link_va": "0x10f2d80",
+        "method_index": 30681
+      },
+      "HutongGames.PlayMaker.ActionData.LoadActions": {
+        "link_va": "0x10f2a20",
+        "method_index": 30680
+      },
+      "HutongGames.PlayMaker.Fsm.Init": {
+        "link_va": "0x1120e50",
+        "method_index": 30888
+      },
+      "HutongGames.PlayMaker.Fsm.InitData": {
+        "link_va": "0x1120f80",
+        "method_index": 30890
+      },
+      "HutongGames.PlayMaker.Fsm.OnDestroy": {
+        "link_va": "0x1127930",
+        "method_index": 30960
+      },
+      "HutongGames.PlayMaker.Fsm.OnEnable": {
+        "link_va": "0x1122c40",
+        "method_index": 30891
+      },
+      "HutongGames.PlayMaker.Fsm.Start": {
+        "link_va": "0x111b930",
+        "method_index": 30892
+      },
+      "HutongGames.PlayMaker.Fsm.Stop": {
+        "link_va": "0x11246a0",
+        "method_index": 30899
+      },
+      "HutongGames.PlayMaker.FsmState.ActivateActions": {
+        "link_va": "0x1118a30",
+        "method_index": 31225
+      },
+      "HutongGames.PlayMaker.FsmState.LoadActions": {
+        "link_va": "0x1122c00",
+        "method_index": 31221
+      },
+      "HutongGames.PlayMaker.FsmState.OnGUI": {
+        "link_va": "0x11276c0",
+        "method_index": 31236
+      },
+      "HutongGames.PlayMaker.FsmState.get_Actions": {
+        "link_va": "0x1118d30",
+        "method_index": 31259
+      },
+      "HutongGames.PlayMaker.FsmState.set_Actions": {
+        "link_va": "0x11305b0",
+        "method_index": 31260
+      },
+      "HutongGames.PlayMaker.FsmStateAction.get_Active": {
+        "link_va": "0x1127490",
+        "method_index": 31309
+      },
+      "HutongGames.PlayMaker.FsmStateAction.get_Enabled": {
+        "link_va": "0x1113490",
+        "method_index": 31301
+      },
+      "PlayMakerFSM.Awake": {
+        "link_va": "0x1139a80",
+        "method_index": 31605
+      },
+      "PlayMakerFSM.Init": {
+        "link_va": "0x1139a90",
+        "method_index": 31606
+      },
+      "PlayMakerFSM.OnDestroy": {
+        "link_va": "0x113b200",
+        "method_index": 31613
+      },
+      "PlayMakerFSM.OnDisable": {
+        "link_va": "0x113b130",
+        "method_index": 31612
+      },
+      "PlayMakerFSM.OnEnable": {
+        "link_va": "0x113afd0",
+        "method_index": 31609
+      },
+      "PlayMakerFSM.SetFsmTemplate": {
+        "link_va": "0x113ade0",
+        "method_index": 31607
+      },
+      "PlayMakerFSM.Start": {
+        "link_va": "0x113af50",
+        "method_index": 31608
+      },
+      "PlayMakerGUI.CallOnGUI": {
+        "link_va": "0x1141320",
+        "method_index": 31675
+      },
+      "PlayMakerGUI.OnDisable": {
+        "link_va": "0x1141550",
+        "method_index": 31676
+      },
+      "PlayMakerGUI.OnGUI": {
+        "link_va": "0x113faf0",
+        "method_index": 31674
+      }
+    },
+    "title": "The Forest CUSA12398 1.15",
+    "verified_native_instruction_sites": {
+      "action_active_check": "0x114138e",
+      "action_active_property_read": "0x1127490",
+      "action_active_set_by_activation": "0x1118b7d",
+      "action_enabled_filter": "0x1118aa0",
+      "action_enabled_property_read": "0x1113490",
+      "action_init_virtual_slot_26": "0x1118b8d",
+      "action_onenter_virtual_slot_30": "0x1118ba4",
+      "actions_array_read": "0x1118dbe",
+      "actions_array_write": "0x1122c1a",
+      "active_state_cache_write": "0x1141507",
+      "active_state_lookup": "0x11414ff",
+      "active_state_name_read": "0x11413bf",
+      "active_state_read": "0x1141351",
+      "fsm_init_assigns_states": "0x1120f4d",
+      "fsm_init_stores_owner_component": "0x1120e7b",
+      "fsm_init_tailcalls_initdata": "0x1120f6b",
+      "fsm_initdata_loads_serialized_actions": "0x1121620",
+      "fsm_removal_dispatch": "0x113b296",
+      "fsm_template_onenable_sets_used_in_template": "0x10ec780",
+      "get_actions_call": "0x114135d",
+      "on_gui_virtual_dispatch": "0x114139e",
+      "playmaker_fsm_awake_tailcalls_init": "0x1139a80",
+      "playmaker_fsm_init_passes_component_to_fsm_init": "0x1139d82",
+      "playmaker_fsm_ondestroy_calls_fsm_ondestroy": "0x113b2ab",
+      "playmaker_fsm_ondisable_stops_fsm": "0x113b1ef",
+      "playmaker_fsm_onenable_calls_fsm_onenable": "0x113b08f",
+      "playmaker_fsm_set_template_reruns_init": "0x113af39",
+      "playmaker_fsm_set_template_resets_fsm": "0x113af29",
+      "playmaker_fsm_start_calls_fsm_start": "0x113afb9",
+      "serialized_action_data_read": "0x1122c09",
+      "set_actions_raw_pointer": "0x11305b0",
+      "singleton_clear": "0x1141637"
+    }
+  },
+  "limitations": [
+    "the parser supports only the pinned zero-action sentinel and one-action ActionData encoding",
+    "specialized nonempty ActionData reference arrays and Fsm.globalTransitions are rejected",
+    "cameraFadeFSM floatVariables are decoded narrowly; 40 remaining Fsm bytes are opaque",
+    "PlayMakerFSM.fsmTemplate is decoded as a trailing PPtr; it does not prove runtime loading or registration",
+    "sharedassets2's 13 prefab PlayMakerFSM components are serialized inline and have null fsmTemplate pointers",
+    "no scene, PKG, ELF, metadata, PRX, or console state was modified",
+    "a structurally valid graph does not prove runtime creation, activation, focus, rendering, or teardown"
+  ],
+  "playmaker_serialized_fields": {
+    "Fsm": [
+      {
+        "name": "owner",
+        "type": "UnityEngine.MonoBehaviour"
+      },
+      {
+        "name": "usedInTemplate",
+        "type": "FsmTemplate"
+      },
+      {
+        "name": "name",
+        "type": "System.String"
+      },
+      {
+        "name": "startState",
+        "type": "System.String"
+      }
+    ],
+    "FsmTemplate": [
+      {
+        "name": "category",
+        "type": "System.String"
+      },
+      {
+        "name": "fsm",
+        "type": "HutongGames.PlayMaker.Fsm"
+      }
+    ],
+    "PlayMakerFSM": [
+      {
+        "name": "fsm",
+        "type": "HutongGames.PlayMaker.Fsm"
+      },
+      {
+        "name": "fsmTemplate",
+        "type": "FsmTemplate"
+      }
+    ]
+  },
+  "precompiled_action_audit": {
+    "GUIBox": {
+      "link_va": "0x2383880",
+      "type_definition": 9459,
+      "virtual_slot": 33
+    },
+    "GUIButton": {
+      "link_va": "0x2383d30",
+      "type_definition": 9460,
+      "virtual_slot": 33
+    },
+    "GUILabel": {
+      "link_va": "0x2384a20",
+      "type_definition": 9464,
+      "virtual_slot": 33
+    },
+    "GetButtonDown": {
+      "callback": "OnUpdate",
+      "fields": {
+        "buttonName": 64,
+        "sendEvent": 72,
+        "storeResult": 80
+      },
+      "link_va": "0x25374d0",
+      "virtual_slot": 32
+    },
+    "SendEvent": {
+      "callback": "OnEnter",
+      "link_va": "0x23405a0",
+      "virtual_slot": 30
+    }
+  },
+  "sharedassets2_embedded_fsm_inventory": {
+    "PlayMakerFSM_components": 13,
+    "null_fsmTemplate_pointers": 13
+  },
+  "source_hashes": {
+    "globalgamemanagers": "2518dad0f38f6357276d1e33b4653a907df82dc8b0eb56450b49cb3eb86af2a8",
+    "level2": "99fce056f65647f62ba52d9957317b4ed876e600f854f12e65a20897d37c396d",
+    "metadata": "238c400de31e28ed4f7f14e7781ea3b33de0d0bd6964ded680d78fce1d85a6c3",
+    "module": "0159ff61c99d25c8f0a821070e3d8b24aff58dbbe5429b8f29561f9960d02969",
+    "sharedassets2": "806d65aa19fd86cbd20ac8cb3f7e5a11cd6a4bd9c9438f0e243b38580303c105"
+  },
+  "source_object": {
+    "component_path_id": 223935,
+    "component_size": 1272,
+    "enabled": true,
+    "fsmTemplate_pointer": {
+      "file_id": 3,
+      "offset": 1260,
+      "path_id": 12111
+    },
+    "fsmTemplate_template": {
+      "category": "General",
+      "class_id": 114,
+      "embedded_fsm_name": "cameraFadeFSM",
+      "embedded_fsm_used_in_template_pointer": {
+        "file_id": 0,
+        "path_id": 12111
+      },
+      "name": "cameraFadeFSM",
+      "path_id": 12111,
+      "script": "FsmTemplate",
+      "size": 1288,
+      "start_state": "wait",
+      "state_count": 3
+    },
+    "fsm_used_in_template_pointer_is_null_in_component": true,
+    "fsm_used_in_template_pointer_serialized": {
+      "file_id": 0,
+      "path_id": 0
+    },
+    "game_object_active": true,
+    "game_object_name": "CutSceneController",
+    "game_object_path_id": 40654,
+    "owner_assignment_path_verified_in_native_code": true,
+    "script": "PlayMakerFSM"
+  },
+  "synthetic_menu_graph": {
+    "actions": 6,
+    "events": 3,
+    "input_binding_verified": false,
+    "limitations": [
+      "normalized graph only; no Unity ActionData bytes were generated",
+      "some AOT metadata fields remain unmodeled; FsmEventTarget Self is symbolic and its serialized payload is not verified",
+      "MenuToggle has no serialized DS4 binding in the inspected defaults",
+      "runtime player, active manager, focus, lifecycle, and component registration are unverified"
+    ],
+    "states": 2,
+    "transitions": 2,
+    "unmodeled_metadata_fields": {
+      "GUIBox": [
+        "content",
+        "image",
+        "rect",
+        "screenRect",
+        "style",
+        "tooltip"
+      ],
+      "GUIButton": [
+        "content",
+        "image",
+        "rect",
+        "screenRect",
+        "style",
+        "tooltip"
+      ],
+      "GUILabel": [
+        "content",
+        "image",
+        "rect",
+        "screenRect",
+        "style",
+        "tooltip"
+      ],
+      "SendEvent": [
+        "delayedEvent"
+      ]
+    },
+    "validated": true
+  },
+  "synthetic_menu_graph_model": {
+    "events": [
+      "Open",
+      "Close",
+      "MenuVisible"
+    ],
+    "input_assumption": {
+      "binding_status": "no serialized DS4 ActionElementMap in the inspected defaults",
+      "reserved_chord": "none; L1+R1 overlaps serialized gameplay/menu defaults",
+      "rewired_action": "MenuToggle",
+      "runtime_player_manager_focus_verified": false
+    },
+    "name": "UCM_Menu_Synthetic",
+    "start_state": "Closed",
+    "states": [
+      {
+        "actions": [
+          {
+            "fields": {
+              "buttonName": {
+                "type": "HutongGames.PlayMaker.FsmString",
+                "value": "MenuToggle"
+              },
+              "sendEvent": {
+                "type": "HutongGames.PlayMaker.FsmEvent",
+                "value": "Open"
+              },
+              "storeResult": {
+                "type": "HutongGames.PlayMaker.FsmBool",
+                "value": false
+              }
+            },
+            "type": "HutongGames.PlayMaker.Actions.GetButtonDown"
+          }
+        ],
+        "name": "Closed",
+        "transitions": [
+          {
+            "event": "Open",
+            "to_state": "Main"
+          }
+        ]
+      },
+      {
+        "actions": [
+          {
+            "fields": {
+              "height": {
+                "type": "HutongGames.PlayMaker.FsmFloat",
+                "value": 420.0
+              },
+              "left": {
+                "type": "HutongGames.PlayMaker.FsmFloat",
+                "value": 80.0
+              },
+              "normalized": {
+                "type": "HutongGames.PlayMaker.FsmBool",
+                "value": false
+              },
+              "text": {
+                "type": "HutongGames.PlayMaker.FsmString",
+                "value": "Ultimate Mod Menu"
+              },
+              "top": {
+                "type": "HutongGames.PlayMaker.FsmFloat",
+                "value": 60.0
+              },
+              "width": {
+                "type": "HutongGames.PlayMaker.FsmFloat",
+                "value": 560.0
+              }
+            },
+            "type": "HutongGames.PlayMaker.Actions.GUIBox"
+          },
+          {
+            "fields": {
+              "height": {
+                "type": "HutongGames.PlayMaker.FsmFloat",
+                "value": 48.0
+              },
+              "left": {
+                "type": "HutongGames.PlayMaker.FsmFloat",
+                "value": 100.0
+              },
+              "normalized": {
+                "type": "HutongGames.PlayMaker.FsmBool",
+                "value": false
+              },
+              "text": {
+                "type": "HutongGames.PlayMaker.FsmString",
+                "value": "UCM menu"
+              },
+              "top": {
+                "type": "HutongGames.PlayMaker.FsmFloat",
+                "value": 80.0
+              },
+              "width": {
+                "type": "HutongGames.PlayMaker.FsmFloat",
+                "value": 520.0
+              }
+            },
+            "type": "HutongGames.PlayMaker.Actions.GUILabel"
+          },
+          {
+            "fields": {
+              "height": {
+                "type": "HutongGames.PlayMaker.FsmFloat",
+                "value": 40.0
+              },
+              "left": {
+                "type": "HutongGames.PlayMaker.FsmFloat",
+                "value": 500.0
+              },
+              "normalized": {
+                "type": "HutongGames.PlayMaker.FsmBool",
+                "value": false
+              },
+              "sendEvent": {
+                "type": "HutongGames.PlayMaker.FsmEvent",
+                "value": "Close"
+              },
+              "storeButtonState": {
+                "type": "HutongGames.PlayMaker.FsmBool",
+                "value": false
+              },
+              "text": {
+                "type": "HutongGames.PlayMaker.FsmString",
+                "value": "Close"
+              },
+              "top": {
+                "type": "HutongGames.PlayMaker.FsmFloat",
+                "value": 420.0
+              },
+              "width": {
+                "type": "HutongGames.PlayMaker.FsmFloat",
+                "value": 100.0
+              }
+            },
+            "type": "HutongGames.PlayMaker.Actions.GUIButton"
+          },
+          {
+            "fields": {
+              "buttonName": {
+                "type": "HutongGames.PlayMaker.FsmString",
+                "value": "MenuToggle"
+              },
+              "sendEvent": {
+                "type": "HutongGames.PlayMaker.FsmEvent",
+                "value": "Close"
+              },
+              "storeResult": {
+                "type": "HutongGames.PlayMaker.FsmBool",
+                "value": false
+              }
+            },
+            "type": "HutongGames.PlayMaker.Actions.GetButtonDown"
+          },
+          {
+            "fields": {
+              "delay": {
+                "type": "HutongGames.PlayMaker.FsmFloat",
+                "value": 0.0
+              },
+              "eventTarget": {
+                "type": "HutongGames.PlayMaker.FsmEventTarget",
+                "value": {
+                  "serialization_verified": false,
+                  "symbolic_target": "Self"
+                }
+              },
+              "everyFrame": {
+                "type": "System.Boolean",
+                "value": false
+              },
+              "sendEvent": {
+                "type": "HutongGames.PlayMaker.FsmEvent",
+                "value": "MenuVisible"
+              }
+            },
+            "type": "HutongGames.PlayMaker.Actions.SendEvent"
+          }
+        ],
+        "name": "Main",
+        "transitions": [
+          {
+            "event": "Close",
+            "to_state": "Closed"
+          }
+        ]
+      }
+    ]
+  },
+  "template_comparison": {
+    "component_fsm_used_in_template_pointer": {
+      "file_id": 0,
+      "path_id": 0
+    },
+    "component_graph_matches_embedded_template_ignoring_editor_rectangles": true,
+    "state_layout_rectangles_differ": [
+      {
+        "component": [
+          205.0,
+          105.0,
+          100.0,
+          48.0
+        ],
+        "state": "wait",
+        "template": [
+          216.0,
+          106.0,
+          100.0,
+          48.0
+        ]
+      }
+    ],
+    "template_fsm_used_in_template_pointer": {
+      "file_id": 0,
+      "path_id": 12111
+    }
+  },
+  "title": "The Forest PS4 CUSA12398 v1.15"
+}

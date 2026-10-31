@@ -1,54 +1,118 @@
-# The Forest UCM PS4 — research and build
+# The Forest UCM PS4
 
-**Target:** The Forest PS4 **CUSA12398 v1.15**, GoldHEN, offline testing.
+## Estado
 
-The first milestone is a **GoldHEN PRX load probe**, not a finished menu. Its purpose is to verify that a game-specific plugin loads and shows a notification. It installs **no hooks**, writes **no game RAM**, invokes **no Unity functions**, and changes **no PKG or saves**.
+Objetivo: The Forest CUSA12398 v1.15, PS4 con firmware 12.02 y GoldHEN 2.4B18.9.
+La consola vuelve a iniciar el juego normalmente después de retirar el PRX
+experimental. No se solicita instalar ni probar otro PRX en esta etapa.
 
-## Current state
+Los hooks de v0.5/v0.6 causaron una pantalla negra y un bloqueo completo,
+respectivamente. El disparador exacto no quedó identificado. No instales ni
+recomiendes esos artifacts históricos.
 
-- Verified on user's PS4: `Il2CppUserAssemblies.prx` was readable, and the code bytes at `DebugConsole.ToggleConsole` and `DebugConsole.OnGUI` matched the offline analysis.
-- Read-only pointer chain ended in a **NULL DebugConsole instance** in both the world and main menu.
-- The two observed `Awake` guard values were `00`, but they were read **after** initialization; this does not prove their values at entry.
-- Portable menu navigation core passes a local C99 test.
-- **PRX build and real-console plugin loading remain unverified.** Never call `ToggleConsole` on NULL or flip unknown guard bytes blindly.
+El código de menú, categorías, navegación y draw-list continúa en `src/`.
+`src/unity_host_adapter.*` y `src/pad_input_map.*` son prototipos host-only: no
+llaman a Unity ni a ScePad y no están incluidos en el PRX. Aún no hay un
+callback de Unity verificado y accesible desde GoldHEN, ni un handle DS4 cuya
+coexistencia con el juego esté validada. Las acciones de gameplay siguen sin
+implementación comprobada.
 
-## Local test on macOS Catalina
+## Investigación IL2CPP offline
+
+Los SELF de la extracción actual se pudieron recuperar offline: sus payloads
+no están cifrados/comprimidos. Ambos ELF reconstruidos coinciden íntegramente
+con los anteriores y los 42 prefijos se comprobaron independientemente contra
+el módulo actual. Las dos confirmaciones históricas de RAM siguen separadas
+de esta comparación offline. El análisis de las llamadas, ABI y contexto está en
+[`docs/PS4_IL2CPP_ANALYSIS.md`](docs/PS4_IL2CPP_ANALYSIS.md). Los analizadores
+[`scripts/analyze_ps4_il2cpp_candidates.py`](scripts/analyze_ps4_il2cpp_candidates.py)
+y [`scripts/analyze_disassembly_report.py`](scripts/analyze_disassembly_report.py)
+procesan copias locales sin subirlas.
+
+La [propuesta AOT](docs/AOT_INTEGRATION_PROPOSAL.md) identifica el registro
+nativo real y el pipeline necesario para crear un componente propio en Unity.
+`scripts/unwrap_plain_self.py` recupera únicamente layouts plaintext soportados;
+`scripts/inspect_aot_registration.py` comprueba tablas v23 y presencia del host.
+El build original todavía no incluye nuestro componente. Falta un pipeline
+reproducible del título antes de poder proponer una integración de paquete.
+
+El ELF original, metadatos y dumps generados deben permanecer fuera del
+repositorio. Las herramientas no escriben en el juego ni habilitan hooks. Nunca
+usan direcciones RAM de una sesión previa.
+
+## Unity AOT prototype and asset inventory (offline)
+
+The repository now includes a **separate Unity 5.6-oriented C# prototype** under
+[`prototype/Unity56/`](prototype/Unity56/README.md). It implements a
+`MonoBehaviour` bootstrap, `Update` input snapshot boundary and Unity IMGUI
+`OnGUI` panel with the same 13 menu entries as the original C core. The
+C# model is tested with Mono and synthetic Unity API stubs in GitHub Actions.
+**It has not been compiled inside The Forest or against the PS4 runtime.**
+Gameplay-changing entries remain disabled until their game API integration is
+proved, and no Rewired/DS4 action IDs have been guessed.
+
+The read-only [Unity asset inventory](docs/UNITY_ASSET_TRIAGE.md) and
+[`scripts/inventory_unity_assets.py`](scripts/inventory_unity_assets.py)
+select likely Player/scene/bundle paths from a saved private PKG file listing.
+The private PKG parts were reconstructed, but local PFS extraction remains
+blocked by a missing private key. The six required Unity assets were later
+verified from user-provided ZIPs and inspected offline.
+The serialized Player version is **5.6.6f2** and all **30 build-scene paths**
+are verified in [the asset evidence report](docs/UNITY_PLAYER_ASSETS_20261030.md).
+Serialized Rewired `ControllerMap` / `ActionElementMap` DS4 bindings are now
+decoded in [`docs/REWIRED_CONTROLLER_MAPS_20261030.md`](docs/REWIRED_CONTROLLER_MAPS_20261030.md).
+The active runtime Player, connected DS4, selected manager/maps, input focus,
+input consumption and callable retail bootstrap **remain unverified**.
+Neither workflow modifies the PKG or publishes proprietary game assets.
+
+## Rewired scene graph and native prefab selection (verified offline)
+
+The current [Rewired scene/prefab investigation](docs/REWIRED_SCENE_GRAPH_20261030.md)
+parses Unity object and script references, not just strings: the start,
+title, and gameplay `RewiredSpawner` components all point to two input
+prefabs in `sharedassets0.assets`. Verified native metadata names both
+prefab fields; `InstanceManager` accesses the XInput field and
+`InstanceVRManager` accesses the VR field. The built-in Rewired action
+catalogs differ (`Select` is 57 in VR and 58 in XInput). These are action
+IDs, **not** known DualShock 4 button bindings.
+
+[`scripts/inspect_unity_rewired_assets.py`](scripts/inspect_unity_rewired_assets.py)
+regenerates the evidence read-only from **private** Unity 5.6.6f2 assets.
+The 5 input files and original game binaries are never committed; the CI
+uses synthetic serialized fixtures. No gameplay controls, hook or PKG
+build has been enabled.
+
+## Visual PS4 browser trial (zero game modification)
+
+For a **first look on physical PS4 hardware**, there is a self-contained
+[browser-only graphical demo](prototype/ps4-browser/index.html) with
+[Mac LAN-server instructions](prototype/ps4-browser/README.md).
+It mirrors all **10 categories / 13 existing C menu items**; only local
+UI-only commands work. Sony's PS4 browser supports cursor, click and D-pad
+keyboard events but **does not expose individual DualShock 4 buttons** to
+web pages. Consequently it cannot test L1+R1, true Rewired input, or actual
+in-game drawing. The browser demo is **not** an alternative architecture for
+the retail game: Unity IL2CPP AOT code registration is still blocked without
+the original or reproducible title build pipeline.
+
+No PKG, PRX or source-level hooks are built or installed by this demo.
+GitHub Actions runs the passive ES5 menu tests and enforces matching item
+IDs with the current C menu core.
+
+## Pruebas host
 
 ```sh
-clang -std=c99 -Wall -Wextra -Werror -Isrc src/menu.c tests/test_menu.c -o /tmp/theforest_menu_tests
-/tmp/theforest_menu_tests
+python3 scripts/assert-safe-build.py
+SANITIZE=1 sh scripts/test.sh
 ```
 
-The code is ordinary C99 and uses no third-party dependencies for these tests.
+Las pruebas cubren el menú, el mapper DS4, el contrato del adaptador host,
+fallos de registro/desregistro, concurrencia, y el parser con datos sintéticos.
+No prueban el juego ni el runtime PS4.
 
-## Build a PRX on GitHub Actions
+GitHub Actions ejecuta únicamente verificaciones y pruebas offline. Esta rama
+no compila ni publica un PRX de notificación. El source v0.8 y su script de
+build se conservan para revisión, pero no son el objetivo del flujo actual.
 
-Open **Actions** → **Test and build The Forest PS4 diagnostic PRX** → **Run workflow** on `main`. A push to code/workflow files also triggers the build. On success, download the artifact named `theforest-ucm-probe-prx`. It is expected to contain `theforest_ucm_probe.prx`.
-
-The workflow uses OpenOrbis, LLVM and the official GoldHEN plugin template in Linux. The end-to-end build has not yet been verified; if it fails, inspect the specific GitHub Actions step.
-
-## Install the probe on your PS4 (only after successful build)
-
-1. Back up `/data/GoldHEN/plugins.ini` with FTP.
-2. Copy the built `theforest_ucm_probe.prx` to `/data/GoldHEN/plugins/`.
-3. Under the **existing** `[CUSA12398]` section in `plugins.ini`, append:
-   `/data/GoldHEN/plugins/theforest_ucm_probe.prx`
-4. Ensure GoldHEN plugin loading is enabled. Launch The Forest **offline**.
-5. Look for the single startup notification. If the game does not load, remove the added INI line and restart; keep the original INI backup.
-
-Do not install another experimental plugin simultaneously.
-
-## Roadmap
-
-1. Verify safe PRX loading (no hooks).
-2. Instrument `DebugConsole.Awake` **read-only** at invocation time, after validating module base and method ABI.
-3. Add an in-game overlay and DualShock 4 navigation.
-4. Integrate independently verified game actions one by one.
-
-## References
-
-- [GoldHEN Plugins SDK](https://github.com/GoldHEN/GoldHEN_Plugins_SDK)
-- [GoldHEN official plugins and templates](https://github.com/GoldHEN/GoldHEN_Plugins_Repository)
-- [OpenOrbis PS4 toolchain](https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain)
-
-Do not commit game binaries, copyrighted game assets or third-party mod payloads. The source project is separate from private game files and research data.
+No se modifican PKG, partidas, framebuffer, flags desconocidos ni direcciones
+absolutas de sesiones anteriores.
