@@ -12,7 +12,8 @@ an input to this workflow.
 - AssetsTools.NET: NuGet `3.0.5`, fixed in
   `tools/UnityFormat17Validator/UnityFormat17Validator.csproj`.
   NuGet lists no dependencies for its `netstandard2.0` target, which is the
-  target consumed by this `net10.0` validator.
+  target consumed by this `net10.0` validator. NuGet listed `3.0.5` as the
+  latest stable package on 2026-10-31 (updated 2026-07-22).
 - Unity class database: `classdata.tpk` extracted from the Linux UABEA v8
   release archive. CI verifies the archive SHA-256
   `c542dd3b5b091b34645ee1c7180df7138f9f3fe5253222f151d7185e542402b2` and
@@ -45,6 +46,19 @@ scale values and a root hierarchy. The MonoBehaviour contains only the Unity
 base fields understood by this fixture and a synthetic MonoScript reference.
 It intentionally has no PlayMaker payload and does not encode or guess the
 unresolved 40-byte `Fsm` tail.
+
+## MonoScript class database schema
+
+The independently downloaded UABEA v8 `classdata.tpk`, loaded for Unity
+`5.6.6f2`, reports this `MonoScript` field order: `m_Name`,
+`m_ExecutionOrder`, `m_PropertiesHash` (16 bytes), `m_ClassName`,
+`m_Namespace`, `m_AssemblyName`, and the final `m_IsEditorScript` boolean.
+The first AssetsTools.NET run exposed an omitted terminal boolean in the initial
+synthetic payload as `EndOfStreamException` while reading `m_IsEditorScript`.
+The fixture now serializes that byte as `false`; the independent reader checks
+the field, while the Python reader rejects a missing/invalid flag or trailing
+bytes. This schema evidence comes from the pinned class database and is limited
+to its Unity 5.6.6f2 entry; it does not identify a PlayMaker package version.
 
 ## Automated validation
 

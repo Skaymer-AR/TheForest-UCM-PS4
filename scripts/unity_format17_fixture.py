@@ -146,7 +146,7 @@ def build_fixture(output_dir: Path) -> dict[str, object]:
     library, library_offsets = _asset_bytes([
         (MONOSCRIPT_ID, 115,
          _string("SyntheticHost") + bytes(20) + _string("SyntheticHost") +
-         _string("FixtureOnly") + _string("FixtureOnly.dll")),
+         _string("FixtureOnly") + _string("FixtureOnly.dll") + b"\0"),
     ])
     scene, scene_offsets = _asset_bytes([
         (GAMEOBJECT_ID, 1, _gameobject(

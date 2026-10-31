@@ -130,10 +130,6 @@ internal static class Program
         if (!ReferenceEquals(dependency.file, library.file))
             throw new InvalidDataException("external dependency resolved to the wrong file");
         Console.WriteLine("Deserializing external MonoScript");
-        AssetTypeTemplateField scriptTemplate = manager.GetTemplateBaseField(dependency, scriptInfo)
-            ?? throw new InvalidDataException("classdata.tpk has no MonoScript template");
-        Console.WriteLine($"MonoScript object bytes: {scriptInfo.ByteSize}");
-        PrintTemplate(scriptTemplate, 0);
         AssetTypeValueField script = manager.GetBaseField(dependency, scriptInfo);
         string scriptClass = Field(script, "m_ClassName").AsString;
         string scriptNamespace = Field(script, "m_Namespace").AsString;
@@ -141,6 +137,8 @@ internal static class Program
         if (scriptClass != "SyntheticHost" || scriptNamespace != "FixtureOnly" ||
             scriptAssembly != "FixtureOnly.dll")
             throw new InvalidDataException("external MonoScript schema fields mismatch");
+        if (Field(script, "m_IsEditorScript").AsBool)
+            throw new InvalidDataException("fixture MonoScript editor flag is unexpectedly set");
 
         var graph = new Graph(gameObjectName, components.Children.Count,
             scene.file.Metadata.AssetInfos.Count, library.file.Metadata.AssetInfos.Count,
@@ -231,11 +229,4 @@ internal static class Program
             throw new InvalidDataException($"{label} mismatch: {actual} != {expected}");
     }
 
-    private static void PrintTemplate(AssetTypeTemplateField field, int depth)
-    {
-        Console.WriteLine($"{new string(' ', depth * 2)}{field.Name}: {field.Type}; " +
-            $"value={field.ValueType}; array={field.IsArray}; aligned={field.IsAligned}");
-        foreach (AssetTypeTemplateField child in field.Children)
-            PrintTemplate(child, depth + 1);
-    }
 }

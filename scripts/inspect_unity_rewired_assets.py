@@ -189,6 +189,8 @@ def monoscript(data: bytes) -> dict[str, str]:
     class_name, at = aligned_string(data, at)
     namespace, at = aligned_string(data, at)
     assembly, at = aligned_string(data, at)
+    if at + 1 != len(data) or data[at] not in (0, 1):
+        raise ValueError("invalid MonoScript editor flag or trailing bytes")
     return dict(name=name, class_name=class_name,
                 namespace=namespace, assembly=assembly)
 

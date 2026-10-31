@@ -33,7 +33,7 @@ def mono(go_id, script_id, extra=b""):
 
 def monoscript(name, namespace, assembly):
     return (string(name) + b"\0" * 20 + string(name) +
-            string(namespace) + string(assembly))
+            string(namespace) + string(assembly) + b"\0")
 
 
 def action_bytes(select_id):
@@ -93,6 +93,14 @@ class UnityRewiredInspectorTests(unittest.TestCase):
             audit.aligned_string(struct.pack("<i", 5000), 0)
         with self.assertRaisesRegex(ValueError, "MonoScript"):
             audit.monoscript(string("A"))
+
+    def test_monoscript_requires_one_valid_editor_flag(self):
+        valid = monoscript("Synthetic", "FixtureOnly", "FixtureOnly.dll")
+        self.assertEqual(audit.monoscript(valid)["class_name"], "Synthetic")
+        for invalid in (valid[:-1], valid[:-1] + b"\x02", valid + b"\0"):
+            with self.subTest(payload_length=len(invalid)):
+                with self.assertRaisesRegex(ValueError, "editor flag or trailing bytes"):
+                    audit.monoscript(invalid)
 
     def test_full_synthetic_cross_file_graph(self):
         with tempfile.TemporaryDirectory() as tmp:
