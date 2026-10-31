@@ -288,3 +288,130 @@ that Rewired routes a safe DS4 binding to it, or that callbacks can be safely
 removed during unload.
 
 No scene, asset, PKG, ELF, metadata, PRX, or console state was modified.
+
+## 2026-10-31 — Bounded PlayMakerFSM container codec and tail gate
+
+This section updates the earlier status above. The previously missing
+container encoder now covers the observed `Fsm` graph subset, component
+wrapper, and `FsmTemplate` wrapper. It deliberately does **not** claim a
+complete semantic map of every field in Unity's serialized `Fsm` object.
+
+### The 40-byte tail: exact boundary, semantics still unknown
+
+The new `scripts/audit_playmaker_fsm_tails.py` rechecks the pinned SHA-256 of
+each input before scanning. Across all 30 `level0`–`level29` files and all 30
+`sharedassets0.assets`–`sharedassets29.assets` files, the scan found 19 relevant
+objects:
+
+| Asset | `PlayMakerFSM` | `FsmTemplate` |
+| --- | ---: | ---: |
+| `level2` | 2 | 0 |
+| `level7` | 2 | 0 |
+| `sharedassets2.assets` | 13 | 2 |
+
+For a `PlayMakerFSM`, the 40 bytes are the interval immediately before its
+trailing 12-byte `fsmTemplate` PPtr. For an embedded `Fsm` in `FsmTemplate`,
+they are the final 40 bytes. All 19 sample values were byte-identical; the
+derived SHA-256 is `fd31410c401d1624d966bd279d6e3aa6f8ba288610811d85d428772aa9ef7345`.
+The report records only that digest, counts, and asset names; it emits no
+source bytes. `resources.assets` was in the prior source manifest but is not
+available to this runtime scan, so this pass covers 60/60 scene/sharedassets
+files plus `globalgamemanagers.assets` for MonoScript lookup, not the full
+62-file source inventory.
+
+IL2CPP v23 metadata yields 18 public-instance or `[SerializeField]` Fsm field
+candidates, in metadata declaration order:
+
+| Candidate field | Metadata evidence |
+| --- | --- |
+| `usedInTemplate`, `name`, `startState`, `states`, `events`, `globalTransitions`, `variables`, `description`, `docUrl`, `showStateLabel`, `maxLoopCount`, `watermark` | private fields marked `UnityEngine.SerializeField` |
+| `version`, `ExposedEvents`, `RestartOnEnable`, `EnableDebugFlow`, `StepFrame` | public instance fields |
+| `activeStateName` | private field marked `UnityEngine.SerializeField` |
+
+The bounded type resolver cannot resolve `ExposedEvents`' generic-instantiated
+type (`IL2CPP_TYPE_GENERICINST`, kind `0x15`). Metadata declaration order is
+not evidence of Unity's binary field order. No candidate has been assigned to
+an individual tail byte. The type tree is disabled in these assets, every
+available tail sample has the same value, and the title's AOT metadata exposes
+no `Fsm.Save`/`Fsm.Serialize` writer that would map these fields. The exact
+missing evidence is a Unity 5.6.6f2-compatible deserialization/type-tree view
+of this `Fsm`, or a matching Unity/PlayMaker serializer output where these
+candidate fields are varied one at a time. Until then, the tail must be
+preserved byte-for-byte from a source object; arbitrary synthetic bytes are
+only a parser fixture, not a valid Unity value.
+
+### Round-trip and synthetic object-graph results
+
+`encode_fsm_component`, `parse_fsm_template`, and `encode_fsm_template` now
+reuse the existing bounded ActionData codec. They support the observed
+camera-fade data subset: one optional `FsmFloat`, empty remaining variable
+arrays, empty global transitions, bounded states/events/transitions and
+verified ActionData shapes. The 40-byte tail and the 32-byte MonoBehaviour
+header are carried as explicit opaque bytes. The encoder reparses its output
+to reject duplicate state/event names, unresolved transitions or variable
+links, invalid counts, malformed pointers, and unsupported tails.
+
+On the private exact-hash source copies, both the real `cameraFadeFSM`
+component and its real `FsmTemplate` encode back to exactly their original
+bytes, then parse again with equivalent graphs. This verifies the codec for
+those two observed objects; it is not a Unity Editor import/reload test and
+does not validate a newly authored tail.
+
+`build_synthetic_graphic_playmaker_component` creates a 1,324-byte synthetic
+component containing one `DrawMenu` state with both existing AOT `GUIBox` and
+`GUILabel` ActionData records. The merged action table contains 20 parameters
+and rebased references to the shared byteData and specialized arrays. The
+strict parser accepts it and the encoder returns byte-identical output when
+given the same explicit opaque tail. A synthetic Unity object-graph validator
+also checks unique PathIDs, GameObject/Transform/component membership, the
+MonoScript external PPtr, dependency membership, and null or external
+`FsmTemplate` references.
+
+These bytes and graph are test fixtures only. The validator does not serialize
+Unity's complete `.assets` header, type records, object table, external-file
+table, dependency metadata, or asset bundle. A strict parser round-trip does
+not show that Unity or PlayMaker accepts or activates the component. The
+synthetic FSM draws only; it does not define DS4 navigation or gameplay input
+isolation.
+
+### Architecture status and minimum next proof
+
+Route A, a separate object owned by a scene or prefab, remains the only
+promising route that reuses PlayMaker's AOT GUI actions without an arbitrary
+runtime registration API. It remains pending, because neither the 40-byte
+tail semantics nor the complete Unity object-table writer/import validation
+is established. Route B, runtime creation/registration, still lacks a
+demonstrated Unity-thread entry point, PlayMaker list ownership, focus, and
+quiescent destruction contract; no new evidence changes that assessment.
+
+An authorized future asset integration would add an independent root
+`GameObject`, `Transform`, and `PlayMakerFSM` to the selected title/gameplay
+scene (`levelN` not yet selected from a verified scene-load map), or add a
+separate prefab in a `sharedassetsN.assets` file and reference it from the
+chosen scene. The necessary commercial outputs would therefore be the chosen
+scene file, or the prefab asset plus its scene references/dependency tables.
+`level2` contains the existing CutSceneController, so its FSM components must
+remain byte-identical; the current work does not select it as the integration
+scene. No commercial file was modified.
+
+The minimum next offline experiment is a separate, noncommercial Unity
+5.6.6f2 project with the exact PlayMaker package version, creating one
+`PlayMakerFSM` with controlled values for the unresolved candidates and
+exporting a type-tree or equivalent serialized object view. Then a compatible
+asset tool must deserialize and reserialize the synthetic GameObject graph,
+confirm all PPtrs/dependencies, and round-trip it. The required Unity Editor,
+matching PlayMaker package, and compatible asset writer are not present in
+this environment. Until that evidence exists, do not build an installable
+asset, package, or PRX.
+
+The tail audit result is in
+[`PLAYMAKER_FSM_TAIL_AUDIT_20261031.json`](PLAYMAKER_FSM_TAIL_AUDIT_20261031.json).
+
+Local verification for this update: 46 targeted PlayMaker parser/codec tests
+passed; the complete offline suite passed 204 Python tests plus native C,
+ASan, and UBSan checks; `scripts/assert-safe-build.py`,
+`node tests/js/test_ps4_browser_demo.js`, Python compilation, the exact-hash
+cameraFade component/template inspector, and the 60-asset tail audit passed.
+The local Unity C#4 fixture was skipped because Unity/Mono tools are absent.
+These results validate static byte preservation and synthetic graph rules,
+not Unity import, runtime loading, graphics, DS4 input, or PS4 behavior.

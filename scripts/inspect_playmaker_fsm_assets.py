@@ -11,6 +11,7 @@ are removed before JSON output.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import math
@@ -48,6 +49,10 @@ MAX_ACTIONS = 64
 MAX_PARAMETERS = 4096
 MAX_ACTION_DATA_BYTES = 1 << 18
 MAX_NATIVE_TYPE_NESTING = 16
+MAX_FSM_TAIL_BYTES = 40
+MAX_GRAPH_OBJECTS = 4096
+CUSTOM_ATTRIBUTE_INFO_HEADER_INDEX = 27
+CUSTOM_ATTRIBUTE_TYPES_HEADER_INDEX = 28
 
 ACTIONDATA_SPECIAL_ARRAYS = (
     "unityObjectParams", "fsmGameObjectParams", "fsmOwnerDefaultParams",
@@ -193,6 +198,19 @@ class TypeResolver:
         self.type_defs_by_index = {item.index: item for item in self.metadata.types}
         self.type_def_offset = self.metadata.sections["type_definitions"][0]
         self.field_offset = self.metadata.sections["fields"][0]
+        attribute_info_offset, attribute_info_size = struct.unpack_from(
+            "<Ii", metadata_data, 8 + CUSTOM_ATTRIBUTE_INFO_HEADER_INDEX * 8)
+        attribute_types_offset, attribute_types_size = struct.unpack_from(
+            "<Ii", metadata_data, 8 + CUSTOM_ATTRIBUTE_TYPES_HEADER_INDEX * 8)
+        if (attribute_info_size < 0 or attribute_info_size % 8 or
+                attribute_types_size < 0 or attribute_types_size % 4 or
+                attribute_info_offset + attribute_info_size > len(metadata_data) or
+                attribute_types_offset + attribute_types_size > len(metadata_data)):
+            raise ValueError("IL2CPP custom-attribute metadata sections are invalid")
+        self.attribute_info_offset = attribute_info_offset
+        self.attribute_info_count = attribute_info_size // 8
+        self.attribute_types_offset = attribute_types_offset
+        self.attribute_type_count = attribute_types_size // 4
 
     def resolve(self, type_index: int) -> str:
         if not 0 <= type_index < self.type_count:
@@ -311,6 +329,69 @@ class TypeResolver:
             row = FIELD_RECORD.unpack_from(
                 self.metadata_data, self.field_offset + field.index * FIELD_RECORD.size)
             result.append({"name": field.name, "type": self.resolve(row[1])})
+        return result
+
+    def field_custom_attributes(self, field_index: int) -> list[str]:
+        """Resolve bounded v23 field custom-attribute type ranges.
+
+        This exposes metadata evidence such as UnityEngine.SerializeField. It
+        does not decide Unity's serialization rules or wire order.
+        """
+        if type(field_index) is not int or not 0 <= field_index < len(self.metadata.fields):
+            raise ValueError("IL2CPP field index outside metadata table")
+        field = self.metadata.fields[field_index]
+        if field.declaring_type < 0:
+            raise ValueError("IL2CPP field has no declaring type")
+        row = FIELD_RECORD.unpack_from(
+            self.metadata_data, self.field_offset + field_index * FIELD_RECORD.size)
+        attribute_index = row[2]
+        if attribute_index == 0:
+            return []
+        if not 0 < attribute_index < self.attribute_info_count:
+            raise ValueError("IL2CPP field custom-attribute index outside bounds")
+        first, count = struct.unpack_from(
+            "<ii", self.metadata_data,
+            self.attribute_info_offset + attribute_index * 8)
+        if (first < 0 or count < 0 or count > 256 or
+                first + count > self.attribute_type_count):
+            raise ValueError("IL2CPP field custom-attribute range outside bounds")
+        result = []
+        for index in range(first, first + count):
+            type_index = struct.unpack_from(
+                "<I", self.metadata_data, self.attribute_types_offset + index * 4)[0]
+            result.append(self.resolve(type_index))
+        return result
+
+    def serialization_field_candidates(self, full_name: str) -> list[dict]:
+        """Expose public-instance/SerializeField metadata without guessing wire order."""
+        current = self.type_defs.get(full_name)
+        if current is None:
+            raise ValueError("type missing from IL2CPP metadata: " + full_name)
+        result = []
+        for field in self.metadata.owned_fields(current):
+            row = FIELD_RECORD.unpack_from(
+                self.metadata_data, self.field_offset + field.index * FIELD_RECORD.size)
+            native_attributes = self.field_attributes(row[1])
+            custom_attributes = self.field_custom_attributes(field.index)
+            public_instance = is_public_instance_field(native_attributes)
+            explicitly_serialized = "UnityEngine.SerializeField" in custom_attributes
+            if public_instance or explicitly_serialized:
+                try:
+                    field_type = self.resolve(row[1])
+                    type_status = "resolved"
+                except ValueError as exc:
+                    field_type = None
+                    type_status = "unsupported by bounded type resolver: " + str(exc)
+                result.append({
+                    "name": field.name,
+                    "type": field_type,
+                    "type_index": row[1],
+                    "type_status": type_status,
+                    "public_instance": public_instance,
+                    "has_serialize_field_attribute": explicitly_serialized,
+                    "custom_attributes": custom_attributes,
+                    "metadata_field_index": field.index,
+                })
         return result
 
     @property
@@ -1556,6 +1637,7 @@ def parse_fsm_component(blob: bytes, *, has_template_pointer: bool = True) -> di
                 raise ValueError("ActionData FsmFloat variable link is unresolved")
 
     return {
+        "_mono_header": blob[:32],
         "used_in_template_pointer": {"file_id": template_file_id,
                                       "path_id": template_path_id},
         "name": fsm_name, "name_offset": name_offset,
@@ -1563,8 +1645,154 @@ def parse_fsm_component(blob: bytes, *, has_template_pointer: bool = True) -> di
         "states": states, "events": events, "global_transitions_count": global_transition_count,
         "variables": variables,
         "opaque_fsm_tail": {"offset": opaque_tail_offset, "size": opaque_tail_size},
+        "_opaque_fsm_tail": blob[opaque_tail_offset:opaque_tail_offset + opaque_tail_size],
         "fsm_template_pointer": template_pointer,
     }
+
+
+def _encode_fsm_variables(variables: dict) -> bytes:
+    if not isinstance(variables, dict):
+        raise ValueError("FsmVariables model is missing")
+    floats = variables.get("float_variables")
+    if not isinstance(floats, list) or len(floats) > 1:
+        raise ValueError("only zero or one verified FsmFloat variable is encodable")
+    result = bytearray(struct.pack("<i", len(floats)))
+    for item in floats:
+        if not isinstance(item, dict):
+            raise ValueError("invalid FsmFloat variable model")
+        leading = item.get("serialized_leading_word")
+        value = item.get("value")
+        if (type(leading) is not int or not -(1 << 31) <= leading < (1 << 31) or
+                type(value) not in (int, float) or not math.isfinite(value)):
+            raise ValueError("FsmFloat variable scalar outside bounds")
+        result += struct.pack("<i", leading)
+        result += _encode_aligned_string(item.get("name"))
+        result += _encode_pptr(item.get("reference_pointer"))
+        try:
+            result += struct.pack("<f", value)
+        except (OverflowError, struct.error) as exc:
+            raise ValueError("FsmFloat variable value outside f32 range") from exc
+
+    empty_arrays = variables.get("empty_variable_arrays")
+    expected_arrays = (
+        "intVariables", "boolVariables", "stringVariables", "vector2Variables",
+        "vector3Variables", "colorVariables", "rectVariables", "quaternionVariables",
+        "gameObjectVariables", "objectVariables", "materialVariables", "textureVariables",
+    )
+    if (not isinstance(empty_arrays, dict) or set(empty_arrays) != set(expected_arrays) or
+            any(type(empty_arrays[name]) is not int or empty_arrays[name] != 0
+                for name in expected_arrays)):
+        raise ValueError("nonempty or unknown FsmVariables array is unsupported")
+    result += bytes(4 * len(expected_arrays))
+    result += _encode_bool32(variables.get("global_variables_synced"),
+                             "FsmVariables.GlobalVariablesSynced")
+    return bytes(result)
+
+
+def _encode_fsm_transition(value: dict) -> bytes:
+    if not isinstance(value, dict):
+        raise ValueError("invalid FsmTransition model")
+    result = bytearray(_encode_aligned_string(value.get("event")))
+    result += _encode_bool32(value.get("is_system_event"), "FsmTransition.isSystemEvent")
+    result += _encode_bool32(value.get("is_global"), "FsmTransition.isGlobal")
+    result += _encode_aligned_string(value.get("to_state"))
+    for key in ("link_style", "link_constraint", "color_index"):
+        integer = value.get(key)
+        if type(integer) is not int or not -(1 << 31) <= integer < (1 << 31):
+            raise ValueError("FsmTransition integer outside bounds: " + key)
+        result += struct.pack("<i", integer)
+    return bytes(result)
+
+
+def _encode_fsm_state(value: dict) -> bytes:
+    if not isinstance(value, dict):
+        raise ValueError("invalid FsmState model")
+    name, description = value.get("name"), value.get("description")
+    color_index = value.get("color_index")
+    rect = value.get("rect")
+    if (type(color_index) is not int or not -(1 << 31) <= color_index < (1 << 31) or
+            not isinstance(rect, list) or len(rect) != 4 or
+            any(type(item) not in (int, float) or not math.isfinite(item) for item in rect)):
+        raise ValueError("invalid FsmState scalar or Rect fields")
+    try:
+        rect_bytes = struct.pack("<4f", *rect)
+    except (OverflowError, struct.error) as exc:
+        raise ValueError("FsmState Rect value outside f32 range") from exc
+    result = bytearray(_encode_aligned_string(name) + _encode_aligned_string(description))
+    result += struct.pack("<i", color_index) + rect_bytes
+    for key in ("breakpoint", "sequence", "hide_unused"):
+        result += _encode_bool32(value.get(key), "FsmState." + key)
+    transitions = value.get("transitions")
+    if not isinstance(transitions, list) or len(transitions) > MAX_TRANSITIONS:
+        raise ValueError("FsmState transition count outside bounds")
+    result += struct.pack("<i", len(transitions))
+    result += b"".join(_encode_fsm_transition(item) for item in transitions)
+    action_data = value.get("action_data")
+    if not isinstance(action_data, dict):
+        raise ValueError("FsmState ActionData model is missing")
+    result += encode_action_data(action_data)
+    return bytes(result)
+
+
+def _encode_fsm_payload(fsm: dict, *, has_template_pointer: bool,
+                        opaque_tail: bytes | None = None) -> bytes:
+    if not isinstance(fsm, dict):
+        raise ValueError("Fsm model is missing")
+    tail = opaque_tail if opaque_tail is not None else fsm.get("_opaque_fsm_tail")
+    if not isinstance(tail, bytes) or len(tail) != MAX_FSM_TAIL_BYTES:
+        raise ValueError("Fsm opaque tail must be supplied as exactly 40 preserved bytes")
+    result = bytearray(_encode_pptr(fsm.get("used_in_template_pointer")))
+    result += _encode_aligned_string(fsm.get("name"))
+    result += _encode_aligned_string(fsm.get("start_state"))
+    states = fsm.get("states")
+    if not isinstance(states, list) or not 1 <= len(states) <= MAX_STATES:
+        raise ValueError("Fsm state count outside bounds")
+    result += struct.pack("<i", len(states))
+    result += b"".join(_encode_fsm_state(state) for state in states)
+    events = fsm.get("events")
+    if not isinstance(events, list) or len(events) > MAX_EVENTS:
+        raise ValueError("Fsm event count outside bounds")
+    result += struct.pack("<i", len(events))
+    for event in events:
+        if not isinstance(event, dict):
+            raise ValueError("invalid FsmEvent model")
+        result += _encode_aligned_string(event.get("name"))
+        result += _encode_bool32(event.get("is_system_event"), "FsmEvent.isSystemEvent")
+        result += _encode_bool32(event.get("is_global"), "FsmEvent.isGlobal")
+    global_count = fsm.get("global_transitions_count")
+    if global_count != 0:
+        raise ValueError("nonempty Fsm.globalTransitions are not supported by this codec")
+    result += struct.pack("<i", 0)
+    result += _encode_fsm_variables(fsm.get("variables"))
+    result += tail
+    if has_template_pointer:
+        result += _encode_pptr(fsm.get("fsm_template_pointer"))
+    elif fsm.get("fsm_template_pointer") is not None:
+        raise ValueError("embedded FsmTemplate payload cannot carry a component PPtr")
+    return bytes(result)
+
+
+def encode_fsm_component(fsm: dict, *, mono_header: bytes | None = None,
+                         opaque_tail: bytes | None = None,
+                         has_template_pointer: bool = True) -> bytes:
+    """Encode the bounded PlayMakerFSM inline-Fsm subset.
+
+    The 40-byte tail is deliberately opaque. Supplying/preserving it makes the
+    byte container reversible; it does not validate a newly authored tail in
+    Unity. The 32-byte MonoBehaviour prefix is also preserved verbatim unless
+    explicitly supplied by a synthetic object-graph fixture.
+    """
+    header = mono_header if mono_header is not None else fsm.get("_mono_header")
+    if not isinstance(header, bytes) or len(header) != 32:
+        raise ValueError("PlayMakerFSM MonoBehaviour header must be preserved as 32 bytes")
+    result = header + _encode_fsm_payload(
+        fsm, has_template_pointer=has_template_pointer, opaque_tail=opaque_tail)
+    if len(result) > MAX_COMPONENT_BYTES:
+        raise ValueError("encoded PlayMakerFSM component exceeds the byte limit")
+    # Reparse through the same strict graph/reference checks used for source
+    # data, so the encoder cannot emit duplicate IDs or dangling transitions.
+    parse_fsm_component(result, has_template_pointer=has_template_pointer)
+    return result
 
 
 def _aligned_cstring(data: bytes, offset: int) -> tuple[str, int]:
@@ -1591,6 +1819,7 @@ def parse_fsm_template_header(blob: bytes) -> dict:
         raise ValueError("FsmTemplate object size outside bounds")
     template_name, at = _aligned_cstring(blob, 32)
     reader = Reader(blob, at)
+    category_wire_start = reader.pos
     category, category_offset = reader.aligned_string()
     fsm_payload_offset = reader.pos
     template_file_id = reader.i32()
@@ -1599,6 +1828,9 @@ def parse_fsm_template_header(blob: bytes) -> dict:
     start_state, start_state_offset = reader.aligned_string()
     state_count = reader.count("FsmTemplate Fsm.states", MAX_STATES)
     return {
+        "_mono_header": blob[:32],
+        "_template_name_wire": blob[32:at],
+        "_category_wire": blob[category_wire_start:fsm_payload_offset],
         "name": template_name, "category": category,
         "category_offset": category_offset,
         "fsm_used_in_template_pointer": {"file_id": template_file_id,
@@ -1607,6 +1839,386 @@ def parse_fsm_template_header(blob: bytes) -> dict:
         "start_state": start_state, "start_state_offset": start_state_offset,
         "state_count": state_count,
         "fsm_payload_offset": fsm_payload_offset,
+    }
+
+
+def parse_fsm_template(blob: bytes) -> tuple[dict, dict]:
+    """Decode an FsmTemplate wrapper and its embedded Fsm using the bounded codec."""
+    header = parse_fsm_template_header(blob)
+    shifted_fsm = blob[header["fsm_payload_offset"] - 32:]
+    fsm = parse_fsm_component(shifted_fsm, has_template_pointer=False)
+    return header, fsm
+
+
+def encode_fsm_template(header: dict, fsm: dict, *,
+                        opaque_tail: bytes | None = None) -> bytes:
+    """Encode a bounded FsmTemplate wrapper around an inline Fsm."""
+    if not isinstance(header, dict):
+        raise ValueError("FsmTemplate header model is missing")
+    mono_header = header.get("_mono_header")
+    name, category = header.get("name"), header.get("category")
+    if not isinstance(mono_header, bytes) or len(mono_header) != 32:
+        raise ValueError("FsmTemplate MonoBehaviour header must be preserved as 32 bytes")
+    if not isinstance(name, str) or not name or len(name.encode("utf-8")) > MAX_STRING_BYTES:
+        raise ValueError("FsmTemplate name outside bounds")
+    if not isinstance(category, str) or len(category.encode("utf-8")) > MAX_STRING_BYTES:
+        raise ValueError("FsmTemplate category outside bounds")
+    if (header.get("fsm_used_in_template_pointer") !=
+            fsm.get("used_in_template_pointer")):
+        raise ValueError("FsmTemplate header and embedded Fsm PPtrs disagree")
+    if (header.get("fsm_name") != fsm.get("name") or
+            header.get("start_state") != fsm.get("start_state") or
+            header.get("state_count") != len(fsm.get("states", []))):
+        raise ValueError("FsmTemplate header and embedded Fsm graph disagree")
+    raw_name = header.get("_template_name_wire")
+    if not isinstance(raw_name, bytes):
+        raw_name = name.encode("utf-8") + b"\0"
+        raw_name += bytes(-(32 + len(raw_name)) % 4)
+    raw_category = header.get("_category_wire")
+    if not isinstance(raw_category, bytes):
+        raw_category = _encode_aligned_string(category)
+    result = mono_header + raw_name + raw_category + _encode_fsm_payload(
+        fsm, has_template_pointer=False, opaque_tail=opaque_tail)
+    if len(result) > MAX_COMPONENT_BYTES:
+        raise ValueError("encoded FsmTemplate exceeds the byte limit")
+    parse_fsm_template(result)
+    return bytes(result)
+
+
+def build_synthetic_graphic_playmaker_component(
+        opaque_tail: bytes, *, game_object_path_id: int,
+        script_file_id: int, mono_script_path_id: int,
+        opaque_header_padding: bytes = bytes(3),
+        opaque_header_suffix: bytes = bytes(4)) -> bytes:
+    """Build a synthetic render-only inline PlayMakerFSM component.
+
+    Callers must supply the unknown 40-byte Fsm tail. The MonoBehaviour's
+    alignment and final four bytes are explicit inputs too; their meaning is
+    not guessed. This builds component bytes, not a Unity asset file.
+    """
+    if not isinstance(opaque_tail, bytes) or len(opaque_tail) != MAX_FSM_TAIL_BYTES:
+        raise ValueError("synthetic Fsm requires an explicit 40-byte opaque tail")
+    if (not isinstance(opaque_header_padding, bytes) or len(opaque_header_padding) != 3 or
+            not isinstance(opaque_header_suffix, bytes) or len(opaque_header_suffix) != 4):
+        raise ValueError("synthetic MonoBehaviour opaque header slices have invalid sizes")
+    if type(game_object_path_id) is not int or game_object_path_id <= 0:
+        raise ValueError("synthetic GameObject PathID must be positive")
+    if type(script_file_id) is not int or script_file_id <= 0:
+        raise ValueError("synthetic MonoScript FileID must be external")
+    if type(mono_script_path_id) is not int or mono_script_path_id <= 0:
+        raise ValueError("synthetic MonoScript PathID must be positive")
+
+    header = bytearray(_encode_pptr({"file_id": 0, "path_id": game_object_path_id}))
+    header += b"\x01" + opaque_header_padding
+    header += _encode_pptr({"file_id": script_file_id, "path_id": mono_script_path_id})
+    header += opaque_header_suffix
+    if len(header) != 32:
+        raise ValueError("synthetic MonoBehaviour header size invariant failed")
+
+    actions = [
+        parse_action_data(Reader(build_synthetic_graphic_action_data("GUIBox"))),
+        parse_action_data(Reader(build_synthetic_graphic_action_data("GUILabel"))),
+    ]
+    variables = {
+        "float_variables": [],
+        "empty_variable_arrays": {
+            name: 0 for name in (
+                "intVariables", "boolVariables", "stringVariables", "vector2Variables",
+                "vector3Variables", "colorVariables", "rectVariables", "quaternionVariables",
+                "gameObjectVariables", "objectVariables", "materialVariables", "textureVariables",
+            )
+        },
+        "global_variables_synced": False,
+    }
+    fsm = {
+        "_mono_header": bytes(header),
+        "_opaque_fsm_tail": opaque_tail,
+        "used_in_template_pointer": {"file_id": 0, "path_id": 0},
+        "name": "UCM_Menu_Synthetic",
+        "start_state": "DrawMenu",
+        "states": [{
+            "name": "DrawMenu", "description": "synthetic GUI only",
+            "color_index": 0, "rect": [64.0, 64.0, 640.0, 480.0],
+            "breakpoint": False, "sequence": False, "hide_unused": False,
+            "transitions": [],
+            "action_data": {},
+        }],
+        "events": [], "global_transitions_count": 0,
+        "variables": variables,
+        "fsm_template_pointer": {"file_id": 0, "path_id": 0},
+    }
+    # These two real ActionData encodings already have dedicated native-schema
+    # validators. This state contains only drawing actions and no gameplay edits.
+    state_actions = []
+    for action in actions:
+        action_name = action["action_names"][0].rsplit(".", 1)[-1]
+        state_actions.append((action_name, action))
+    state_action_data = _encode_multiple_action_data(state_actions)
+    fsm["states"][0]["action_data"] = parse_action_data(Reader(state_action_data))
+    return encode_fsm_component(fsm)
+
+
+def _encode_multiple_action_data(actions: list[tuple[str, dict]]) -> bytes:
+    """Join supported single-action GUI blocks into one ActionData record.
+
+    The title's ActionData record stores all action parameters in shared
+    tables. This bounded merger only accepts one-action GUIBox/GUILabel
+    models with empty custom/array type metadata. It rebases byteData and
+    specialized-array indices without guessing any new field encodings.
+    """
+    if not isinstance(actions, list) or not actions or len(actions) > MAX_ACTIONS:
+        raise ValueError("synthetic action list outside bounds")
+    merged = {
+        "action_names": [], "custom_names": [], "enabled": [], "is_open": [],
+        "start_indices": [], "hash_codes_u32": [],
+        "specialized_parameter_arrays": {
+            name: [] for name in ACTIONDATA_SPECIAL_ARRAYS},
+        "_byte_data": b"", "array_param_sizes": [], "array_param_types": [],
+        "custom_type_sizes": [], "custom_type_names": [],
+        "param_data_types": [], "param_names": [],
+        "param_data_positions": [], "param_byte_data_sizes": [],
+        "parameters": [],
+    }
+    specialized_type_arrays = {
+        18: "fsmStringParams", 19: "fsmGameObjectParams",
+        20: "fsmOwnerDefaultParams", 24: "fsmObjectParams",
+        31: "fsmEventTargetParams", 32: "fsmObjectParams",
+        33: "fsmObjectParams",
+    }
+    parameter_count = 0
+    byte_data = bytearray()
+    for expected_short_name, model in actions:
+        if expected_short_name not in ("GUIBox", "GUILabel") or not isinstance(model, dict):
+            raise ValueError("synthetic ActionData merger accepts GUIBox/GUILabel only")
+        names = model.get("action_names")
+        if (not isinstance(names, list) or len(names) != 1 or
+                names[0] != "HutongGames.PlayMaker.Actions." + expected_short_name):
+            raise ValueError("synthetic ActionData action name does not match its schema")
+        if (model.get("array_param_sizes") != [] or model.get("array_param_types") != [] or
+                model.get("custom_type_sizes") != [] or model.get("custom_type_names") != []):
+            raise ValueError("synthetic GUI ActionData has unsupported custom/array metadata")
+        params = model.get("parameters")
+        byte_block = model.get("_byte_data")
+        specialized = model.get("specialized_parameter_arrays")
+        types = model.get("param_data_types")
+        positions = model.get("param_data_positions")
+        sizes = model.get("param_byte_data_sizes")
+        param_names = model.get("param_names")
+        if (not isinstance(params, list) or not isinstance(byte_block, bytes) or
+                not isinstance(specialized, dict) or
+                not all(isinstance(value, list) for value in
+                        (types, positions, sizes, param_names)) or
+                not (len(params) == len(types) == len(positions) == len(sizes) ==
+                     len(param_names)) or len(params) > MAX_PARAMETERS - parameter_count):
+            raise ValueError("synthetic GUI ActionData parameter tables are inconsistent")
+        old_byte_base = len(byte_data)
+        if old_byte_base + len(byte_block) > MAX_ACTION_DATA_BYTES:
+            raise ValueError("merged synthetic ActionData byteData exceeds the byte limit")
+        byte_data.extend(byte_block)
+        for array_name in ACTIONDATA_SPECIAL_ARRAYS:
+            values = specialized.get(array_name)
+            if not isinstance(values, list):
+                raise ValueError("synthetic GUI ActionData specialized array is missing")
+            merged["specialized_parameter_arrays"][array_name].extend(copy.deepcopy(values))
+        # The only supported per-action field arrays contain one entry each.
+        for key, target in (("custom_names", "custom_names"),
+                            ("enabled", "enabled"), ("is_open", "is_open"),
+                            ("hash_codes_u32", "hash_codes_u32")):
+            values = model.get(key)
+            if not isinstance(values, list) or len(values) != 1:
+                raise ValueError("synthetic GUI ActionData per-action metadata is invalid")
+            merged[target].append(copy.deepcopy(values[0]))
+        merged["action_names"].append(names[0])
+        merged["start_indices"].append(parameter_count)
+        for field_name, code, position, size, parameter in zip(
+                param_names, types, positions, sizes, params):
+            if (not isinstance(parameter, dict) or parameter.get("name") != field_name or
+                    parameter.get("serialized_type_code") != code or
+                    type(position) is not int or type(size) is not int or
+                    position < 0 or size < 0):
+                raise ValueError("synthetic GUI ActionData parameter row is invalid")
+            merged["param_names"].append(field_name)
+            merged["param_data_types"].append(code)
+            merged["param_byte_data_sizes"].append(size)
+            array_name = specialized_type_arrays.get(code)
+            copied = copy.deepcopy(parameter)
+            if array_name is not None:
+                source_array = specialized.get(array_name, [])
+                array_base = len(merged["specialized_parameter_arrays"][array_name]) - len(source_array)
+                if (size != 0 or parameter.get("specialized_array") != array_name or
+                        type(position) is not int or not 0 <= position < len(source_array) or
+                        parameter.get("specialized_array_index") != position):
+                    raise ValueError("synthetic GUI ActionData specialized reference is invalid")
+                rebased = array_base + position
+                merged["param_data_positions"].append(rebased)
+                copied["specialized_array_index"] = rebased
+                copied["value"] = copy.deepcopy(
+                    merged["specialized_parameter_arrays"][array_name][rebased])
+            else:
+                if position + size > len(byte_block):
+                    raise ValueError("synthetic GUI ActionData byteData reference is invalid")
+                merged["param_data_positions"].append(old_byte_base + position)
+                copied["byte_data_position"] = old_byte_base + position
+                copied["byte_data_size"] = size
+            merged["parameters"].append(copied)
+        parameter_count += len(params)
+    merged["_byte_data"] = bytes(byte_data)
+    return encode_action_data(merged)
+
+
+def validate_synthetic_unity_object_graph(graph: dict) -> dict:
+    """Validate a small synthetic GameObject/Transform/PlayMakerFSM PPtr graph.
+
+    The model checks IDs, component membership and external MonoScript
+    dependencies. It does not encode Unity's full .assets object table.
+    """
+    if not isinstance(graph, dict):
+        raise ValueError("synthetic Unity object graph is missing")
+    objects = graph.get("objects")
+    if not isinstance(objects, list) or not 1 <= len(objects) <= MAX_GRAPH_OBJECTS:
+        raise ValueError("synthetic Unity object count outside bounds")
+    object_by_id = {}
+    for item in objects:
+        if not isinstance(item, dict):
+            raise ValueError("invalid synthetic Unity object row")
+        path_id, class_id = item.get("path_id"), item.get("class_id")
+        if (type(path_id) is not int or path_id <= 0 or path_id >= (1 << 63) or
+                type(class_id) is not int or class_id <= 0 or path_id in object_by_id):
+            raise ValueError("duplicate or invalid synthetic Unity PathID/class")
+        object_by_id[path_id] = item
+
+    external_files = graph.get("external_files")
+    external_objects = graph.get("external_objects")
+    dependencies = graph.get("dependencies")
+    if (not isinstance(external_files, dict) or not external_files or
+            not isinstance(external_objects, dict) or
+            not isinstance(dependencies, list) or len(dependencies) > MAX_GRAPH_OBJECTS):
+        raise ValueError("synthetic Unity external/dependency tables are invalid")
+    for file_id, target in external_files.items():
+        if (type(file_id) is not int or file_id <= 0 or
+                not isinstance(target, str) or not target):
+            raise ValueError("synthetic external FileID/asset name is invalid")
+
+    def local_pointer(value: dict, expected_class: int, label: str) -> dict:
+        if not isinstance(value, dict) or value.get("file_id") != 0:
+            raise ValueError(label + " must be an internal PPtr")
+        path_id = value.get("path_id")
+        target = object_by_id.get(path_id) if type(path_id) is int else None
+        if target is None or target["class_id"] != expected_class:
+            raise ValueError(label + " target is missing or has the wrong class")
+        return target
+
+    def external_class(asset_name: str, path_id: int, label: str) -> tuple[int, str | None]:
+        targets = external_objects.get(asset_name)
+        if not isinstance(targets, dict) or path_id not in targets:
+            raise ValueError(label + " external PathID is unresolved")
+        target = targets[path_id]
+        if type(target) is int:
+            return target, None
+        if not isinstance(target, dict) or type(target.get("class_id")) is not int:
+            raise ValueError(label + " external object record is invalid")
+        class_name = target.get("class_name")
+        if class_name is not None and not isinstance(class_name, str):
+            raise ValueError(label + " external object class name is invalid")
+        return target["class_id"], class_name
+
+    game_object_id = graph.get("game_object_path_id")
+    transform_id = graph.get("transform_path_id")
+    component_id = graph.get("playmaker_component_path_id")
+    game_object = object_by_id.get(game_object_id)
+    transform = object_by_id.get(transform_id)
+    component = object_by_id.get(component_id)
+    if (game_object is None or game_object["class_id"] != 1 or
+            transform is None or transform["class_id"] != 4 or
+            component is None or component["class_id"] != 114):
+        raise ValueError("synthetic GameObject/Transform/PlayMakerFSM object is missing")
+    members = game_object.get("components")
+    required_ids = {transform_id, component_id}
+    if (not isinstance(members, list) or len(members) != 2 or
+            any(not isinstance(p, dict) or p.get("file_id") != 0 for p in members) or
+            {p.get("path_id") for p in members} != required_ids):
+        raise ValueError("GameObject component list does not contain exactly Transform and PlayMakerFSM")
+    local_pointer(transform.get("game_object"), 1, "Transform.gameObject")
+    if transform["game_object"].get("path_id") != game_object_id:
+        raise ValueError("Transform owner does not match the GameObject")
+    if transform.get("father") != {"file_id": 0, "path_id": 0}:
+        raise ValueError("synthetic root Transform must have a null father")
+    if transform.get("children") != []:
+        raise ValueError("synthetic root Transform model must not invent children")
+    local_pointer(component.get("game_object"), 1, "PlayMakerFSM.gameObject")
+    if component["game_object"].get("path_id") != game_object_id:
+        raise ValueError("PlayMakerFSM owner does not match the GameObject")
+    if component.get("class_name") != "PlayMakerFSM" or component.get("enabled") is not True:
+        raise ValueError("synthetic component is not an enabled PlayMakerFSM")
+
+    script = component.get("script")
+    if not isinstance(script, dict):
+        raise ValueError("PlayMakerFSM MonoScript PPtr is missing")
+    file_id, script_path_id = script.get("file_id"), script.get("path_id")
+    if type(file_id) is not int or file_id not in external_files or type(script_path_id) is not int:
+        raise ValueError("PlayMakerFSM MonoScript external reference is unresolved")
+    external_name = external_files[file_id]
+    if external_name not in dependencies:
+        raise ValueError("MonoScript asset is absent from the synthetic dependency list")
+    targets = external_objects.get(external_name)
+    if not isinstance(targets, dict):
+        raise ValueError("MonoScript external object table is missing")
+    script_target = targets.get(script_path_id)
+    script_class = (script_target if type(script_target) is int else
+                    script_target.get("class_id") if isinstance(script_target, dict) else None)
+    if script_class != 115:
+        raise ValueError("MonoScript PPtr does not resolve to an external MonoScript object")
+
+    header = component.get("mono_header")
+    payload_size = component.get("component_payload_size")
+    component_bytes = component.get("component_bytes")
+    if (not isinstance(header, bytes) or len(header) != 32 or
+            not isinstance(component_bytes, bytes) or
+            len(component_bytes) > MAX_COMPONENT_BYTES or
+            type(payload_size) is not int or payload_size != len(component_bytes) or
+            payload_size < 32 + 52):
+        raise ValueError("synthetic PlayMakerFSM serialized payload/header is invalid")
+    if component_bytes[:32] != header:
+        raise ValueError("synthetic PlayMakerFSM bytes disagree with the supplied header")
+    if header[12] not in (0, 1):
+        raise ValueError("MonoBehaviour enabled byte is invalid")
+    header_game_object = _read_pptr(Reader(header, 0), "MonoBehaviour.gameObject")
+    header_script = _read_pptr(Reader(header, 16), "MonoBehaviour.m_Script")
+    if (header_game_object != {"file_id": 0, "path_id": game_object_id} or
+            header_script != {"file_id": file_id, "path_id": script_path_id}):
+        raise ValueError("MonoBehaviour header PPtrs disagree with the object graph")
+    if header[12] != int(component["enabled"]):
+        raise ValueError("MonoBehaviour enabled byte disagrees with the object graph")
+    component_fsm = parse_fsm_component(component_bytes)
+    template = component_fsm["fsm_template_pointer"]
+    if template is not None:
+        file_id, template_path_id = template["file_id"], template["path_id"]
+        if (file_id == 0) != (template_path_id == 0):
+            raise ValueError("synthetic FsmTemplate PPtr has a half-null reference")
+        if file_id == 0 and template_path_id == 0:
+            pass  # Optional FsmTemplate reference is null.
+        elif file_id == 0:
+            target = local_pointer(template, 114, "PlayMakerFSM.fsmTemplate")
+            if target.get("class_name") != "FsmTemplate":
+                raise ValueError("local FsmTemplate PPtr target has the wrong script class")
+        else:
+            if file_id not in external_files:
+                raise ValueError("PlayMakerFSM.fsmTemplate external FileID is unresolved")
+            template_asset = external_files[file_id]
+            if template_asset not in dependencies:
+                raise ValueError("FsmTemplate asset is absent from dependencies")
+            target_class, target_name = external_class(
+                template_asset, template_path_id, "PlayMakerFSM.fsmTemplate")
+            if target_class != 114 or target_name != "FsmTemplate":
+                raise ValueError("external FsmTemplate PPtr target has the wrong class")
+    return {
+        "validated": True, "local_objects": len(objects),
+        "external_dependencies": len(set(dependencies)),
+        "playmaker_component_path_id": component_id,
+        "script_asset": external_name, "component_payload_size": payload_size,
+        "fsm_template_pointer_validated": True,
+        "synthetic_model_only": True,
+        "unity_assets_object_table_serialized": False,
     }
 
 
@@ -1879,6 +2491,9 @@ def inspect(level2_data: bytes, global_data: bytes, sharedassets2_data: bytes,
             raise ValueError("cameraFadeFSM component is missing or ambiguous")
         path_id, mono, go, blob = selected[0]
         fsm = parse_fsm_component(blob)
+        component_round_trip = encode_fsm_component(fsm) == blob
+        if not component_round_trip:
+            raise ValueError("cameraFadeFSM component failed byte-identical round-trip")
 
         scene_template_links = []
         resolved_templates = {}
@@ -1936,10 +2551,11 @@ def inspect(level2_data: bytes, global_data: bytes, sharedassets2_data: bytes,
             raise ValueError("parsed cameraFadeFSM fsmTemplate pointer disagrees with component tail")
         camera_template_id = camera_template_link["template"]["path_id"]
         camera_template_blob = sharedassets2.obj(camera_template_id)
-        camera_template_header = parse_fsm_template_header(camera_template_blob)
-        template_fsm = parse_fsm_component(
-            camera_template_blob[camera_template_header["fsm_payload_offset"] - 32:],
-            has_template_pointer=False)
+        camera_template_header, template_fsm = parse_fsm_template(camera_template_blob)
+        template_round_trip = encode_fsm_template(
+            camera_template_header, template_fsm) == camera_template_blob
+        if not template_round_trip:
+            raise ValueError("cameraFadeFSM FsmTemplate failed byte-identical round-trip")
         if template_fsm["name"] != "cameraFadeFSM":
             raise ValueError("cameraFadeFSM template embedded Fsm name mismatch")
         validate_action_data_schema(template_fsm, resolver)
@@ -1982,6 +2598,8 @@ def inspect(level2_data: bytes, global_data: bytes, sharedassets2_data: bytes,
             "HutongGames.PlayMaker.Actions." + short_name)
         for short_name in ("GUIBox", "GUILabel")
     }
+    fsm_serialization_candidates = resolver.serialization_field_candidates(
+        "HutongGames.PlayMaker.Fsm")
     graphic_actiondata = audit_synthetic_graphic_actiondata(resolver)
     synthetic = validate_synthetic_menu_graph(
         build_synthetic_menu_graph(), action_fields, aot_actions)
@@ -1997,6 +2615,17 @@ def inspect(level2_data: bytes, global_data: bytes, sharedassets2_data: bytes,
         "playmaker_serialized_fields": {
             "PlayMakerFSM": playmaker_fields, "FsmTemplate": template_fields,
             "Fsm": fsm_fields,
+        },
+        "fsm_unity_serialization_field_candidates": {
+            "fields": fsm_serialization_candidates,
+            "wire_order_established": False,
+            "all_candidates_mapped_to_40_byte_tail": False,
+        },
+        "real_source_round_trip": {
+            "cameraFadeFSM_component_byte_identical": component_round_trip,
+            "cameraFadeFSM_template_byte_identical": template_round_trip,
+            "opaque_tail_preserved_without_semantic_decode": True,
+            "scope": "verified source subset; not a Unity deserialize/import test",
         },
         "fsm_lifecycle_audit": lifecycle,
         "cut_scene_controller_template_links": scene_template_links,

@@ -1,0 +1,55 @@
+{
+  "all_tail_bytes_equal": true,
+  "distinct_tail_sha256": [
+    "fd31410c401d1624d966bd279d6e3aa6f8ba288610811d85d428772aa9ef7345"
+  ],
+  "distinct_tail_values": 1,
+  "globalgamemanagers_used_for_monoscript_resolution": true,
+  "hash_pinned_scene_and_sharedassets_scanned": 60,
+  "interpretation": "Byte equality across these samples does not identify the tail fields; it only establishes an invariant byte sequence in the scanned objects.",
+  "matched_objects_by_asset": [
+    {
+      "FsmTemplate": 0,
+      "PlayMakerFSM": 2,
+      "asset": "level2"
+    },
+    {
+      "FsmTemplate": 0,
+      "PlayMakerFSM": 2,
+      "asset": "level7"
+    },
+    {
+      "FsmTemplate": 2,
+      "PlayMakerFSM": 13,
+      "asset": "sharedassets2.assets"
+    }
+  ],
+  "raw_tail_bytes_emitted": false,
+  "read_only": true,
+  "resources_assets_hash_pinned_but_not_scanned": true,
+  "resources_assets_scanned": false,
+  "samples_by_asset_and_type": [
+    {
+      "asset": "level2",
+      "count": 2,
+      "type": "PlayMakerFSM"
+    },
+    {
+      "asset": "level7",
+      "count": 2,
+      "type": "PlayMakerFSM"
+    },
+    {
+      "asset": "sharedassets2.assets",
+      "count": 2,
+      "type": "FsmTemplate"
+    },
+    {
+      "asset": "sharedassets2.assets",
+      "count": 13,
+      "type": "PlayMakerFSM"
+    }
+  ],
+  "tail_samples": 19,
+  "title": "The Forest PS4 CUSA12398 v1.15"
+}

@@ -5,6 +5,7 @@ import copy
 import json
 import struct
 import sys
+from types import SimpleNamespace
 import unittest
 from pathlib import Path
 
@@ -321,6 +322,33 @@ class SyntheticGraphicResolver:
 
 
 class PlayMakerFsmAssetInspectorTests(unittest.TestCase):
+    def test_type_resolver_reads_bounded_field_custom_attribute_ranges(self):
+        metadata = bytearray(320)
+        struct.pack_into("<Ii", metadata,
+                         8 + audit.CUSTOM_ATTRIBUTE_INFO_HEADER_INDEX * 8, 256, 16)
+        struct.pack_into("<Ii", metadata,
+                         8 + audit.CUSTOM_ATTRIBUTE_TYPES_HEADER_INDEX * 8, 272, 4)
+        struct.pack_into("<ii", metadata, 264, 0, 1)  # attribute-info row 1
+        struct.pack_into("<I", metadata, 272, 17)
+        audit.FIELD_RECORD.pack_into(metadata, 300, 0, 0, 1, 0)
+        resolver = audit.TypeResolver.__new__(audit.TypeResolver)
+        resolver.metadata = SimpleNamespace(fields=[SimpleNamespace(declaring_type=0)])
+        resolver.metadata_data = bytes(metadata)
+        resolver.field_offset = 300
+        resolver.attribute_info_offset = 256
+        resolver.attribute_info_count = 2
+        resolver.attribute_types_offset = 272
+        resolver.attribute_type_count = 1
+        resolver.resolve = lambda index: {17: "UnityEngine.SerializeField"}[index]
+        self.assertEqual(resolver.field_custom_attributes(0), ["UnityEngine.SerializeField"])
+        with self.assertRaisesRegex(ValueError, "field index outside"):
+            resolver.field_custom_attributes(1)
+
+        struct.pack_into("<ii", metadata, 264, 0, 2)
+        resolver.metadata_data = bytes(metadata)
+        with self.assertRaisesRegex(ValueError, "attribute range outside"):
+            resolver.field_custom_attributes(0)
+
     def test_public_instance_field_attribute_filter_matches_reflection_flags(self):
         self.assertTrue(audit.is_public_instance_field(0x0006))
         self.assertFalse(audit.is_public_instance_field(0x0003))  # Assembly/internal
@@ -402,6 +430,132 @@ class PlayMakerFsmAssetInspectorTests(unittest.TestCase):
         self.assertEqual(parsed["opaque_fsm_tail"]["size"], 40)
         self.assertEqual(parsed["fsm_template_pointer"], {
             "file_id": 0, "path_id": 0, "offset": len(fsm_component()) - 12})
+
+    def test_complete_synthetic_gui_playmaker_component_round_trips(self):
+        tail = bytes(range(audit.MAX_FSM_TAIL_BYTES))
+        component = audit.build_synthetic_graphic_playmaker_component(
+            tail, game_object_path_id=101, script_file_id=3,
+            mono_script_path_id=115000)
+        parsed = audit.parse_fsm_component(component)
+        action_data = parsed["states"][0]["action_data"]
+        self.assertEqual(parsed["name"], "UCM_Menu_Synthetic")
+        self.assertEqual(parsed["start_state"], "DrawMenu")
+        self.assertEqual(action_data["action_names"], [
+            "HutongGames.PlayMaker.Actions.GUIBox",
+            "HutongGames.PlayMaker.Actions.GUILabel",
+        ])
+        self.assertEqual(len(action_data["parameters"]), 20)
+        self.assertEqual(action_data["parameters"][11]["value"]["value"],
+                         "Ultimate Mod Menu")
+        self.assertEqual(action_data["param_data_positions"][11], 3)
+        self.assertEqual(action_data["parameters"][14]["byte_data_position"], 39)
+        self.assertEqual(parsed["_opaque_fsm_tail"], tail)
+        self.assertEqual(audit.encode_fsm_component(parsed), component)
+        decoded_again = audit.parse_fsm_component(audit.encode_fsm_component(parsed))
+        self.assertEqual(decoded_again["name"], parsed["name"])
+        self.assertEqual(decoded_again["states"][0]["action_data"]["action_names"],
+                         action_data["action_names"])
+        self.assertEqual(decoded_again["_opaque_fsm_tail"], tail)
+
+    def test_synthetic_playmaker_component_links_to_valid_unity_object_graph(self):
+        component_bytes = audit.build_synthetic_graphic_playmaker_component(
+            bytes(40), game_object_path_id=101, script_file_id=1,
+            mono_script_path_id=501)
+        graph = {
+            "game_object_path_id": 101, "transform_path_id": 102,
+            "playmaker_component_path_id": 103,
+            "objects": [
+                {"path_id": 101, "class_id": 1,
+                 "components": [{"file_id": 0, "path_id": 102},
+                                {"file_id": 0, "path_id": 103}]},
+                {"path_id": 102, "class_id": 4,
+                 "game_object": {"file_id": 0, "path_id": 101},
+                 "father": {"file_id": 0, "path_id": 0}, "children": []},
+                {"path_id": 103, "class_id": 114,
+                 "game_object": {"file_id": 0, "path_id": 101},
+                 "class_name": "PlayMakerFSM", "enabled": True,
+                 "script": {"file_id": 1, "path_id": 501},
+                 "mono_header": component_bytes[:32],
+                 "component_bytes": component_bytes,
+                 "component_payload_size": len(component_bytes)},
+            ],
+            "external_files": {1: "globalgamemanagers.assets"},
+            "external_objects": {"globalgamemanagers.assets": {501: 115}},
+            "dependencies": ["globalgamemanagers.assets"],
+        }
+        report = audit.validate_synthetic_unity_object_graph(graph)
+        self.assertTrue(report["validated"])
+        self.assertFalse(report["unity_assets_object_table_serialized"])
+        self.assertTrue(report["fsm_template_pointer_validated"])
+
+        duplicate = copy.deepcopy(graph)
+        duplicate["objects"][2]["path_id"] = 102
+        with self.assertRaisesRegex(ValueError, "duplicate or invalid"):
+            audit.validate_synthetic_unity_object_graph(duplicate)
+
+        unresolved = copy.deepcopy(graph)
+        unresolved["objects"][2]["script"]["path_id"] = 999
+        with self.assertRaisesRegex(ValueError, "does not resolve"):
+            audit.validate_synthetic_unity_object_graph(unresolved)
+
+    def test_synthetic_unity_graph_validates_optional_external_template_pptr(self):
+        component_bytes = bytearray(audit.build_synthetic_graphic_playmaker_component(
+            bytes(40), game_object_path_id=101, script_file_id=1,
+            mono_script_path_id=501))
+        struct.pack_into("<iq", component_bytes, len(component_bytes) - 12, 2, 600)
+        component_bytes = bytes(component_bytes)
+        graph = {
+            "game_object_path_id": 101, "transform_path_id": 102,
+            "playmaker_component_path_id": 103,
+            "objects": [
+                {"path_id": 101, "class_id": 1,
+                 "components": [{"file_id": 0, "path_id": 102},
+                                {"file_id": 0, "path_id": 103}]},
+                {"path_id": 102, "class_id": 4,
+                 "game_object": {"file_id": 0, "path_id": 101},
+                 "father": {"file_id": 0, "path_id": 0}, "children": []},
+                {"path_id": 103, "class_id": 114,
+                 "game_object": {"file_id": 0, "path_id": 101},
+                 "class_name": "PlayMakerFSM", "enabled": True,
+                 "script": {"file_id": 1, "path_id": 501},
+                 "mono_header": component_bytes[:32],
+                 "component_bytes": component_bytes,
+                 "component_payload_size": len(component_bytes)},
+            ],
+            "external_files": {1: "globalgamemanagers.assets",
+                               2: "sharedassets2.assets"},
+            "external_objects": {
+                "globalgamemanagers.assets": {501: 115},
+                "sharedassets2.assets": {
+                    600: {"class_id": 114, "class_name": "FsmTemplate"},
+                },
+            },
+            "dependencies": ["globalgamemanagers.assets", "sharedassets2.assets"],
+        }
+        self.assertTrue(audit.validate_synthetic_unity_object_graph(graph)["validated"])
+        graph["external_objects"]["sharedassets2.assets"][600]["class_name"] = "Other"
+        with self.assertRaisesRegex(ValueError, "wrong class"):
+            audit.validate_synthetic_unity_object_graph(graph)
+
+    def test_synthetic_gui_fsm_rejects_missing_or_malformed_opaque_tail(self):
+        for tail in (b"", bytes(39), bytes(41)):
+            with self.subTest(tail_size=len(tail)):
+                with self.assertRaisesRegex(ValueError, "explicit 40-byte"):
+                    audit.build_synthetic_graphic_playmaker_component(
+                        tail, game_object_path_id=101, script_file_id=1,
+                        mono_script_path_id=501)
+
+    def test_fsm_encoder_rejects_duplicate_state_and_event_references(self):
+        parsed = audit.parse_fsm_component(fsm_component())
+        duplicate_state = copy.deepcopy(parsed)
+        duplicate_state["states"][1]["name"] = duplicate_state["states"][0]["name"]
+        with self.assertRaisesRegex(ValueError, "duplicate state name"):
+            audit.encode_fsm_component(duplicate_state)
+
+        unresolved_event = copy.deepcopy(parsed)
+        unresolved_event["states"][0]["transitions"][0]["event"] = "Missing"
+        with self.assertRaisesRegex(ValueError, "undeclared Fsm event"):
+            audit.encode_fsm_component(unresolved_event)
 
     def test_rejects_unresolved_transition_state(self):
         with self.assertRaisesRegex(ValueError, "undeclared state"):
@@ -731,6 +885,26 @@ class PlayMakerFsmAssetInspectorTests(unittest.TestCase):
         self.assertEqual(parsed["fsm_name"], "SyntheticFSM")
         self.assertEqual(parsed["start_state"], "Closed")
         self.assertEqual(parsed["state_count"], 2)
+
+    def test_synthetic_fsm_template_round_trips_byte_for_byte(self):
+        prefix = bytearray(32)
+        prefix += b"SyntheticTemplate\0"
+        prefix += bytes(-len(prefix) % 4)
+        prefix += string("General")
+        embedded_fsm = bytearray(fsm_component()[32:-12])
+        struct.pack_into("<iq", embedded_fsm, 0, 0, 77)
+        raw = bytes(prefix + embedded_fsm)
+        header, fsm = audit.parse_fsm_template(raw)
+        encoded = audit.encode_fsm_template(header, fsm)
+        header_again, fsm_again = audit.parse_fsm_template(encoded)
+        self.assertEqual(encoded, raw)
+        self.assertEqual(header_again["name"], header["name"])
+        self.assertEqual(audit._semantic_fsm_summary(fsm_again),
+                         audit._semantic_fsm_summary(fsm))
+        inconsistent = copy.deepcopy(header)
+        inconsistent["fsm_name"] = "different"
+        with self.assertRaisesRegex(ValueError, "header and embedded Fsm graph disagree"):
+            audit.encode_fsm_template(inconsistent, fsm)
 
     def test_rejects_invalid_fsm_template_name_and_truncated_header(self):
         no_terminator = bytearray(32 + audit.MAX_STRING_BYTES + 1)
