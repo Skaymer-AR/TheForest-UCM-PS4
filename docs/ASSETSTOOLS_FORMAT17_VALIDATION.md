@@ -96,9 +96,16 @@ provided, and the MonoBehaviour carries no corresponding executable script
 payload. This is a structural reader/writer fixture, not an importable Unity
 component.
 
-It also does **not** validate a PlayMakerFSM, its private serialized schema,
-the remaining Fsm tail, a Unity Editor save round-trip, loading in The Forest,
-PlayMaker execution, a runtime registration path, or DualShock 4 input. A
-separate Unity `5.6.6f2` Editor import test and an authorized, compatible
-PlayMaker schema are still required before claiming editor-importable PlayMaker
-data. Even those would not prove runtime loading in the game.
+This base fixture does **not** validate a PlayMakerFSM. The workflow now also
+runs the separate synthetic PlayMaker container probe documented in
+[`PLAYMAKER_FORMAT17_CONTAINER_PROBE_20261031.md`](PLAYMAKER_FORMAT17_CONTAINER_PROBE_20261031.md).
+That probe embeds the repository's synthetic PlayMakerFSM payload and shows
+that AssetsTools.NET can preserve its bytes through a format-17 rewrite; the
+Python codec independently accepts the synthetic payload. AssetsTools.NET's
+class database still does not decode PlayMaker's private schema.
+
+Neither fixture demonstrates Unity Editor import/save, PlayMaker execution,
+loading in The Forest, a runtime registration path, or DualShock 4 input. A
+Unity `5.6.6f2` Editor round-trip using an authorized, compatible PlayMaker
+package is still required before claiming editor-importable PlayMaker data.
+Even that would not prove runtime loading in the game.

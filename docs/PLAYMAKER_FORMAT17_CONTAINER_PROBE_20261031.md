@@ -58,6 +58,17 @@ released 2018-05-08, changeset 6bac21139588. Unity Hub's archive
 provides a legitimate route for installing archived editors. The editor
 is not installed or activated by this repository's CI.
 
+Hutong Games' [PlayMaker 1.8.4 release notes](https://hutonggames.fogbugz.com/default.asp?ixWikiPage=1461&nRevision1=1&pg=pgWikiDiff)
+explicitly list Unity 5.6 compatibility; the same notes list a fix for missing
+iOS system events in Unity 5.6 in 1.8.5. These make 1.8.4/1.8.5 candidates for
+the separate Editor experiment, but do not identify what The Forest shipped.
+The current [PlayMaker 1 Asset Store listing](https://assetstore.unity.com/packages/tools/visual-scripting/playmaker-368)
+shows version 1.9.12f1 with original Unity version 2022.3.62. That public
+listing does not provide evidence that this version supports Unity 5.6.6f2.
+Unity's [My Assets page](https://docs.unity.com/en-us/asset-store/downloads/organize-asset-packages)
+lists packages owned by a Unity ID, but its public documentation does not
+confirm that a specific archived PlayMaker 1.8.x release remains downloadable.
+
 Hutong Games' [PlayMaker 2 installation guide](https://docs.hutonggames.com/welcome/installation/)
 requires Unity 2022.3+ and explicitly rules out backward compatibility
 with PlayMaker 1. The historical commercial PlayMaker 1 package is not
@@ -75,8 +86,11 @@ fields, not chosen from these strings alone.
 Hutong Games' own forum points purchasers with expired download links
 to [info at hutonggames.com](https://hutonggames.com/playmakerforum/index.php?topic=7462.0)
 for a refreshed legitimate download. A concrete next dependency action is
-to request a licensed PlayMaker 1 release compatible with Unity 5.6.6f2
-and ask whether the older 2018-era release packages remain available.
+to request licensed PlayMaker 1.8.4 or 1.8.5 packages (or another release
+confirmed compatible with Unity 5.6.6f2) and ask whether those older packages
+remain available. Record the delivered package's exact version and assembly
+metadata before using it. The versions in release notes remain candidates,
+not evidence of The Forest's exact package.
 Do not source a proprietary package from unlicensed mirrors or commit it.
 
 ## Next experiment after obtaining the dependency
