@@ -37,15 +37,16 @@ scene-object experiment. The minimum source set depends on the object graph:
 - To edit `level2`, its exact bytes are mandatory.
 - `globalgamemanagers.assets` is required to resolve the `MonoScript` pointer
   for a title-owned `PlayMakerFSM` and validate the script/type reference.
-- A self-contained inline FSM can avoid a new `FsmTemplate` asset. If the new
-  component references an existing `FsmTemplate`, the pointed-to asset file
-  must also be present; existing reports identify `sharedassets2.assets` as
-  containing the inspected PlayMaker templates.
-- `sharedassets0.assets` is needed if the edit changes or validates the
-  existing Rewired maps. It is not automatically required for a purely visual
-  scene object.
+- `sharedassets0.assets` is needed to resolve the scene's existing Rewired
+  prefab references and is the source for the controller maps if the input
+  path is changed or validated.
+- `sharedassets2.assets` is needed to resolve the scene's existing
+  `FsmTemplate` references. A self-contained inline FSM can avoid adding a
+  new template dependency, but it does not erase the scene's existing ones.
 - `resources.assets` and `resources.assets.resS` are needed only if the new
-  object graph references objects or streamed payloads in those files.
+  object graph or the scene's dependency table actually references objects or
+  streamed payloads in those files; inspect the original `level2` table to
+  decide.
 
 Read the source scene's external table and all PPtrs before deciding the
 candidate's exact allowlist. Preserve all existing components, keep the
@@ -62,9 +63,12 @@ requiring unrelated levels or the complete package tree.
 | Add a new native/AOT component | Least viable now: no title IL2CPP source/build pipeline or validated registration/bootstrap; the original PS4 module is a SELF/PRX container, not a linkable project. It would expand the patch and recovery surface. |
 
 Do not generate a scene candidate from fixtures or inferred bytes. The single
-current build blocker is the absence of the hash-pinned `level2` bytes; to
-validate its script pointer, `globalgamemanagers.assets` must arrive with it.
-This is a bounded source-input gap, not a requirement for the full game tree.
+current build blocker is that the hash-pinned scene source bundle is not
+available: at minimum `level2`, `globalgamemanagers.assets`,
+`sharedassets0.assets`, and `sharedassets2.assets` are needed for this scene's
+object/script/map/template references. Any other files named by `level2`'s
+external table can be added to that bounded set. This is not a requirement
+for unrelated levels or the full `Image0`/`Sc0` tree.
 
 ## Input logic advanced offline
 
