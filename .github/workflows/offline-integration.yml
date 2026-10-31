@@ -69,6 +69,10 @@ jobs:
       - name: Generate fixture and read, write, and reread with AssetsTools.NET
         run: |
           set -euo pipefail
+          python3 scripts/unity_format17_playmaker_fixture.py build output/unity-format17/input
+          python3 scripts/unity_format17_playmaker_fixture.py verify \
+            output/unity-format17/input/synthetic_playmaker_scene.assets \
+            output/unity-format17/input/synthetic_playmaker_library.assets
           python3 scripts/unity_format17_fixture.py build output/unity-format17/input
           python3 scripts/unity_format17_fixture.py verify \
             output/unity-format17/input/synthetic_scene.assets \
@@ -80,3 +84,8 @@ jobs:
             output/unity-format17/roundtrip/synthetic_scene.assets \
             output/unity-format17/roundtrip/synthetic_library.assets \
             --expected-name "Synthetic Menu Host (AssetsTools.NET rewrite)"
+
+          python3 scripts/unity_format17_playmaker_fixture.py verify \
+            output/unity-format17/roundtrip/synthetic_playmaker_scene.assets \
+            output/unity-format17/roundtrip/synthetic_playmaker_library.assets \
+            --expected-name "Synthetic PlayMaker Menu (AssetsTools.NET rewrite)"

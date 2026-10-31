@@ -35,10 +35,17 @@ internal static class Program
 
             stage = "initial AssetsTools.NET read";
             Graph before = ReadAndValidate(classDataPath, fixtureDir, OriginalName);
+            string playmakerBefore = PlayMakerFormat17Probe.Validate(classDataPath, fixtureDir,
+                PlayMakerFormat17Probe.OriginalName);
             stage = "AssetsTools.NET rewrite";
             RewriteWithAssetsTools(classDataPath, fixtureDir, roundtripDir);
+            PlayMakerFormat17Probe.Rewrite(classDataPath, fixtureDir, roundtripDir);
             stage = "AssetsTools.NET reread";
             Graph after = ReadAndValidate(classDataPath, roundtripDir, RewrittenName);
+            string playmakerAfter = PlayMakerFormat17Probe.Validate(classDataPath,
+                roundtripDir, PlayMakerFormat17Probe.RewrittenName);
+            if (playmakerBefore != playmakerAfter)
+                throw new InvalidDataException("AssetsTools.NET changed opaque PlayMakerFSM component bytes");
             if ((before with { GameObjectName = RewrittenName }) != after)
                 throw new InvalidDataException("AssetsTools.NET rewrite changed graph semantics");
 
@@ -48,6 +55,8 @@ internal static class Program
             Console.WriteLine("Validated: GameObject, Transform, MonoBehaviour base, MonoScript PPtr and external dependency");
             Console.WriteLine("Write/re-read: PASS (GameObject name changed through SetNewData)");
             Console.WriteLine($"Scene objects: {after.SceneObjectCount}; library objects: {after.LibraryObjectCount}");
+            Console.WriteLine("PlayMakerFSM container: PASS (synthetic MonoBehaviour, raw payload SHA-256 retained)");
+            Console.WriteLine("PlayMaker private schema: NOT validated by AssetsTools.NET class database");
             return 0;
         }
         catch (Exception ex)
