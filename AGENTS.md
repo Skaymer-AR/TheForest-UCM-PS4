@@ -63,10 +63,16 @@ DebugConsole or web demo work.
   and test an adapter boundary but do not implement a Unity or ScePad provider.
 - Keep original game binaries, metadata, and generated decompiler output
   outside the repository. The offline analyzer must never upload those files.
+- **Authorization update (2026-10-31):** the owner explicitly authorized
+  modifying and rebuilding private working copies of the original CUSA12398
+  1.15 PKG and Unity assets for offline analysis. This does not authorize
+  installing a package, running hooks, writing console memory, or publishing
+  game binaries/assets. Preserve the original source and keep every generated
+  package and commercial asset outside GitHub.
 - src/bridge_lifecycle.* is host-test-only and must not be included in the
   PRX build. The archived unsafe backends are for source review only.
-- Do not modify the PKG, save files, unknown game flags, or commit game
-  binaries/assets. Do not claim CI is hardware verification.
+- Do not modify save files or unknown game flags, install packages, or commit
+  game binaries/assets. Do not claim CI is hardware verification.
 
 ## Verification
 
@@ -77,4 +83,4 @@ unload or an in-game Unity callback.
 
 ## Alternate implementation evidence
 
-The original IL2CPP metadata contains precompiled GUIBox, GUIButton, GUILabel, GUILayoutButton and GUILayoutToggle actions. The evidence and serialization limitations are recorded in docs/PLAYMAKER_PRECOMPILED_GUI_EVIDENCE.md and docs/PLAYMAKER_ACTIONDATA_LAYOUT.json. An isolated PlayMaker FSM may provide an in-game graphical host without a new AOT class, but its actual Unity serialization, lifecycle and controller support remain unverified. Existing CutSceneController FSM components must remain untouched. This option is an architecture change; request authorization before editing the retail game's scene files or building a package. Continue safe offline research and tests autonomously.
+The original IL2CPP metadata contains precompiled GUIBox, GUIButton, GUILabel, GUILayoutButton and GUILayoutToggle actions. The evidence and serialization limitations are recorded in docs/PLAYMAKER_PRECOMPILED_GUI_EVIDENCE.md and docs/PLAYMAKER_ACTIONDATA_LAYOUT.json. An isolated PlayMaker FSM may provide an in-game graphical host without a new AOT class, but its actual Unity serialization, lifecycle and controller support remain unverified. Existing CutSceneController FSM components must remain untouched. The owner has authorized private offline scene/PKG copies; do not create an installable candidate until the serialized object, dependencies and package audit gates pass. Continue safe offline research and tests autonomously.
