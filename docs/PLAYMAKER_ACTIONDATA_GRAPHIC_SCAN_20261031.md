@@ -101,12 +101,12 @@ Metadata describes `GUIBox` and `GUILabel` fields using `FsmTexture`,
 inherits layout-option arrays (`GUILayoutAction` fields whose native metadata
 type kind is `SZARRAY`). These are AOT field signatures only. A separate
 `GetEventInfo` scan provides serialized examples of the shared `FsmTexture`
-and `FsmRect` wrapper encodings; it does not provide GUI-action payloads, nor
-a `GUIContent`, direct `UnityEngine.Rect`, or GUILayout-option encoding.
+and `FsmRect` wrapper encodings; it contains no serialized GUI-action records,
+GUIContent values, direct Rect fields, or GUILayout-option arrays.
 
 | AOT action | Metadata fields relevant to drawing | Serialization evidence |
 | --- | --- | --- |
-| `GUIBox` / `GUILabel` | `image:FsmTexture`, `text/tooltip/style:FsmString`, `content:UnityEngine.GUIContent`, `screenRect:FsmRect`, `left/top/width/height:FsmFloat`, `normalized:FsmBool`, `rect:UnityEngine.Rect` | Shared `FsmTexture`, `FsmRect`, and `FsmString` wrappers have examples in other actions; `GUIContent`, direct Rect, and these actions' complete parameter list are not serialized in available assets. |
+| `GUIBox` / `GUILabel` | `image:FsmTexture`, `text/tooltip/style:FsmString`, `content:UnityEngine.GUIContent`, `screenRect:FsmRect`, `left/top/width/height:FsmFloat`, `normalized:FsmBool`, `rect:UnityEngine.Rect` | No GUI action instance exists in the scanned assets; shared wrapper instances occur in other actions. The native writer-derived mapping is described below. |
 | `GUIButton` | `sendEvent:FsmEvent`, `storeButtonState:FsmBool`, then the `GUIBox` drawing fields | `FsmEvent` appears in serialized actions; exact GUIButton field-to-ActionData mapping is not observed. |
 | `GUILayoutButton` | `sendEvent:FsmEvent`, `storeButtonState:FsmBool`, `image:FsmTexture`, `text:FsmString`, `tooltip:FsmString`, `style:FsmString`; inherited `GUILayoutAction.layoutOptions` and `options` are arrays | Element types resolve from native metadata; serialized layout-option records are unavailable. |
 
@@ -123,11 +123,13 @@ The native `ActionData.GetFsmTexture` helper at link VA `0x01101210` reads
 `fsmObjectParams` at ActionData object offset `+0x90`; the already analyzed
 `GetFsmEventTarget` helper at `0x01102E90` reads `fsmEventTargetParams` at
 `+0x70`. `GetParamDataType` (`0x0110FB80`) and `SaveActionField`
-(`0x010F40C0`) are also present. These are static runtime access/serialization
-paths, not a verified Unity file encoding for a GUI action's texture. Without
-a serialized GUI instance or a fully mapped field-specific writer path, they
-do not establish a loadable GUI ActionData record. No guessed GUIContent,
-direct-Rect, or layout-option encoding was added.
+(`0x010F40C0`) are the title's static serializer paths. The exact writer
+branches and reflected GUI fields are now mapped below. That supports a
+native-schema synthetic ActionData block; it still does not prove Unity will
+accept that block when loading a newly authored asset. `GUIContent` and the
+GUI action's cached Rect are internal runtime fields, not serialized public
+parameters. Direct Rect has a native writer, but it is not one of the GUIBox
+or GUILabel public fields. GUILayout arrays remain outside the selected path.
 
 ## Serialized shared graphic-parameter witnesses
 
@@ -184,11 +186,11 @@ so the surrounding ActionData remains prefix-only. This partial string match
 does not establish the full record serializer.
 
 These observations prove wrapper type codes and serialization shapes in
-`GetEventInfo`. They do not prove the exact `GUIBox`/`GUILabel`/`GUIButton`
-action records, usable texture references, values for the drawing actions,
-or that these placeholder records can be loaded as a new FSM. Applying the
-same type codes to the matching GUI fields is an inference from their shared
-AOT wrapper type, not a serialized GUI instance.
+`GetEventInfo`. They are still not serialized GUI action instances and do not
+prove usable texture references or Unity acceptance of new assets. The
+field-specific native writer and reflection audit below now support the GUI
+field-to-ActionData mapping; actual retail bytes for GUIBox/GUILabel remain
+unavailable in the scanned assets.
 
 ## Parser and round-trip result
 
@@ -196,9 +198,11 @@ The bounded ActionData parser now covers the title-observed header arrays and
 the specialized `FsmString`, `FsmGameObject`, `FsmObject` (including
 `FsmTexture`/`FsmMaterial` references), `FsmOwnerDefault`,
 and `FsmEventTarget` arrays. It decodes the observed byte-data forms for
-`System.Boolean`, `FsmFloat`, `FsmBool` where its variable link is understood,
-`FsmEvent`, `FsmColor`, `FsmInt`, `FsmRect`, `FsmVector2`, `FsmVector3`, and
-`FsmQuaternion`. Unknown parameter codes fail in strict mode;
+`System.Boolean`, `UnityEngine.Rect`, `FsmFloat`, `FsmBool`, `FsmEvent`,
+`FsmColor`, `FsmInt`, `FsmRect`, `FsmVector2`, `FsmVector3`, and
+`FsmQuaternion`. FsmFloat/FsmBool/FsmRect variable-name tails use strict
+UTF-8 decoding and a 4096-byte bound; an empty name after a true variable flag
+is retained as an unresolved link rather than discarded. Unknown parameter codes fail in strict mode;
 the scanner's explicit salvage mode preserves their byte slices as opaque.
 Invalid/truncated counts, bad packed booleans, out-of-range array references,
 overlapping or out-of-range byteData slices, invalid PPtr shapes, and changed
@@ -225,38 +229,135 @@ unknown parameter types in strict mode, invalid array references, negative
 PPtr IDs, truncation, and payload-size changes. This is a tested ActionData
 subset, not a complete PlayMaker component/Unity asset serializer.
 
+## 2026-10-31 — Native writer closure for GUIBox/GUILabel
+
+The exact-build IL2CPP text and v23 metadata were inspected privately. The
+original ELF and metadata hashes match the pinned values above; only derived
+field names, types, code addresses, and test summaries are kept in Git.
+
+### Native call path and field selection
+
+`ActionData.SaveAction` (`0x010F3C30`) obtains action fields through
+`ActionData.GetFields` (`0x010F2690`), computes each action's type hash in
+`GetActionTypeHashCode` (`0x010F2810`), and sends each field through
+`SaveActionField` (`0x010F40C0`). Loading uses `LoadActionField`
+(`0x010FCA70`). `GetParamDataType` (`0x0110FB80`) selects the per-field
+parameter type, while `TryConvertParameter` (`0x0110DF40`) and
+`TryConvertArrayElement` (`0x011110B0`) handle wrapper and array conversion.
+The native reflection call uses `Public|Instance`; its field walk is
+derived-class first and then base classes. The low 16 bits on each registered
+Il2CppType carry the field attributes used to filter those results.
+
+For both `GUIBox` and `GUILabel`, this gives exactly ten `ActionData` fields
+in this order:
+
+| Field | AOT type | Code | ActionData storage |
+| --- | --- | ---: | --- |
+| `image` | `FsmTexture` | 33 | `fsmObjectParams` |
+| `text`, `tooltip`, `style` | `FsmString` | 18 | `fsmStringParams` |
+| `screenRect` | `FsmRect` | 30 | `byteData` |
+| `left`, `top`, `width`, `height` | `FsmFloat` | 15 | `byteData` |
+| `normalized` | `FsmBool` | 17 | `byteData` |
+
+Metadata marks `GUIContentAction.content` as Assembly/internal (`0x0003`), and
+`GUIAction.rect` as Assembly/internal (`0x0003`); both are omitted by
+`Public|Instance`. `GUIContentAction.OnGUI` constructs the cached `GUIContent`
+from `image/text/tooltip/style`, and `GUIAction.OnGUI` builds/caches the Rect
+from `screenRect` or the four scalar coordinates. These are runtime caches,
+not missing serialized parameters. `normalized` controls the coordinate mode.
+
+`ActionData.GetActionTypeHashCode` concatenates the public field type
+`FullName` strings in that order and applies the title's UTF-16 string hash
+(`h = h*31 + codeUnit`, modulo 32 bits). The algorithm reproduces the real
+`CameraFadeIn` hash `0xCF3E5806` from its four serialized field types. The
+same native-derived calculation gives `0xFC6EB184` for both GUI action types.
+
+### Parameter writer formats
+
+| Type | Wire form recovered | Evidence class |
+| --- | --- | --- |
+| `FsmTexture` (33) | FsmObject wrapper in `fsmObjectParams`; 56-byte record with aligned strings, flags, type name and PPtr | Real `GetEventInfo` records plus native type dispatch |
+| `FsmString` (18) | FsmString wrapper in `fsmStringParams`; aligned strings and flags | Real `GetEventInfo` records plus native type dispatch |
+| `FsmRect` (30) | Four little-endian f32 values, one useVariable byte, then UTF-8 variable-name bytes when linked | Real 17-byte `GetEventInfo` witness; `FsmRectToByteArray` `0x010FA950` and inverse `0x01100640` |
+| `FsmFloat` (15) | f32, one useVariable byte, then UTF-8 variable-name bytes when linked | Real ActionData plus `FsmFloatToByteArray` `0x010F9EB0` and inverse `0x010FFB10` |
+| `FsmBool` (17) | value byte, one useVariable byte, then UTF-8 variable-name bytes when linked | Native `FsmBoolToByteArray` `0x010FA2F0` and inverse `0x010FFF50`; retail blocks witness the two-byte base size |
+| `UnityEngine.Rect` (11) | Four little-endian f32 values (16 bytes) | Native `RectToByteArray` `0x010F9C40` and inverse `ByteArrayToRect` `0x01112B30`; not a public GUIBox/GUILabel field |
+
+FsmFloat/FsmBool/FsmRect names call the title's UTF-8 `StringToByteArray`
+(`0x010FAFD0`); the byte-array readers consume the remaining bytes. A true
+variable flag with an empty name therefore has a valid five-, two-, or
+seventeen-byte wrapper representation but is not resolved to an Fsm variable.
+The parser preserves that condition; a full FSM reference validator still
+rejects unresolved FsmFloat links.
+
+`GUILayoutAction.layoutOptions` is public `LayoutOption[]`; `options` is a
+private runtime `GUILayoutOption[]` cache. `GetLayoutOption` (`0x01103270`)
+and `TryConvertArrayElement` (`0x011110B0`) confirm a conversion route, but
+there is no serialized GUI layout-option witness in the scanned assets and
+those arrays are not needed by GUIBox/GUILabel. `FunctionCall` uses the
+separate `functionCallParams` path (`GetFunctionCall` at `0x01101460`); those
+arrays are empty for the selected drawing actions and do not enter this
+minimal writer. No layout or FunctionCall encoding is claimed here.
+
+### Strict synthetic round-trip
+
+The inspector now supports `--graphic-actiondata-only`. Given the exact
+private module and metadata, it checks the reflected public-instance field
+list against the ten-field schema, emits one synthetic `ActionData` block
+per action, strictly decodes it, re-encodes it, and decodes again. The local
+run produced:
+
+| Action | Encoded bytes | byteData | Type hash | Result |
+| --- | ---: | ---: | ---: | --- |
+| `GUIBox` | 572 | 39 | `0xFC6EB184` | byte-identical decode → encode → decode |
+| `GUILabel` | 596 | 39 | `0xFC6EB184` | byte-identical decode → encode → decode |
+
+The fixture uses a null image PPtr and ordinary text/coordinates; it has no
+gameplay mutation. Tests cover round-trip equality, field/hash mismatch,
+Rect truncation/non-finite values, malformed UTF-8, oversized variable-name
+tails, and empty unresolved variable names. This establishes a complete
+format-level ActionData block **derived from this title's native writer and
+metadata**. It is not a block extracted from a commercial GUI action, a Unity
+asset writer, or proof that PlayMaker will load or render it.
+
+The full inspector was rerun with SHA-pinned `level2`,
+`globalgamemanagers.assets`, `sharedassets2.assets`, the IL2CPP ELF, and v23
+metadata. All five hashes matched; the existing `cameraFadeFSM` and its
+template validated, and the report included the two synthetic GUI ActionData
+round-trips. The JSON output remained in `/tmp` and contains derived audit
+data only.
+
 ## Independent FSM and integration gate
 
-The independent menu FSM remains **pending**, not ready to serialize. The
-existing two-state menu graph is still a normalized structural model; it does
-not emit Unity ActionData for its GUI actions. Serialized `SendEvent`,
-`GetButtonDown`, and `GetEventInfo` examples now anchor the event, input, and
-shared wrapper subsets. The drawing-action records, GUIContent/direct-Rect
-fields, and layout arrays remain unproven. No complete graphical FSM was
-fabricated from AOT presence alone.
+The independent menu FSM remains **pending**. The synthetic drawing-action
+ActionData is now complete at the native-format level, but the existing
+two-state graph does not yet emit a full serialized FSM. Serialized
+`SendEvent`, `GetButtonDown`, and `GetEventInfo` examples anchor the event,
+input, and shared wrapper subsets. The 40-byte Fsm tail is still opaque; there
+is no full `Fsm`/scene-object Unity asset writer or demonstrated loader. No
+commercial scene or prefab was built or changed.
 
 | Architecture | Evidence and work still required | Current status |
 | --- | --- | --- |
-| New `PlayMakerFSM` in a scene/prefab | The title serializes inline FSM components and `FsmTemplate` references. A new uniquely identified object/action graph would require scene/prefab edits and dependency/reference updates; full GUI ActionData serialization and a reversible package workflow are still missing. | Structurally grounded; commercial asset edit not authorized or attempted. |
-| Runtime content loader | No title-specific content loader that accepts an arbitrary FSM, and no safe PlayMaker component/list registration API, has been demonstrated. | No evidence of a usable loader. |
+| A. New scene/prefab object with `PlayMakerFSM` | The title demonstrably serializes inline `Fsm` components and `FsmTemplate` references. GUIBox/GUILabel ActionData is now derivable and round-trips against native metadata. Still needed: a complete writer for the containing FSM/component and Unity object/PPtr tables, plus import/scene dependency validation. | Most concrete route; not built or validated by Unity. Commercial asset edit remains unauthorized. |
+| B. Runtime object/component registration | No title-specific loader or safe API to create a GameObject/PlayMakerFSM, register its Fsm with PlayMaker, establish GUI-list ownership, activate it on Unity's thread, transfer focus, or wait for callbacks before destruction. | No demonstrated route; substantially more runtime ownership and teardown risk. |
 | Title AOT build | A new managed host/action would require the title's Unity/IL2CPP build and registration pipeline plus matching metadata/package integration. The existing AOT actions do not create or attach a new object by themselves. | No source/build pipeline or reproducible AOT rebuild available. |
 
-The least speculative future asset architecture is a separate scene/prefab
-object owning a new `PlayMakerFSM`, never either `CutSceneController` FSM.
-Before any authorized edit, the next offline gate is to establish the exact
-GUI action parameter codes/arrays from a trustworthy GUI ActionData fixture
-or verified field-specific serialization path, resolve `GUIContent`, direct
-`UnityEngine.Rect`, and GUILayout-option array encoding, and round-trip a
-complete synthetic component and its references. `FsmTexture`/`FsmRect` wrapper
-wire forms are now witnessed in `GetEventInfo`, but the exact GUI action data
-is not. Input must separately use a nonconflicting Rewired action and a verified
-runtime focus/input policy; `L1+R1` remains unsuitable because its stored
-maps overlap gameplay controls.
+The recommended direction is to continue only with route A as an isolated,
+asset-owned FSM, never either `CutSceneController` FSM. Before any authorized
+asset edit, implement a bounded serializer for the containing `Fsm`, component,
+GameObject and dependency references; validate it with a Unity 5.6.6f2 asset
+reader/writer and ensure original object bytes remain unchanged. Route B
+should remain deferred unless a concrete Unity-thread creation/registration
+and quiescent-destruction API is found. Input must separately use a
+nonconflicting Rewired action and a verified runtime focus/input policy;
+`L1+R1` remains unsuitable because its stored maps overlap gameplay controls.
 
-**Verdict:** the AOT drawing classes exist, and the title's existing
-serialized event/input and shared `FsmTexture`/`FsmRect` ActionData subsets are
-better understood. A new graphical FSM is still not demonstrated as fully
-serializable or loadable.
-There is no proven loader/registration route. The Ultimate Mod Menu is not
-ready for PS4 testing; no PRX, asset edit, PKG change, or console action was
-performed.
+**Verdict:** GUIBox and GUILabel ActionData are now complete and coherent at
+the title-native format level, with synthetic byte-identical round-trips
+validated against exact metadata and native code. They are not commercial GUI
+instances, and a complete FSM/Unity asset inclusion path is still pending.
+Continue with isolated static-asset architecture A; do not pursue runtime
+registration B without new evidence. There is no demonstrated loader or
+registration route. The Ultimate Mod Menu is not ready for PS4 testing; no
+PRX, asset edit, PKG change, or console action was performed.

@@ -310,7 +310,36 @@ def graph_schema():
     return fields, aot
 
 
+class SyntheticGraphicResolver:
+    def serializable_action_fields(self, full_name: str) -> list[dict]:
+        if not full_name.endswith((".GUIBox", ".GUILabel")):
+            raise ValueError("unexpected synthetic action")
+        return [
+            {"name": name, "type": type_name, "attributes": 0x0006}
+            for name, type_name, _, _ in audit.GRAPHIC_ACTION_FIELD_LAYOUT
+        ]
+
+
 class PlayMakerFsmAssetInspectorTests(unittest.TestCase):
+    def test_public_instance_field_attribute_filter_matches_reflection_flags(self):
+        self.assertTrue(audit.is_public_instance_field(0x0006))
+        self.assertFalse(audit.is_public_instance_field(0x0003))  # Assembly/internal
+        self.assertFalse(audit.is_public_instance_field(0x0001))  # Private
+        self.assertFalse(audit.is_public_instance_field(0x0016))  # Public static
+        self.assertFalse(audit.is_public_instance_field(-1))
+        self.assertFalse(audit.is_public_instance_field("public"))
+
+    def test_type_resolver_reads_field_attributes_from_registered_type(self):
+        regions = {
+            0x1000: struct.pack("<Q", 0x2000),
+            0x2000: struct.pack("<QI", 7, (0x12 << 16) | 0x0006) + bytes(4),
+        }
+        resolver = audit.TypeResolver.__new__(audit.TypeResolver)
+        resolver.type_count = 1
+        resolver.type_table = 0x1000
+        resolver.image = SyntheticNativeImage(regions)
+        self.assertEqual(resolver.field_attributes(0), 0x0006)
+
     def test_type_resolver_follows_bounded_szarray_element_types(self):
         regions = {
             0x1000: struct.pack("<Q", 0x2000),
@@ -430,6 +459,104 @@ class PlayMakerFsmAssetInspectorTests(unittest.TestCase):
         self.assertEqual(decoded["parameters"][0]["value"]["value_pointer"]["path_id"], 99)
         self.assertEqual(decoded["parameters"][1]["value"]["rect"][2], 400.0)
 
+    def test_actiondata_direct_unity_rect_round_trip(self):
+        payload = struct.pack("<4f", 16.0, 24.0, 320.0, 180.0)
+        raw = action_data_one_parameter(
+            "HutongGames.PlayMaker.Actions.SyntheticRect", "rect", 11, payload)
+        decoded = audit.parse_action_data(audit.Reader(raw))
+        self.assertEqual(decoded["parameters"][0]["type"], "UnityEngine.Rect")
+        self.assertEqual(decoded["parameters"][0]["value"]["rect"],
+                         [16.0, 24.0, 320.0, 180.0])
+        self.assertEqual(audit.encode_action_data(decoded), raw)
+
+    def test_actiondata_direct_unity_rect_rejects_truncated_and_nonfinite_values(self):
+        malformed = (
+            struct.pack("<3f", 0.0, 0.0, 1.0),
+            struct.pack("<4f", float("nan"), 0.0, 1.0, 1.0),
+        )
+        for payload in malformed:
+            raw = action_data_one_parameter(
+                "HutongGames.PlayMaker.Actions.SyntheticRect", "rect", 11, payload)
+            with self.subTest(payload=payload), self.assertRaises(ValueError):
+                audit.parse_action_data(audit.Reader(raw))
+
+    def test_fsmfloat_variable_links_use_bounded_utf8_and_allow_empty_name(self):
+        for variable_name in ("time", "tiempo-é", ""):
+            payload = struct.pack("<fB", 1.25, 1) + variable_name.encode("utf-8")
+            raw = action_data_one_parameter(
+                "HutongGames.PlayMaker.Actions.GetEventInfo", "getFloatData", 15, payload)
+            decoded = audit.parse_action_data(audit.Reader(raw))
+            self.assertEqual(decoded["parameters"][0]["value"]["variable_name"],
+                             variable_name)
+            self.assertEqual(audit.encode_action_data(decoded), raw)
+
+    def test_fsmbool_and_fsmrect_variable_links_use_bounded_utf8(self):
+        cases = (
+            ("flag", 17, b"\x01\x01" + "visible-é".encode("utf-8"), "visible-é"),
+            ("flag", 17, b"\x00\x01", ""),
+            ("rect", 30, struct.pack("<4fB", 1.0, 2.0, 3.0, 4.0, 1), ""),
+            ("rect", 30, struct.pack("<4fB", 1.0, 2.0, 3.0, 4.0, 1) +
+             "panel-é".encode("utf-8"), "panel-é"),
+        )
+        for name, code, payload, expected_name in cases:
+            raw = action_data_one_parameter(
+                "HutongGames.PlayMaker.Actions.Synthetic", name, code, payload)
+            decoded = audit.parse_action_data(audit.Reader(raw))
+            self.assertEqual(decoded["parameters"][0]["value"]["variable_name"],
+                             expected_name)
+            self.assertEqual(audit.encode_action_data(decoded), raw)
+
+    def test_variable_link_rejects_invalid_utf8_and_oversized_suffix(self):
+        malformed = (
+            (15, struct.pack("<fB", 1.0, 1) + b"\xff"),
+            (17, b"\x00\x01\xff"),
+            (30, struct.pack("<4fB", 0.0, 0.0, 1.0, 1.0, 1) + b"\xff"),
+            (15, struct.pack("<fB", 1.0, 1) + b"a" * (audit.MAX_STRING_BYTES + 1)),
+        )
+        for code, payload in malformed:
+            raw = action_data_one_parameter(
+                "HutongGames.PlayMaker.Actions.Synthetic", "value", code, payload)
+            with self.subTest(code=code, size=len(payload)), self.assertRaises(ValueError):
+                audit.parse_action_data(audit.Reader(raw))
+
+    def test_synthetic_gui_actiondata_full_byte_round_trip_and_metadata_schema(self):
+        resolver = SyntheticGraphicResolver()
+        for action_name in ("GUIBox", "GUILabel"):
+            with self.subTest(action=action_name):
+                raw = audit.build_synthetic_graphic_action_data(action_name)
+                summary = audit.validate_graphic_action_data(raw, action_name, resolver)
+                parsed = audit.parse_action_data(audit.Reader(raw))
+                encoded = audit.encode_action_data(parsed)
+                redecoded = audit.parse_action_data(audit.Reader(encoded))
+                self.assertEqual(encoded, raw)
+                self.assertEqual(redecoded, parsed)
+                self.assertEqual(summary["action_type_hash_code_u32"], 0xFC6EB184)
+                self.assertEqual(summary["byte_data_size"], 39)
+                self.assertEqual(len(summary["serialized_fields"]), 10)
+
+    def test_synthetic_gui_actiondata_rejects_schema_or_hash_mismatch(self):
+        resolver = SyntheticGraphicResolver()
+        raw = audit.build_synthetic_graphic_action_data("GUIBox")
+        parsed = audit.parse_action_data(audit.Reader(raw))
+        parsed["hash_codes_u32"][0] ^= 1
+        with self.assertRaisesRegex(ValueError, "start/hash metadata"):
+            audit.validate_graphic_action_data(audit.encode_action_data(parsed),
+                                               "GUIBox", resolver)
+
+        class WrongResolver:
+            def serializable_action_fields(self, _name):
+                return [{"name": "content", "type": "UnityEngine.GUIContent"}]
+
+        with self.assertRaisesRegex(ValueError, "native public-instance GUI action fields"):
+            audit.validate_graphic_action_data(raw, "GUIBox", WrongResolver())
+
+    def test_action_type_hash_matches_retail_camera_fade_witness(self):
+        signature = [
+            "HutongGames.PlayMaker.FsmColor", "HutongGames.PlayMaker.FsmFloat",
+            "HutongGames.PlayMaker.FsmEvent", "System.Boolean",
+        ]
+        self.assertEqual(audit.action_type_hash_code(signature), 0xCF3E5806)
+
     def test_actiondata_fsmtexture_rejects_a_detached_parameter_value(self):
         parsed = audit.parse_action_data(
             audit.Reader(synthetic_graphic_field_action_data()))
@@ -483,15 +610,12 @@ class PlayMakerFsmAssetInspectorTests(unittest.TestCase):
                 self.assertIsNotNone(decoded)
                 self.assertEqual(audit.encode_action_data(decoded), raw)
 
-    def test_actiondata_empty_fsmfloat_variable_is_rejected_or_retained_opaque(self):
+    def test_actiondata_empty_fsmfloat_variable_is_decoded_and_round_trips(self):
         raw = action_data_one_parameter(
             "HutongGames.PlayMaker.Actions.GetEventInfo", "getFloatData", 15,
             struct.pack("<fB", 0.0, 1))
-        with self.assertRaisesRegex(ValueError, "empty FsmFloat variable link"):
-            audit.parse_action_data(audit.Reader(raw))
-        decoded = audit.parse_action_data(
-            audit.Reader(raw), salvage_unknown_parameters=True)
-        self.assertFalse(decoded["parameters"][0]["value"]["decoded"])
+        decoded = audit.parse_action_data(audit.Reader(raw))
+        self.assertEqual(decoded["parameters"][0]["value"]["variable_name"], "")
         self.assertEqual(audit.encode_action_data(decoded), raw)
 
     def test_actiondata_encoder_rejects_changed_payload_size_and_invalid_pointer(self):

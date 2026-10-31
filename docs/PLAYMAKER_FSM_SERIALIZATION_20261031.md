@@ -163,16 +163,20 @@ metadata field names and types for every supplied field, AOT virtual slots,
 and the explicit symbolic status of the `SendEvent` target. It rejects
 malformed typed fields, unresolved transitions and invalid event routes.
 
-This graph is **not** valid Unity ActionData output. The full-asset scans now
-provide real `FsmEventTarget`, `GetButtonDown`, and `GetEventInfo` instances.
-The two decoded `GetEventInfo` blocks witness the shared `FsmTexture` (type
-code 33, `fsmObjectParams`) and `FsmRect` (type code 30, 17-byte `byteData`)
-formats; their references are null placeholders. These are not GUI action
-instances. The graph builder remains a normalized model and does not consume
-the observed encodings to emit a serialized FSM. `GUIContent`, direct
-`UnityEngine.Rect`, the serialized GUILayout option arrays, and runtime
-`DelayedEvent` remain unmodeled. Their AOT array element types resolve to
-`HutongGames.PlayMaker.LayoutOption[]` and `UnityEngine.GUILayoutOption[]`,
+This graph is still **not** a complete serialized Unity FSM. The full-asset
+scans provide real `FsmEventTarget`, `GetButtonDown`, and `GetEventInfo`
+instances. The two decoded `GetEventInfo` blocks witness shared `FsmTexture`
+(type code 33, `fsmObjectParams`) and `FsmRect` (type code 30, 17-byte
+`byteData`) formats; their references are null placeholders. These are not
+GUI action instances. A separate native writer audit now emits complete
+synthetic `GUIBox` and `GUILabel` `ActionData` blocks, validated against the
+exact public-instance metadata fields and ActionData type hash. The normalized
+menu graph does not yet embed these blocks into a serialized Fsm. `GUIContent`
+and the GUI action's cached `UnityEngine.Rect` are internal fields excluded by
+the native reflection flags. Direct Rect's 16-byte encoding is code-derived,
+but is not used by GUIBox/GUILabel. Serialized GUILayout option arrays and
+runtime `DelayedEvent` remain unmodeled. Their AOT array element types resolve
+to `HutongGames.PlayMaker.LayoutOption[]` and `UnityEngine.GUILayoutOption[]`,
 but no such action is serialized in the scanned assets. The per-instance parameter records are in
 [`PLAYMAKER_GRAPHIC_PARAMETER_EXAMPLES_20261031.jsonl`](PLAYMAKER_GRAPHIC_PARAMETER_EXAMPLES_20261031.jsonl).
 Therefore the graph is still a structural prototype and cannot yet be
@@ -203,17 +207,23 @@ loader. No title-specific loader or external component-registration API for
 an arbitrary graph was demonstrated. No scene/PKG editing, IL2CPP rebuild,
 PRX, or PS4 action was performed.
 
+| Route | What is evidenced | Missing contract | Assessment |
+| --- | --- | --- | --- |
+| A. New serialized scene/prefab object | Unity scenes/prefabs already own inline `PlayMakerFSM` components and optional `FsmTemplate` links; GUIBox/GUILabel ActionData now round-trips against the title-native field schema. | Full Fsm/component and object-table serializer; dependency/PPtr generation; Unity import/reload validation; an authorized separate-object asset change. | Continue this route as the lowest-unknown architecture; no commercial asset is ready. |
+| B. Runtime component registration | Existing PlayMaker lifecycle has `Awake`/`Init`, active GUI dispatch, and destruction paths. | Supported Unity-thread GameObject/component creation, PlayMaker-list registration and ownership, focus handling, and quiescent callback teardown. No arbitrary-FSM loader/API was found. | Defer; no safe runtime route demonstrated. |
+
 The least speculative future asset proposal is a separate scene/prefab object
 with a new `PlayMakerFSM`, never a modification of either `CutSceneController`
 FSM. Follow-up results, full-scan counts, per-instance data, ActionData parser
-coverage and the remaining GUI serialization gaps are in
+coverage and remaining full-Fsm/component gaps are in
 [`PLAYMAKER_ACTIONDATA_GRAPHIC_SCAN_20261031.md`](PLAYMAKER_ACTIONDATA_GRAPHIC_SCAN_20261031.md).
-Before any asset integration is considered, obtain a graphical ActionData
-witness or verify the field-specific serializer for the GUI action parameter
-arrays. `FsmTexture`/`FsmRect` wrapper encodings are now witnessed in
-`GetEventInfo`, but the GUI actions' own fields, `GUIContent`, direct
-`UnityEngine.Rect`, GUILayout option arrays, and complete scene/prefab
-reference graph still need offline validation.
+The field-specific serializer and metadata now justify a complete
+format-level `ActionData` block for `GUIBox`/`GUILabel`, with synthetic
+byte-identical round-trip. This is not an original GUI action witness or a
+Unity load test. The containing `Fsm` and component writer, 40-byte opaque Fsm
+tail, scene/prefab object and dependency references, and Unity import/reload
+validation still need offline work. GUILayout option arrays are not needed
+for the selected GUI actions and remain unsupported.
 Delivery would then require rebuilding the affected Unity asset files and a
 valid game-package installation path; this is outside the present
 authorization. A runtime path would need an independently proven
@@ -228,10 +238,11 @@ safe-destruction contract.
   tables. Do not edit `CutSceneController`, Rewired maps, or native code in
   the first isolated build.
 - **Risks:** malformed ActionData or PPtrs can break scene loading; the
-  current synthetic graph omits action fields; GUIButton is not proven to
-  accept DS4 navigation; a new component's insertion into the live PlayMaker
-  GUI list is not verified; modifying assets may require a valid signed
-  package workflow.
+  normalized menu graph still does not embed the new GUIBox/GUILabel
+  ActionData blocks into a full Fsm; GUIButton is not proven to accept DS4
+  navigation; a new component's insertion into the live PlayMaker GUI list
+  is not verified; modifying assets may require a valid signed package
+  workflow.
 - **Acceptance:** implement a serializer for every field used by the selected
   GUI/input actions, including the special `FsmEventTarget` payload; round-trip
   its generated component and template through a strict parser; prove unique
@@ -244,25 +255,30 @@ safe-destruction contract.
   package and confirm the original hashes after rollback. No installation or
   PS4 test is authorized by this proposal.
 
-**Verdict:** an independent asset-owned FSM is **structurally promising but
-still pending**. We are not ready to test an Ultimate Mod Menu on PS4.
+**Verdict:** the drawing `ActionData` layer is now **native-schema complete for
+GUIBox/GUILabel**, while an independent asset-owned FSM remains **pending**
+because the containing Unity object serialization and inclusion path are not
+complete. Continue only on the isolated scene/prefab architecture; runtime
+registration still has no safe, demonstrated path. We are not ready to test
+an Ultimate Mod Menu on PS4.
 
 ## Verification and limits
 
-Twenty-six synthetic-only tests cover serialized component parsing, ActionData
-boundaries and same-size semantic round-trips, variable/event/state references,
-FsmTemplate headers, malformed tails, typed graph fields, event routes,
-`FsmTexture`/`FsmRect` payloads, and decode/encode/re-decode structural
-equivalence. The exact-source inspector also
+Thirty-six targeted PlayMaker tests cover serialized component parsing,
+ActionData boundaries and same-size semantic round-trips, variable/event/state
+references, FsmTemplate headers, malformed tails, typed graph fields, event
+routes, `FsmTexture`/`FsmRect` payloads, native field-attribute filtering,
+synthetic GUIBox/GUILabel ActionData, and decode/encode/re-decode equivalence.
+The exact-source inspector also
 verifies all five input hashes, both scene-to-template references, the
 cameraFade component/template semantic match, the 13 inline prefab components,
 and the extended native lifecycle audit.
 
-`ASAN_OPTIONS=detect_leaks=0 SANITIZE=1 sh scripts/test.sh` passed 184 Python
-tests and the native C, ASan, and UBSan suites. `scripts/assert-safe-build.py`,
-the JavaScript check, and the targeted AOT/lifecycle unit tests passed. The
-local Unity C# fixture could not run because `mcs` and `mono` are absent; the
-GitHub Actions run for the resulting commit is the available Mono-backed
+`ASAN_OPTIONS=detect_leaks=0 SANITIZE=1 sh scripts/test.sh` passed 194 Python
+tests and the native C, ASan, and UBSan suites. `scripts/assert-safe-build.py`
+passed. The exact-source inspector matched all five hashes and validated both
+synthetic GUI ActionData blocks. The local Unity C# fixture could not run
+because `mcs` and `mono` are absent; GitHub Actions supplies the Mono-backed
 check.
 
 These checks establish the static serialized relationships and native

@@ -64,6 +64,7 @@ PARAM_DATA_TYPES = {
     20: "HutongGames.PlayMaker.FsmOwnerDefault",
     15: "HutongGames.PlayMaker.FsmFloat",
     16: "HutongGames.PlayMaker.FsmInt",
+    11: "UnityEngine.Rect",
     23: "HutongGames.PlayMaker.FsmEvent",
     24: "HutongGames.PlayMaker.FsmObject",
     25: "HutongGames.PlayMaker.FsmColor",
@@ -75,6 +76,29 @@ PARAM_DATA_TYPES = {
     35: "HutongGames.PlayMaker.FsmQuaternion",
     37: "HutongGames.PlayMaker.FsmVector2",
 }
+
+FIELD_ATTRIBUTE_ACCESS_MASK = 0x0007
+FIELD_ATTRIBUTE_PUBLIC = 0x0006
+FIELD_ATTRIBUTE_STATIC = 0x0010
+
+
+def is_public_instance_field(attributes: int) -> bool:
+    return (type(attributes) is int and 0 <= attributes <= 0xFFFF and
+            (attributes & FIELD_ATTRIBUTE_ACCESS_MASK) == FIELD_ATTRIBUTE_PUBLIC and
+            not (attributes & FIELD_ATTRIBUTE_STATIC))
+
+GRAPHIC_ACTION_FIELD_LAYOUT = [
+    ("image", "HutongGames.PlayMaker.FsmTexture", 33, "fsmObjectParams"),
+    ("text", "HutongGames.PlayMaker.FsmString", 18, "fsmStringParams"),
+    ("tooltip", "HutongGames.PlayMaker.FsmString", 18, "fsmStringParams"),
+    ("style", "HutongGames.PlayMaker.FsmString", 18, "fsmStringParams"),
+    ("screenRect", "HutongGames.PlayMaker.FsmRect", 30, None),
+    ("left", "HutongGames.PlayMaker.FsmFloat", 15, None),
+    ("top", "HutongGames.PlayMaker.FsmFloat", 15, None),
+    ("width", "HutongGames.PlayMaker.FsmFloat", 15, None),
+    ("height", "HutongGames.PlayMaker.FsmFloat", 15, None),
+    ("normalized", "HutongGames.PlayMaker.FsmBool", 17, None),
+]
 
 IL2CPP_PRIMITIVES = {
     0x01: "System.Void", 0x02: "System.Boolean", 0x03: "System.Char",
@@ -197,6 +221,54 @@ class TypeResolver:
             element = self._resolve_type_pointer(data, depth=depth + 1)
             return element + "[]"
         raise ValueError(f"unsupported IL2CPP field type kind 0x{kind:02X}")
+
+    def field_attributes(self, type_index: int) -> int:
+        """Read the field-attribute bits carried by this registered Il2CppType."""
+        if type(type_index) is not int or not 0 <= type_index < self.type_count:
+            raise ValueError("field attribute type index outside native type table")
+        pointer = struct.unpack(
+            "<Q", self.image.read(self.type_table + type_index * 8, 8))[0]
+        if pointer <= 0:
+            raise ValueError("field attribute type pointer is invalid")
+        flags = struct.unpack("<I", self.image.read(pointer + 8, 4))[0]
+        return flags & 0xFFFF
+
+    def serializable_action_fields(self, full_name: str) -> list[dict]:
+        """Return the public instance fields ActionData.GetFields can see.
+
+        Native ActionData.GetFields calls reflection with Public|Instance. The
+        metadata-backed field type registration carries the ECMA field attrs
+        in its low 16 bits, allowing this view to omit internal caches such as
+        GUIContentAction.content and GUIAction.rect.
+        """
+        current = self.type_defs.get(full_name)
+        if current is None:
+            raise ValueError("action type missing from IL2CPP metadata: " + full_name)
+        result: list[dict] = []
+        for _ in range(32):
+            if current.full_name in ("HutongGames.PlayMaker.FsmStateAction", "System.Object"):
+                return result
+            for field in self.metadata.owned_fields(current):
+                row = FIELD_RECORD.unpack_from(
+                    self.metadata_data, self.field_offset + field.index * FIELD_RECORD.size)
+                attributes = self.field_attributes(row[1])
+                if not is_public_instance_field(attributes):
+                    continue
+                result.append({
+                    "name": field.name, "type": self.resolve(row[1]),
+                    "attributes": attributes,
+                })
+            raw = TYPE_RECORD.unpack_from(
+                self.metadata_data,
+                self.type_def_offset + current.index * TYPE_RECORD.size)
+            parent_native_index = raw[6]
+            if parent_native_index < 0:
+                return result
+            parent_name = self.resolve(parent_native_index)
+            current = self.type_defs.get(parent_name)
+            if current is None:
+                raise ValueError("action base type missing from metadata: " + parent_name)
+        raise ValueError("action inheritance exceeds the supported depth")
 
     def action_fields(self, full_name: str) -> list[dict[str, str]]:
         current = self.type_defs.get(full_name)
@@ -528,8 +600,25 @@ def parse_action_data(reader: Reader, *, salvage_unknown_parameters: bool = Fals
             else:
                 value = {"value": struct.unpack("<i", payload[:4])[0],
                          "use_variable": bool(payload[4])}
+        elif type_name == "UnityEngine.Rect":
+            if size != 16:
+                if salvage_unknown_parameters:
+                    value = {"decoded": False, "serialized_type_code": code,
+                             "payload_size": size}
+                else:
+                    raise ValueError("unsupported UnityEngine.Rect ActionData encoding")
+            else:
+                rect = struct.unpack("<4f", payload)
+                if not all(math.isfinite(item) for item in rect):
+                    if salvage_unknown_parameters:
+                        value = {"decoded": False, "serialized_type_code": code,
+                                 "payload_size": size}
+                    else:
+                        raise ValueError("non-finite UnityEngine.Rect ActionData value")
+                else:
+                    value = {"rect": list(rect)}
         elif type_name == "HutongGames.PlayMaker.FsmRect":
-            if size != 17 or payload[16] not in (0, 1):
+            if size < 17 or size > 17 + MAX_STRING_BYTES or payload[16] not in (0, 1):
                 if salvage_unknown_parameters:
                     value = {"decoded": False, "serialized_type_code": code,
                              "payload_size": size}
@@ -537,14 +626,32 @@ def parse_action_data(reader: Reader, *, salvage_unknown_parameters: bool = Fals
                     raise ValueError("unsupported FsmRect ActionData encoding")
             else:
                 rect = struct.unpack("<4f", payload[:16])
+                variable = bool(payload[16])
                 if not all(math.isfinite(item) for item in rect):
                     if salvage_unknown_parameters:
                         value = {"decoded": False, "serialized_type_code": code,
                                  "payload_size": size}
                     else:
                         raise ValueError("non-finite FsmRect ActionData value")
+                elif not variable and size != 17:
+                    if salvage_unknown_parameters:
+                        value = {"decoded": False, "serialized_type_code": code,
+                                 "payload_size": size}
+                    else:
+                        raise ValueError("unexpected FsmRect payload after a constant")
                 else:
-                    value = {"rect": list(rect), "use_variable": bool(payload[16])}
+                    try:
+                        variable_name = payload[17:].decode("utf-8") if variable else None
+                    except UnicodeDecodeError as exc:
+                        if salvage_unknown_parameters:
+                            value = {"decoded": False, "serialized_type_code": code,
+                                     "payload_size": size}
+                            variable_name = None
+                        else:
+                            raise ValueError("invalid UTF-8 in FsmRect variable name") from exc
+                    else:
+                        value = {"rect": list(rect), "use_variable": variable,
+                                 "variable_name": variable_name}
         elif type_name in {
                 "HutongGames.PlayMaker.FsmVector2",
                 "HutongGames.PlayMaker.FsmVector3",
@@ -574,7 +681,7 @@ def parse_action_data(reader: Reader, *, salvage_unknown_parameters: bool = Fals
                     value = {"components": list(components),
                              "use_variable": bool(payload[-1])}
         elif type_name == "HutongGames.PlayMaker.FsmFloat":
-            if size < 5 or payload[4] not in (0, 1):
+            if size < 5 or size > 5 + MAX_STRING_BYTES or payload[4] not in (0, 1):
                 if salvage_unknown_parameters:
                     value = {"decoded": False, "serialized_type_code": code,
                              "payload_size": size}
@@ -586,8 +693,8 @@ def parse_action_data(reader: Reader, *, salvage_unknown_parameters: bool = Fals
                     })
                     continue
                 raise ValueError("unsupported FsmFloat ActionData encoding")
-            variable = payload[5:].decode("ascii") if payload[4] else None
-            if payload[4] and not variable:
+            variable = bool(payload[4])
+            if not variable and size != 5:
                 if salvage_unknown_parameters:
                     value = {"decoded": False, "serialized_type_code": code,
                              "payload_size": size}
@@ -598,14 +705,36 @@ def parse_action_data(reader: Reader, *, salvage_unknown_parameters: bool = Fals
                         "byte_data_size": size, "value": value,
                     })
                     continue
-                raise ValueError("empty FsmFloat variable link")
-            if payload[4] and any(not (32 <= char < 127) for char in payload[5:]):
-                raise ValueError("invalid FsmFloat variable name")
+                raise ValueError("unexpected FsmFloat payload after a constant")
             float_value = struct.unpack("<f", payload[:4])[0]
             if not math.isfinite(float_value):
+                if salvage_unknown_parameters:
+                    value = {"decoded": False, "serialized_type_code": code,
+                             "payload_size": size}
+                    parameters.append({
+                        "name": name, "serialized_type_code": code, "type": type_name,
+                        "byte_data_position": position,
+                        "byte_data_offset": byte_data_offset + position,
+                        "byte_data_size": size, "value": value,
+                    })
+                    continue
                 raise ValueError("non-finite FsmFloat ActionData value")
+            try:
+                variable_name = payload[5:].decode("utf-8") if variable else None
+            except UnicodeDecodeError as exc:
+                if salvage_unknown_parameters:
+                    value = {"decoded": False, "serialized_type_code": code,
+                             "payload_size": size}
+                    parameters.append({
+                        "name": name, "serialized_type_code": code, "type": type_name,
+                        "byte_data_position": position,
+                        "byte_data_offset": byte_data_offset + position,
+                        "byte_data_size": size, "value": value,
+                    })
+                    continue
+                raise ValueError("invalid UTF-8 in FsmFloat variable name") from exc
             value = {"value": float_value,
-                     "use_variable": bool(payload[4]), "variable_name": variable}
+                     "use_variable": variable, "variable_name": variable_name}
         elif type_name == "HutongGames.PlayMaker.FsmBool":
             if size < 2 or payload[0] not in (0, 1) or payload[1] not in (0, 1):
                 if salvage_unknown_parameters:
@@ -619,8 +748,8 @@ def parse_action_data(reader: Reader, *, salvage_unknown_parameters: bool = Fals
                     })
                     continue
                 raise ValueError("invalid FsmBool ActionData payload")
-            variable = payload[2:].decode("ascii") if payload[1] else None
-            if payload[1] and (not variable or any(not (32 <= char < 127) for char in payload[2:])):
+            variable = bool(payload[1])
+            if size > 2 + MAX_STRING_BYTES or (not variable and size != 2):
                 if salvage_unknown_parameters:
                     value = {"decoded": False, "serialized_type_code": code,
                              "payload_size": size}
@@ -631,8 +760,10 @@ def parse_action_data(reader: Reader, *, salvage_unknown_parameters: bool = Fals
                         "byte_data_size": size, "value": value,
                     })
                     continue
-                raise ValueError("invalid FsmBool variable link")
-            if not payload[1] and size != 2:
+                raise ValueError("invalid FsmBool variable payload size")
+            try:
+                variable_name = payload[2:].decode("utf-8") if variable else None
+            except UnicodeDecodeError as exc:
                 if salvage_unknown_parameters:
                     value = {"decoded": False, "serialized_type_code": code,
                              "payload_size": size}
@@ -643,9 +774,9 @@ def parse_action_data(reader: Reader, *, salvage_unknown_parameters: bool = Fals
                         "byte_data_size": size, "value": value,
                     })
                     continue
-                raise ValueError("unexpected FsmBool payload after a constant")
+                raise ValueError("invalid UTF-8 in FsmBool variable name") from exc
             value = {"value": bool(payload[0]), "use_variable": bool(payload[1]),
-                     "variable_name": variable}
+                     "variable_name": variable_name}
         elif type_name == "HutongGames.PlayMaker.FsmEvent":
             try:
                 event_name = payload.decode("ascii")
@@ -769,13 +900,40 @@ def _encode_fsm_event_target(value: dict) -> bytes:
             _encode_pptr(value["fsm_component"]))
 
 
+def _encode_variable_name(value: object, label: str) -> bytes:
+    if not isinstance(value, str):
+        raise ValueError(label + " must be a UTF-8 string")
+    try:
+        raw = value.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise ValueError("invalid UTF-8 " + label) from exc
+    if len(raw) > MAX_STRING_BYTES:
+        raise ValueError(label + " exceeds the byte limit")
+    return raw
+
+
+def _pack_f32s(values: list, label: str) -> bytes:
+    if (not isinstance(values, list) or not values or
+            any(type(value) not in (int, float) or not math.isfinite(value)
+                for value in values)):
+        raise ValueError("invalid float32 values for " + label)
+    try:
+        raw = struct.pack("<" + "f" * len(values), *values)
+    except (OverflowError, struct.error) as exc:
+        raise ValueError(label + " value is outside float32 range") from exc
+    if not all(math.isfinite(value) for value in struct.unpack("<" + "f" * len(values), raw)):
+        raise ValueError(label + " value is outside finite float32 range")
+    return raw
+
+
 def _encode_parameter_payload(parameter: dict) -> bytes | None:
     """Encode a semantically decoded byteData parameter, or preserve it raw.
 
     ``None`` means that this parameter is intentionally opaque and its bytes
-    must be retained from the original byteData buffer. FsmTexture and FsmRect
-    use formats verified from serialized GetEventInfo fields; GUIContent,
-    UnityEngine.Rect and unknown/custom encodings remain unsupported.
+    must be retained from the original byteData buffer. FsmTexture/FsmString,
+    FsmRect and FsmFloat/FsmBool wrappers use the title-observed ActionData
+    layouts; direct Rect has a native-code-derived layout. This does not prove
+    that the game accepts a newly synthesized GUI action.
     """
     code = parameter.get("serialized_type_code")
     value = parameter.get("value")
@@ -791,17 +949,12 @@ def _encode_parameter_payload(parameter: dict) -> bytes | None:
         number = value.get("value")
         variable = value.get("use_variable")
         variable_name = value.get("variable_name")
-        if (not isinstance(number, (int, float)) or not math.isfinite(number) or
+        if (type(number) not in (int, float) or not math.isfinite(number) or
                 not isinstance(variable, bool)):
             raise ValueError("invalid FsmFloat ActionData fields")
-        raw = struct.pack("<fB", number, int(variable))
+        raw = _pack_f32s([number], "FsmFloat") + bytes((int(variable),))
         if variable:
-            if not isinstance(variable_name, str) or not variable_name:
-                raise ValueError("FsmFloat variable link is missing its name")
-            encoded_name = variable_name.encode("ascii")
-            if any(not 32 <= char < 127 for char in encoded_name):
-                raise ValueError("invalid FsmFloat variable name")
-            raw += encoded_name
+            raw += _encode_variable_name(variable_name, "FsmFloat variable name")
         elif variable_name is not None:
             raise ValueError("constant FsmFloat has an unexpected variable name")
         return raw
@@ -815,12 +968,7 @@ def _encode_parameter_payload(parameter: dict) -> bytes | None:
             raise ValueError("invalid FsmBool ActionData fields")
         raw = bytes((int(current), int(variable)))
         if variable:
-            if not isinstance(variable_name, str) or not variable_name:
-                raise ValueError("FsmBool variable link is missing its name")
-            encoded_name = variable_name.encode("ascii")
-            if any(not 32 <= char < 127 for char in encoded_name):
-                raise ValueError("invalid FsmBool variable name")
-            raw += encoded_name
+            raw += _encode_variable_name(variable_name, "FsmBool variable name")
         elif variable_name is not None:
             raise ValueError("constant FsmBool has an unexpected variable name")
         return raw
@@ -844,22 +992,36 @@ def _encode_parameter_payload(parameter: dict) -> bytes | None:
                 any(not isinstance(item, (int, float)) or not math.isfinite(item)
                     for item in rgba)):
             raise ValueError("invalid FsmColor ActionData fields")
-        return struct.pack("<4fB", *rgba, int(use_variable))
+        return _pack_f32s(rgba, "FsmColor") + bytes((int(use_variable),))
     if code == 16:  # FsmInt
         if (not isinstance(value, dict) or type(value.get("value")) is not int or
                 not -(1 << 31) <= value["value"] < (1 << 31) or
                 not isinstance(value.get("use_variable"), bool)):
             raise ValueError("invalid FsmInt ActionData fields")
         return struct.pack("<iB", value["value"], int(value["use_variable"]))
+    if code == 11:  # UnityEngine.Rect; native RectToByteArray writes four f32s.
+        rect = value.get("rect") if isinstance(value, dict) else None
+        if (not isinstance(rect, list) or len(rect) != 4 or
+                any(type(item) not in (int, float) or not math.isfinite(item)
+                    for item in rect)):
+            raise ValueError("invalid UnityEngine.Rect ActionData fields")
+        return _pack_f32s(rect, "UnityEngine.Rect")
     if code == 30:  # FsmRect
         rect = value.get("rect") if isinstance(value, dict) else None
         use_variable = value.get("use_variable") if isinstance(value, dict) else None
+        variable_name = value.get("variable_name") if isinstance(value, dict) else None
         if (not isinstance(rect, list) or len(rect) != 4 or
                 not isinstance(use_variable, bool) or
                 any(type(item) not in (int, float) or not math.isfinite(item)
                     for item in rect)):
             raise ValueError("invalid FsmRect ActionData fields")
-        return struct.pack("<4fB", *rect, int(use_variable))
+        if use_variable:
+            name = _encode_variable_name(variable_name, "FsmRect variable name")
+        elif variable_name is None:
+            name = b""
+        else:
+            raise ValueError("constant FsmRect has an unexpected variable name")
+        return _pack_f32s(rect, "FsmRect") + bytes((int(use_variable),)) + name
     vector_shapes = {
         28: 3, 35: 4, 37: 2,
     }
@@ -872,8 +1034,8 @@ def _encode_parameter_payload(parameter: dict) -> bytes | None:
                 any(type(item) not in (int, float) or not math.isfinite(item)
                     for item in components)):
             raise ValueError("invalid vector ActionData fields")
-        return struct.pack("<" + "f" * count + "B",
-                           *components, int(use_variable))
+        return (_pack_f32s(components, "vector ActionData") +
+                bytes((int(use_variable),)))
     # Unknown, unsupported, and specialized-array parameters carry no
     # independently verified byteData encoder.
     return None
@@ -1044,6 +1206,199 @@ def encode_action_data(action_data: dict) -> bytes:
     if len(result) > MAX_COMPONENT_BYTES:
         raise ValueError("encoded ActionData exceeds the byte limit")
     return result
+
+
+def action_type_hash_code(field_type_names: list[str]) -> int:
+    """Match the title's ActionData.GetActionTypeHashCode string hash."""
+    if not isinstance(field_type_names, list) or len(field_type_names) > MAX_PARAMETERS:
+        raise ValueError("ActionData field type list outside bounds")
+    if any(not isinstance(name, str) for name in field_type_names):
+        raise ValueError("ActionData field type names must be strings")
+    signature = "".join(field_type_names)
+    try:
+        raw = signature.encode("utf-16-le")
+    except UnicodeEncodeError as exc:
+        raise ValueError("invalid ActionData field type signature") from exc
+    if len(raw) > MAX_STRING_BYTES * 8:
+        raise ValueError("ActionData field type signature exceeds the byte limit")
+    value = 0
+    for offset in range(0, len(raw), 2):
+        value = ((value * 31) + int.from_bytes(raw[offset:offset + 2], "little")) & 0xFFFFFFFF
+    return value
+
+
+def build_synthetic_graphic_action_data(action_short_name: str) -> bytes:
+    """Build one synthetic GUIBox or GUILabel ActionData block.
+
+    The returned bytes are a bounded research fixture, not a Unity asset and
+    not evidence that the game accepts a new action instance.
+    """
+    if action_short_name not in ("GUIBox", "GUILabel"):
+        raise ValueError("synthetic graphic ActionData supports only GUIBox/GUILabel")
+    full_name = "HutongGames.PlayMaker.Actions." + action_short_name
+    specialized = {name: [] for name in ACTIONDATA_SPECIAL_ARRAYS}
+    byte_data = bytearray()
+    parameters = []
+    names = []
+    types = []
+    positions = []
+    sizes = []
+
+    x, y, width, height = ((80.0, 60.0, 560.0, 420.0) if action_short_name == "GUIBox"
+                           else (100.0, 76.0, 520.0, 36.0))
+    value_by_name = {
+        "image": {
+            "use_variable": False, "name": "", "tooltip": "",
+            "show_in_inspector": False, "network_sync": False,
+            "type_name": "UnityEngine.Object",
+            "value_pointer": {"file_id": 0, "path_id": 0},
+        },
+        "text": "Ultimate Mod Menu" if action_short_name == "GUILabel" else "",
+        "tooltip": "", "style": "",
+        "screenRect": {"rect": [0.0, 0.0, 0.0, 0.0],
+                       "use_variable": False, "variable_name": None},
+        "left": {"value": x, "use_variable": False, "variable_name": None},
+        "top": {"value": y, "use_variable": False, "variable_name": None},
+        "width": {"value": width, "use_variable": False, "variable_name": None},
+        "height": {"value": height, "use_variable": False, "variable_name": None},
+        "normalized": {"value": False, "use_variable": False, "variable_name": None},
+    }
+    for name, type_name, code, specialized_array in GRAPHIC_ACTION_FIELD_LAYOUT:
+        names.append(name)
+        types.append(code)
+        parameter_value = value_by_name[name]
+        if code == 18:
+            string_value = {
+                "use_variable": False, "name": "", "tooltip": "",
+                "show_in_inspector": False, "network_sync": False,
+                "value": parameter_value,
+            }
+            position = len(specialized[specialized_array])
+            specialized[specialized_array].append(string_value)
+            positions.append(position)
+            sizes.append(0)
+            parameters.append({
+                "name": name, "serialized_type_code": code, "type": type_name,
+                "specialized_array": specialized_array,
+                "specialized_array_index": position, "value": string_value,
+            })
+        elif code == 33:
+            position = len(specialized[specialized_array])
+            specialized[specialized_array].append(parameter_value)
+            positions.append(position)
+            sizes.append(0)
+            parameters.append({
+                "name": name, "serialized_type_code": code, "type": type_name,
+                "specialized_array": specialized_array,
+                "specialized_array_index": position, "value": parameter_value,
+            })
+        else:
+            encoded = _encode_parameter_payload({
+                "serialized_type_code": code, "value": parameter_value,
+            })
+            if encoded is None:
+                raise ValueError("no verified synthetic payload encoder for " + name)
+            position = len(byte_data)
+            byte_data.extend(encoded)
+            positions.append(position)
+            sizes.append(len(encoded))
+            parameters.append({
+                "name": name, "serialized_type_code": code, "type": type_name,
+                "byte_data_position": position, "byte_data_size": len(encoded),
+                "value": parameter_value,
+            })
+
+    model = {
+        "action_names": [full_name], "custom_names": [""],
+        "enabled": [True], "is_open": [True], "start_indices": [0],
+        "hash_codes_u32": [action_type_hash_code(
+            [field_type for _, field_type, _, _ in GRAPHIC_ACTION_FIELD_LAYOUT])],
+        "specialized_parameter_arrays": specialized,
+        "_byte_data": bytes(byte_data),
+        "array_param_sizes": [], "array_param_types": [],
+        "custom_type_sizes": [], "custom_type_names": [],
+        "param_data_types": types, "param_names": names,
+        "param_data_positions": positions, "param_byte_data_sizes": sizes,
+        "parameters": parameters,
+    }
+    return encode_action_data(model)
+
+
+def validate_graphic_action_data(blob: bytes, action_short_name: str,
+                                 resolver: TypeResolver) -> dict:
+    """Validate a one-action GUIBox/GUILabel block against the title metadata."""
+    if action_short_name not in ("GUIBox", "GUILabel"):
+        raise ValueError("graphic ActionData validation supports only GUIBox/GUILabel")
+    full_name = "HutongGames.PlayMaker.Actions." + action_short_name
+    decoded = parse_action_data(Reader(blob))
+    if decoded["action_names"] != [full_name]:
+        raise ValueError("graphic ActionData action name does not match the AOT action")
+    expected_fields = [(name, type_name, code) for name, type_name, code, _ in
+                       GRAPHIC_ACTION_FIELD_LAYOUT]
+    native_fields = resolver.serializable_action_fields(full_name)
+    if [(field["name"], field["type"]) for field in native_fields] != [
+            (name, type_name) for name, type_name, _ in expected_fields]:
+        raise ValueError("native public-instance GUI action fields differ from the fixture schema")
+    if decoded["param_names"] != [name for name, _, _ in expected_fields]:
+        raise ValueError("graphic ActionData parameter names differ from native reflection order")
+    if decoded["param_data_types"] != [code for _, _, code in expected_fields]:
+        raise ValueError("graphic ActionData type codes differ from native field types")
+    if decoded["start_indices"] != [0] or decoded["hash_codes_u32"] != [
+            action_type_hash_code([type_name for _, type_name, _ in expected_fields])]:
+        raise ValueError("graphic ActionData action start/hash metadata is invalid")
+    if (decoded["array_param_sizes"] or decoded["array_param_types"] or
+            decoded["custom_type_sizes"] or decoded["custom_type_names"]):
+        raise ValueError("unexpected array/custom fields in GUIBox/GUILabel ActionData")
+    arrays = decoded["specialized_parameter_arrays"]
+    expected_counts = {name: 0 for name in ACTIONDATA_SPECIAL_ARRAYS}
+    expected_counts["fsmObjectParams"] = 1
+    expected_counts["fsmStringParams"] = 3
+    if {name: len(arrays[name]) for name in ACTIONDATA_SPECIAL_ARRAYS} != expected_counts:
+        raise ValueError("graphic ActionData specialized-array counts are invalid")
+    if any(parameter.get("type") != type_name
+           for parameter, (_, type_name, _) in zip(decoded["parameters"], expected_fields)):
+        raise ValueError("graphic ActionData parameter type names are inconsistent")
+    return {
+        "action": action_short_name,
+        "action_type_hash_code_u32": decoded["hash_codes_u32"][0],
+        "serialized_fields": [
+            {"name": field["name"], "type": field["type"]}
+            for field in native_fields
+        ],
+        "parameter_type_codes": decoded["param_data_types"],
+        "specialized_array_counts": expected_counts,
+        "byte_data_size": decoded["byte_data_size"],
+        "actiondata_size": decoded["size"],
+    }
+
+
+def audit_synthetic_graphic_actiondata(resolver: TypeResolver) -> dict:
+    """Run strict metadata validation and byte round-trips for GUIBox/GUILabel."""
+    actions = {}
+    for short_name in ("GUIBox", "GUILabel"):
+        raw = build_synthetic_graphic_action_data(short_name)
+        summary = validate_graphic_action_data(raw, short_name, resolver)
+        decoded = parse_action_data(Reader(raw))
+        encoded = encode_action_data(decoded)
+        redecoded = parse_action_data(Reader(encoded))
+        if encoded != raw or redecoded != decoded:
+            raise ValueError("synthetic graphic ActionData failed byte/structure round-trip")
+        summary.update({
+            "decode_encode_decode": "pass",
+            "byte_identical": True,
+            "synthetic_only": True,
+        })
+        actions[short_name] = summary
+    return {
+        "result": "native-schema-validated synthetic ActionData",
+        "actions": actions,
+        "not_demonstrated": [
+            "acceptance by Unity/PlayMaker in The Forest",
+            "loading or activation of a new FSM",
+            "usable scene references or runtime texture ownership",
+            "DualShock 4 focus, navigation, or gameplay input isolation",
+        ],
+    }
 
 
 def _public_json(value):
@@ -1622,6 +1977,12 @@ def inspect(level2_data: bytes, global_data: bytes, sharedassets2_data: bytes,
     aot_actions = {
         **aot["precompiled_gui_actions"], **aot["precompiled_input_event_actions"],
     }
+    serializable_gui_fields = {
+        short_name: resolver.serializable_action_fields(
+            "HutongGames.PlayMaker.Actions." + short_name)
+        for short_name in ("GUIBox", "GUILabel")
+    }
+    graphic_actiondata = audit_synthetic_graphic_actiondata(resolver)
     synthetic = validate_synthetic_menu_graph(
         build_synthetic_menu_graph(), action_fields, aot_actions)
     return {
@@ -1669,16 +2030,18 @@ def inspect(level2_data: bytes, global_data: bytes, sharedassets2_data: bytes,
                 template_fsm["used_in_template_pointer"],
         },
         "action_field_signatures": action_fields,
+        "gui_serializable_public_instance_fields": serializable_gui_fields,
         "precompiled_action_audit": {
             short_name: aot_actions[short_name]
             for short_name in ("GUIBox", "GUILabel", "GUIButton", "GetButtonDown", "SendEvent")
         },
         "synthetic_menu_graph": synthetic,
         "synthetic_menu_graph_model": build_synthetic_menu_graph(),
+        "synthetic_graphic_actiondata_round_trip": graphic_actiondata,
         "limitations": [
             "the parser supports the pinned zero-action sentinel and verified multi-action ActionData subsets",
             "nonempty animationCurveParams, functionCallParams, fsmTemplateControlParams, fsmPropertyParams, layoutOptionParams, fsmVarParams and unityObjectParams are rejected",
-            "ActionData encoding is limited to the decoded arrays and parameter type codes; it is not a Unity asset writer",
+            "GUIBox/GUILabel ActionData is a native-schema-validated synthetic block, not a GUI action recovered from a commercial asset and not a Unity asset writer",
             "cameraFadeFSM floatVariables are decoded narrowly; 40 remaining Fsm bytes are opaque",
             "PlayMakerFSM.fsmTemplate is decoded as a trailing PPtr; it does not prove runtime loading or registration",
             "sharedassets2's 13 prefab PlayMakerFSM components are serialized inline and have null fsmTemplate pointers",
@@ -1690,17 +2053,37 @@ def inspect(level2_data: bytes, global_data: bytes, sharedassets2_data: bytes,
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--level2", type=Path, required=True)
-    parser.add_argument("--globalgamemanagers", type=Path, required=True)
-    parser.add_argument("--sharedassets2", type=Path, required=True)
-    parser.add_argument("--module", type=Path, required=True)
-    parser.add_argument("--metadata", type=Path, required=True)
+    parser.add_argument("--level2", type=Path)
+    parser.add_argument("--globalgamemanagers", type=Path)
+    parser.add_argument("--sharedassets2", type=Path)
+    parser.add_argument("--module", type=Path)
+    parser.add_argument("--metadata", type=Path)
+    parser.add_argument(
+        "--graphic-actiondata-only", action="store_true",
+        help="validate synthetic GUIBox/GUILabel ActionData against pinned IL2CPP metadata",
+    )
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     try:
-        report = inspect(args.level2.read_bytes(), args.globalgamemanagers.read_bytes(),
-                         args.sharedassets2.read_bytes(), args.module.read_bytes(),
-                         args.metadata.read_bytes())
+        if args.graphic_actiondata_only:
+            if not args.module or not args.metadata:
+                parser.error("--graphic-actiondata-only requires --module and --metadata")
+            resolver = TypeResolver(args.module.read_bytes(), args.metadata.read_bytes())
+            report = audit_synthetic_graphic_actiondata(resolver)
+        else:
+            required = {
+                "--level2": args.level2,
+                "--globalgamemanagers": args.globalgamemanagers,
+                "--sharedassets2": args.sharedassets2,
+                "--module": args.module,
+                "--metadata": args.metadata,
+            }
+            missing = [name for name, value in required.items() if value is None]
+            if missing:
+                parser.error("missing required arguments: " + ", ".join(missing))
+            report = inspect(args.level2.read_bytes(), args.globalgamemanagers.read_bytes(),
+                             args.sharedassets2.read_bytes(), args.module.read_bytes(),
+                             args.metadata.read_bytes())
         rendered = json.dumps(_public_json(report), indent=2, sort_keys=True) + "\n"
         if args.output:
             args.output.parent.mkdir(parents=True, exist_ok=True)
