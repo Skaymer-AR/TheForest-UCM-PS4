@@ -76,7 +76,7 @@ class UnityPlayMakerFormat17Tests(unittest.TestCase):
         descriptor = struct.pack("<q", MONOBEHAVIOUR_ID)
         # Inspect the asset descriptor, not an arbitrary in-object byte sequence.
         # Version-17 object descriptors align PathID to 4 bytes.
-        pos = data.find(descriptor, 20, asset.header_data_offset)
+        pos = data.find(descriptor, 20, struct.unpack_from(">I", data, 12)[0])
         self.assertNotEqual(pos, -1)
         struct.pack_into("<I", data, pos + 12, obj.size - 1)
         path = self.root / "short-fsm.assets"
