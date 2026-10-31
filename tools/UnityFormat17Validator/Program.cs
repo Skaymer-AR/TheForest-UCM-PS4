@@ -19,6 +19,7 @@ internal static class Program
 
     private static int Main(string[] args)
     {
+        string stage = "argument validation";
         try
         {
             if (args.Length != 3)
@@ -32,8 +33,11 @@ internal static class Program
             string roundtripDir = Path.GetFullPath(args[2]);
             Directory.CreateDirectory(roundtripDir);
 
+            stage = "initial AssetsTools.NET read";
             Graph before = ReadAndValidate(classDataPath, fixtureDir, OriginalName);
+            stage = "AssetsTools.NET rewrite";
             RewriteWithAssetsTools(classDataPath, fixtureDir, roundtripDir);
+            stage = "AssetsTools.NET reread";
             Graph after = ReadAndValidate(classDataPath, roundtripDir, RewrittenName);
             if ((before with { GameObjectName = RewrittenName }) != after)
                 throw new InvalidDataException("AssetsTools.NET rewrite changed graph semantics");
@@ -48,7 +52,8 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"AssetsTools.NET format-17 validation failed: {ex.GetType().Name}: {ex.Message}");
+            Console.Error.WriteLine($"AssetsTools.NET format-17 validation failed during {stage}:");
+            Console.Error.WriteLine(ex);
             return 1;
         }
     }
@@ -58,9 +63,11 @@ internal static class Program
         var manager = new AssetsManager();
         manager.LoadClassPackage(classDataPath);
         manager.LoadClassDatabaseFromPackage(UnityVersion);
+        Console.WriteLine($"Loaded class database for {UnityVersion}");
 
         AssetsFileInstance library = manager.LoadAssetsFile(Path.Combine(root, LibraryFile));
         AssetsFileInstance scene = manager.LoadAssetsFile(Path.Combine(root, SceneFile));
+        Console.WriteLine("Loaded both serialized files");
         ValidateHeader(library.file, LibraryFile);
         ValidateHeader(scene.file, SceneFile);
         if (scene.file.Metadata.TypeTreeEnabled || library.file.Metadata.TypeTreeEnabled)
@@ -73,6 +80,7 @@ internal static class Program
         EnsureUniquePathIds(scene.file, SceneFile);
         EnsureUniquePathIds(library.file, LibraryFile);
 
+        Console.WriteLine("Deserializing GameObject");
         AssetTypeValueField go = manager.GetBaseField(scene, goInfo);
         string gameObjectName = Field(go, "m_Name").AsString;
         if (gameObjectName != expectedName)
@@ -90,6 +98,7 @@ internal static class Program
         if (!componentIds.SequenceEqual(new[] { (0, TransformId), (0, MonoBehaviourId) }))
             throw new InvalidDataException("GameObject component PPtrs are not the expected local objects");
 
+        Console.WriteLine("Deserializing Transform");
         AssetTypeValueField transform = manager.GetBaseField(scene, transformInfo);
         AssertPPtr(transform, "m_GameObject", 0, GameObjectId, "Transform GameObject");
         AssertPPtr(transform, "m_Father", 0, 0, "root Transform father");
@@ -100,6 +109,7 @@ internal static class Program
         AssertNear(Field(transform, "m_LocalPosition.z").AsFloat, 3.75f, "position.z");
         AssertNear(Field(transform, "m_LocalScale.x").AsFloat, 1.0f, "scale.x");
 
+        Console.WriteLine("Deserializing MonoBehaviour base fields");
         AssetTypeValueField mono = manager.GetBaseField(scene, monoInfo);
         AssertPPtr(mono, "m_GameObject", 0, GameObjectId, "MonoBehaviour GameObject");
         if (Field(mono, "m_Enabled").AsBool != true)
@@ -119,6 +129,7 @@ internal static class Program
             ?? throw new InvalidDataException("AssetsTools.NET could not resolve the external dependency");
         if (!ReferenceEquals(dependency.file, library.file))
             throw new InvalidDataException("external dependency resolved to the wrong file");
+        Console.WriteLine("Deserializing external MonoScript");
         AssetTypeValueField script = manager.GetBaseField(dependency, scriptInfo);
         string scriptClass = Field(script, "m_ClassName").AsString;
         string scriptNamespace = Field(script, "m_Namespace").AsString;
