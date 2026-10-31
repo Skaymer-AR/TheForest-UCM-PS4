@@ -31,6 +31,26 @@ public static class UcmMenuModelTests
         model.Tick(true, chord);
         Assert(!model.Visible, "held chord ignored before neutral sample");
         model.Tick(true, UcmButton.None);
+
+        model.Tick(true, UcmButton.L1);
+        Assert(!model.Visible, "L1 alone does not open menu");
+        model.Tick(true, UcmButton.None);
+        model.Tick(true, UcmButton.R1);
+        Assert(!model.Visible, "R1 alone after L1 release does not open menu");
+        model.Tick(true, UcmButton.None);
+        model.Tick(true, UcmButton.L1);
+        model.Tick(true, chord);
+        Assert(model.Visible && model.Category == UcmCategory.Cheats,
+            "staggered shoulder presses open only while both overlap");
+        model.Tick(true, UcmButton.R1);
+        Assert(model.Visible && model.Category == UcmCategory.Cheats,
+            "releasing one shoulder does not navigate categories");
+        model.Tick(true, chord);
+        Assert(!model.Visible, "re-completing the chord closes the menu");
+        model.Tick(true, chord);
+        Assert(!model.Visible, "held close chord does not reopen the menu");
+        model.Tick(true, UcmButton.None);
+
         Tap(model, chord);
         Assert(model.Visible, "L1+R1 opens menu");
 

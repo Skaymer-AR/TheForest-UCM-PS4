@@ -33,6 +33,28 @@ int main(void) {
     assert(!overlay_attach(&o, &r));
     overlay_frame(&o, true, PAD_L1 | PAD_R1);
     assert(!o.menu.visible); /* Held at attachment. */
+
+    /* The chord is a simultaneous level plus a rising edge: either shoulder
+     * alone is inert, staggered presses toggle only while both overlap, and a
+     * held chord never repeats. */
+    press(&o, PAD_L1);
+    assert(!o.menu.visible && o.menu.category == CAT_CHEATS);
+    overlay_frame(&o, true, 0);
+    overlay_frame(&o, true, PAD_R1);
+    assert(!o.menu.visible); /* Separate, non-overlapping taps are not a chord. */
+    overlay_frame(&o, true, 0);
+    overlay_frame(&o, true, PAD_L1);
+    overlay_frame(&o, true, PAD_L1 | PAD_R1);
+    assert(o.menu.visible && o.menu.category == CAT_CHEATS);
+    overlay_frame(&o, true, PAD_R1);
+    assert(o.menu.visible && o.menu.category == CAT_CHEATS);
+    overlay_frame(&o, true, PAD_L1 | PAD_R1);
+    assert(!o.menu.visible);
+    overlay_frame(&o, true, PAD_L1 | PAD_R1);
+    assert(!o.menu.visible);
+    overlay_frame(&o, true, 0);
+    rects = texts = saw_title = saw_unverified = 0;
+
     press(&o, PAD_L1 | PAD_R1);
     assert(o.menu.visible && saw_title && saw_unverified && rects == 2 && texts > 0);
     overlay_frame(&o, true, PAD_L1 | PAD_R1);
