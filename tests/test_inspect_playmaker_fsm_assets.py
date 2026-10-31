@@ -9,6 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import inspect_playmaker_fsm_assets as audit
+import scan_playmaker_action_instances as scan_actions
 
 
 def i32(value: int) -> bytes:
@@ -39,8 +40,8 @@ def action_data_generic(action_name: str) -> bytes:
     data = bytearray()
     data += i32(1) + string(action_name)  # actionNames
     data += i32(1) + string("")          # customNames
-    data += i32(1) + i32(1)              # actionEnabled
-    data += i32(1) + i32(1)              # actionIsOpen
+    data += i32(1) + b"\x01\0\0\0"    # packed actionEnabled
+    data += i32(1) + b"\x01\0\0\0"    # packed actionIsOpen
     data += i32(1) + i32(0)              # actionStartIndex
     data += i32(1) + i32(123)            # actionHashCodes
     data += bytes(len(audit.ACTIONDATA_SPECIAL_ARRAYS) * 4)
@@ -56,8 +57,8 @@ def action_data_camera(position_time: int = 17) -> bytes:
     action_name = "HutongGames.PlayMaker.Actions.CameraFadeIn"
     data += i32(1) + string(action_name)
     data += i32(1) + string("")
-    data += i32(1) + i32(1)
-    data += i32(1) + i32(1)
+    data += i32(1) + b"\x01\0\0\0"
+    data += i32(1) + b"\x01\0\0\0"
     data += i32(1) + i32(0)
     data += i32(1) + i32(0x12345678)
     data += bytes(len(audit.ACTIONDATA_SPECIAL_ARRAYS) * 4)
@@ -71,6 +72,74 @@ def action_data_camera(position_time: int = 17) -> bytes:
     data += i32(4) + i32(0) + i32(position_time) + i32(26) + i32(26)
     data += i32(4) + i32(17) + i32(9) + i32(0) + i32(1)
     return bytes(data)
+
+
+def synthetic_send_event_action_data() -> bytes:
+    """Build a synthetic ActionData using the title-observed SendEvent layout."""
+    game_object = {
+        "use_variable": False, "name": "", "tooltip": "",
+        "show_in_inspector": False, "network_sync": False,
+        "value_pointer": {"file_id": 0, "path_id": 0},
+    }
+    bool_field = {
+        "use_variable": False, "name": "", "tooltip": "",
+        "show_in_inspector": False, "network_sync": False, "value": False,
+    }
+    event_target = {
+        "target_value": 2,
+        "exclude_self": bool_field,
+        "game_object": {"owner_option": 0, "game_object": game_object},
+        "fsm_name": {
+            "use_variable": False, "name": "", "tooltip": "",
+            "show_in_inspector": False, "network_sync": False, "value": "",
+        },
+        "send_to_children": bool_field,
+        "fsm_component": {"file_id": 0, "path_id": 0},
+    }
+    specialized = {name: [] for name in audit.ACTIONDATA_SPECIAL_ARRAYS}
+    specialized["fsmEventTargetParams"] = [event_target]
+    byte_data = b"off" + struct.pack("<fB", 0.0, 0) + b"\0"
+    parameters = [
+        {"name": "eventTarget", "serialized_type_code": 31,
+         "type": "HutongGames.PlayMaker.FsmEventTarget",
+         "specialized_array": "fsmEventTargetParams", "specialized_array_index": 0,
+         "value": event_target},
+        {"name": "sendEvent", "serialized_type_code": 23,
+         "type": "HutongGames.PlayMaker.FsmEvent",
+         "byte_data_position": 0, "byte_data_size": 3,
+         "value": {"event_name": "off"}},
+        {"name": "delay", "serialized_type_code": 15,
+         "type": "HutongGames.PlayMaker.FsmFloat",
+         "byte_data_position": 3, "byte_data_size": 5,
+         "value": {"value": 0.0, "use_variable": False, "variable_name": None}},
+        {"name": "everyFrame", "serialized_type_code": 1,
+         "type": "System.Boolean", "byte_data_position": 8,
+         "byte_data_size": 1, "value": False},
+    ]
+    model = {
+        "action_names": ["HutongGames.PlayMaker.Actions.SendEvent"],
+        "custom_names": [""], "enabled": [True], "is_open": [True],
+        "start_indices": [0], "hash_codes_u32": [0xFFFFFFFE],
+        "specialized_parameter_arrays": specialized, "_byte_data": byte_data,
+        "array_param_sizes": [], "array_param_types": [],
+        "custom_type_sizes": [], "custom_type_names": [],
+        "param_data_types": [31, 23, 15, 1],
+        "param_names": ["eventTarget", "sendEvent", "delay", "everyFrame"],
+        "param_data_positions": [0, 0, 3, 8],
+        "param_byte_data_sizes": [0, 3, 5, 1], "parameters": parameters,
+    }
+    return audit.encode_action_data(model)
+
+
+def actiondata_target_prefix(action_name: str, extra_names: list[str] | None = None) -> bytes:
+    names = ["HutongGames.PlayMaker.Actions." + action_name, *(extra_names or [])]
+    data = i32(len(names)) + b"".join(string(name) for name in names)
+    data += i32(len(names)) + b"".join(string("") for _ in names)
+    data += i32(len(names)) + bytes([1] * len(names)) + bytes(-len(names) % 4)
+    data += i32(len(names)) + bytes([1] * len(names)) + bytes(-len(names) % 4)
+    data += i32(len(names)) + b"".join(i32(0) for _ in names)
+    data += i32(len(names)) + b"".join(i32(123) for _ in names)
+    return data
 
 
 def state(name: str, transitions: list[tuple[str, str]], action_data: bytes) -> bytes:
@@ -202,6 +271,73 @@ class PlayMakerFsmAssetInspectorTests(unittest.TestCase):
     def test_rejects_parameter_slice_past_byte_data(self):
         with self.assertRaisesRegex(ValueError, "outside byteData"):
             audit.parse_fsm_component(fsm_component(time_position=900))
+
+    def test_actiondata_complete_synthetic_send_event_round_trip_and_edit(self):
+        original = synthetic_send_event_action_data()
+        parsed = audit.parse_action_data(audit.Reader(original))
+        self.assertEqual(audit.encode_action_data(parsed), original)
+        self.assertEqual(parsed["parameters"][0]["value"]["target_value"], 2)
+        self.assertGreater(parsed["parameters"][0]["specialized_array_size"], 0)
+        self.assertEqual(parsed["parameters"][0]["specialized_array_offset"],
+                         parsed["specialized_parameter_array_offsets"][
+                             "fsmEventTargetParams"][0]["offset"])
+        self.assertEqual(parsed["parameters"][0]["value"]["game_object"]["owner_option"], 0)
+        self.assertEqual(parsed["parameters"][1]["value"]["event_name"], "off")
+
+        parsed["parameters"][1]["value"]["event_name"] = "on!"
+        parsed["parameters"][2]["value"]["value"] = 1.25
+        parsed["parameters"][3]["value"] = True
+        parsed["specialized_parameter_arrays"]["fsmEventTargetParams"][0]["target_value"] = 3
+        edited = audit.encode_action_data(parsed)
+        decoded = audit.parse_action_data(audit.Reader(edited))
+        self.assertEqual(decoded["parameters"][0]["value"]["target_value"], 3)
+        self.assertEqual(decoded["parameters"][1]["value"]["event_name"], "on!")
+        self.assertEqual(decoded["parameters"][2]["value"]["value"], 1.25)
+        self.assertTrue(decoded["parameters"][3]["value"])
+
+    def test_actiondata_encoder_rejects_changed_payload_size_and_invalid_pointer(self):
+        parsed = audit.parse_action_data(audit.Reader(synthetic_send_event_action_data()))
+        parsed["parameters"][1]["value"]["event_name"] = "longer"
+        with self.assertRaisesRegex(ValueError, "parameter size changed"):
+            audit.encode_action_data(parsed)
+        with self.assertRaisesRegex(ValueError, "negative serialized PPtr"):
+            audit._read_pptr(audit.Reader(struct.pack("<iq", 0, -1)), "test")
+
+    def test_actiondata_unknown_type_rejects_strictly_but_round_trips_opaque(self):
+        parsed = audit.parse_action_data(audit.Reader(synthetic_send_event_action_data()))
+        parsed["param_data_types"][1] = 99
+        parsed["parameters"][1]["serialized_type_code"] = 99
+        opaque_bytes = audit.encode_action_data(parsed)
+        with self.assertRaisesRegex(ValueError, "unsupported ActionData serialized type code: 99"):
+            audit.parse_action_data(audit.Reader(opaque_bytes))
+        recovered = audit.parse_action_data(
+            audit.Reader(opaque_bytes), salvage_unknown_parameters=True)
+        self.assertEqual(recovered["unknown_parameter_type_codes"], [99])
+        self.assertEqual(audit.encode_action_data(recovered), opaque_bytes)
+
+    def test_actiondata_encoder_rejects_invalid_specialized_array_reference(self):
+        parsed = audit.parse_action_data(audit.Reader(synthetic_send_event_action_data()))
+        parsed["param_data_positions"][0] = 4
+        parsed["parameters"][0]["specialized_array_index"] = 4
+        with self.assertRaisesRegex(ValueError, "specialized parameter reference is invalid"):
+            audit.encode_action_data(parsed)
+
+    def test_graphic_actiondata_prefix_must_match_exact_state_header(self):
+        action_data = actiondata_target_prefix("GUIBox", ["CustomActionTest"])
+        blob = bytes(32) + state("draw", [("FINISHED", "closed")], action_data)
+        offset = len(blob) - len(action_data)
+        prefix = scan_actions.parse_actiondata_prefix(blob, offset)
+        self.assertIsNotNone(prefix)
+        self.assertEqual(prefix["action_names"], [
+            "HutongGames.PlayMaker.Actions.GUIBox", "CustomActionTest"])
+        matches = scan_actions.find_state_header(blob, offset)
+        self.assertEqual([match["name"] for match in matches], ["draw"])
+
+        truncated = blob[:offset] + action_data[:-2]
+        self.assertIsNone(scan_actions.parse_actiondata_prefix(truncated, offset))
+        malformed = bytearray(action_data)
+        struct.pack_into("<i", malformed, 0, 65)
+        self.assertIsNone(scan_actions.parse_actiondata_prefix(bytes(malformed), 0))
 
     def test_rejects_nonzero_empty_action_sentinel(self):
         data = bytearray(fsm_component())

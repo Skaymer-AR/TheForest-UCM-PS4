@@ -163,10 +163,13 @@ metadata field names and types for every supplied field, AOT virtual slots,
 and the explicit symbolic status of the `SendEvent` target. It rejects
 malformed typed fields, unresolved transitions and invalid event routes.
 
-This graph is **not** valid Unity ActionData output. It leaves some metadata
-fields unmodeled (`FsmTexture`, `FsmRect`, Unity `GUIContent`/`Rect`,
-`DelayedEvent`) and does not serialize `FsmEventTarget`. Therefore it is a
-structural prototype only; it cannot yet be inserted into an asset.
+This graph is **not** valid Unity ActionData output. The full-asset scan now
+provides real `FsmEventTarget` and `GetButtonDown` serialization examples, but
+the graph builder remains a normalized model and does not consume them to
+emit a serialized FSM. GUI metadata fields remain unmodeled
+(`FsmTexture`, `FsmRect`, Unity `GUIContent`/`Rect`, layout-option arrays and
+runtime `DelayedEvent`). Therefore it is a structural prototype only; it
+cannot yet be inserted into an asset.
 
 ## Rewired and graphics limits
 
@@ -193,15 +196,18 @@ loader. No title-specific loader or external component-registration API for
 an arbitrary graph was demonstrated. No scene/PKG editing, IL2CPP rebuild,
 PRX, or PS4 action was performed.
 
-The only defensible next architecture proposal is a separate scene/prefab
-object with a new `PlayMakerFSM`, never a modification of either
-`CutSceneController` FSM. Before any asset integration is considered, the
-ActionData encodings for the actual GUI/input actions (especially
-`FsmEventTarget`, `FsmTexture`, and `FsmRect`) and the scene/prefab reference
-graph must be completed offline. Delivery would then require rebuilding the
-affected Unity asset files and a valid game-package installation path; this
-is outside the present authorization. A runtime path would need an independently
-proven object-creation, PlayMaker-list registration, Unity-thread, focus and
+The least speculative future asset proposal is a separate scene/prefab object
+with a new `PlayMakerFSM`, never a modification of either `CutSceneController`
+FSM. Follow-up results, full-scan counts, per-instance data, ActionData parser
+coverage and the remaining GUI serialization gaps are in
+[`PLAYMAKER_ACTIONDATA_GRAPHIC_SCAN_20261031.md`](PLAYMAKER_ACTIONDATA_GRAPHIC_SCAN_20261031.md).
+Before any asset integration is considered, the encodings for the actual GUI
+fields (`FsmTexture`, `FsmRect`, Unity `GUIContent`/`Rect`, and GUILayout
+option arrays) and the scene/prefab reference graph must be completed offline.
+Delivery would then require rebuilding the affected Unity asset files and a
+valid game-package installation path; this is outside the present
+authorization. A runtime path would need an independently proven
+object-creation, PlayMaker-list registration, Unity-thread, focus and
 safe-destruction contract.
 
 ### Proposed gates if asset integration is authorized later
@@ -233,9 +239,9 @@ still pending**. We are not ready to test an Ultimate Mod Menu on PS4.
 
 ## Verification and limits
 
-Twelve synthetic-only tests cover serialized component parsing, ActionData
-boundaries, variable/event/state references, FsmTemplate headers, malformed
-tails, typed graph fields and event routes. The exact-source inspector also
+Seventeen synthetic-only tests cover serialized component parsing, ActionData
+boundaries and same-size semantic round-trips, variable/event/state references,
+FsmTemplate headers, malformed tails, typed graph fields and event routes. The exact-source inspector also
 verifies all five input hashes, both scene-to-template references, the
 cameraFade component/template semantic match, the 13 inline prefab components,
 and the extended native lifecycle audit.

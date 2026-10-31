@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Read-only, bounded inspection of one serialized PlayMaker FSM in this title.
+"""Read-only, bounded inspection of serialized PlayMaker FSM data in this title.
 
-This supports the narrow Unity 5.6.6f2 / PlayMaker encoding observed in the
-hash-pinned cameraFadeFSM in level2. It does not edit assets, construct IL2CPP
-objects, register an FSM, or claim that an asset graph can be activated by a
-PRX. Reports contain derived names, values, offsets, and hashes only.
+This supports verified Unity 5.6.6f2 / PlayMaker ActionData encodings present
+in this title, including multi-action states and selected specialized
+parameter arrays. It does not edit assets, construct IL2CPP objects, register
+an FSM, or claim that an asset graph can be activated by a PRX. Reports contain
+derived names, values, offsets, and hashes only; private round-trip byte buffers
+are removed before JSON output.
 """
 from __future__ import annotations
 
@@ -55,9 +57,14 @@ ACTIONDATA_SPECIAL_ARRAYS = (
 
 PARAM_DATA_TYPES = {
     1: "System.Boolean",
+    17: "HutongGames.PlayMaker.FsmBool",
+    18: "HutongGames.PlayMaker.FsmString",
+    19: "HutongGames.PlayMaker.FsmGameObject",
+    20: "HutongGames.PlayMaker.FsmOwnerDefault",
     15: "HutongGames.PlayMaker.FsmFloat",
     23: "HutongGames.PlayMaker.FsmEvent",
     25: "HutongGames.PlayMaker.FsmColor",
+    31: "HutongGames.PlayMaker.FsmEventTarget",
 }
 
 IL2CPP_PRIMITIVES = {
@@ -121,6 +128,16 @@ class Reader:
         if value not in (0, 1):
             raise ValueError(f"invalid serialized boolean: {label}")
         return bool(value)
+
+    def bool_array(self, label: str, maximum: int = MAX_ACTIONS) -> list[bool]:
+        count = self.count(label, maximum)
+        raw = self.take(count)
+        if any(value not in (0, 1) for value in raw):
+            raise ValueError(f"invalid packed serialized boolean array: {label}")
+        padding = (-count) % 4
+        if any(self.take(padding)):
+            raise ValueError(f"nonzero serialized boolean array padding: {label}")
+        return [bool(value) for value in raw]
 
 
 class TypeResolver:
@@ -222,7 +239,81 @@ def _read_string_array(reader: Reader, label: str, maximum: int = MAX_PARAMETERS
     return [reader.aligned_string()[0] for _ in range(count)]
 
 
-def parse_action_data(reader: Reader) -> dict:
+def _read_pptr(reader: Reader, label: str) -> dict[str, int]:
+    file_id = reader.i32()
+    path_id = struct.unpack("<q", reader.take(8))[0]
+    if file_id < 0 or path_id < 0:
+        raise ValueError(f"negative serialized PPtr: {label}")
+    return {"file_id": file_id, "path_id": path_id}
+
+
+def _read_fsm_game_object(reader: Reader) -> dict:
+    """Read the wire order independently confirmed in level2 ActionData."""
+    use_variable = reader.bool32("FsmGameObject.useVariable")
+    name, _ = reader.aligned_string()
+    tooltip, _ = reader.aligned_string()
+    show_in_inspector = reader.bool32("FsmGameObject.showInInspector")
+    network_sync = reader.bool32("FsmGameObject.networkSync")
+    value_pointer = _read_pptr(reader, "FsmGameObject.value")
+    return {
+        "use_variable": use_variable, "name": name, "tooltip": tooltip,
+        "show_in_inspector": show_in_inspector, "network_sync": network_sync,
+        "value_pointer": value_pointer,
+    }
+
+
+def _read_fsm_owner_default(reader: Reader) -> dict:
+    option = reader.i32()
+    if option not in (0, 1):
+        raise ValueError("unknown FsmOwnerDefault owner option")
+    return {"owner_option": option, "game_object": _read_fsm_game_object(reader)}
+
+
+def _read_fsm_bool_object(reader: Reader, label: str) -> dict:
+    """Read the nested FsmBool field order observed in FsmEventTarget records."""
+    use_variable = reader.bool32(label + ".useVariable")
+    name, _ = reader.aligned_string()
+    tooltip, _ = reader.aligned_string()
+    show_in_inspector = reader.bool32(label + ".showInInspector")
+    network_sync = reader.bool32(label + ".networkSync")
+    value = reader.bool32(label + ".value")
+    return {
+        "use_variable": use_variable, "name": name, "tooltip": tooltip,
+        "show_in_inspector": show_in_inspector, "network_sync": network_sync,
+        "value": value,
+    }
+
+
+def _read_fsm_string(reader: Reader, label: str) -> dict:
+    """Read the specialized-list FsmString wire order observed in title assets."""
+    use_variable = reader.bool32(label + ".useVariable")
+    name, _ = reader.aligned_string()
+    tooltip, _ = reader.aligned_string()
+    show_in_inspector = reader.bool32(label + ".showInInspector")
+    network_sync = reader.bool32(label + ".networkSync")
+    value, _ = reader.aligned_string()
+    return {
+        "use_variable": use_variable, "name": name, "tooltip": tooltip,
+        "show_in_inspector": show_in_inspector, "network_sync": network_sync,
+        "value": value,
+    }
+
+
+def _read_fsm_event_target(reader: Reader) -> dict:
+    target = reader.i32()
+    exclude_self = _read_fsm_bool_object(reader, "FsmEventTarget.excludeSelf")
+    game_object = _read_fsm_owner_default(reader)
+    fsm_name = _read_fsm_string(reader, "FsmEventTarget.fsmName")
+    send_to_children = _read_fsm_bool_object(reader, "FsmEventTarget.sendToChildren")
+    fsm_component = _read_pptr(reader, "FsmEventTarget.fsmComponent")
+    return {
+        "target_value": target, "exclude_self": exclude_self,
+        "game_object": game_object, "fsm_name": fsm_name,
+        "send_to_children": send_to_children, "fsm_component": fsm_component,
+    }
+
+
+def parse_action_data(reader: Reader, *, salvage_unknown_parameters: bool = False) -> dict:
     start = reader.pos
     action_count = reader.count("ActionData actionNames", MAX_ACTIONS)
     if action_count == 0:
@@ -237,25 +328,57 @@ def parse_action_data(reader: Reader) -> dict:
             "empty_sentinel_words": 27, "parameters": [],
         }
 
-    if action_count != 1:
-        raise ValueError("only one serialized action per state is supported")
     action_names = [reader.aligned_string()[0] for _ in range(action_count)]
     custom_names = _read_string_array(reader, "ActionData customNames", MAX_ACTIONS)
-    enabled = [reader.bool32("actionEnabled") for _ in range(reader.count("actionEnabled", MAX_ACTIONS))]
-    is_open = [reader.bool32("actionIsOpen") for _ in range(reader.count("actionIsOpen", MAX_ACTIONS))]
+    enabled = reader.bool_array("actionEnabled", MAX_ACTIONS)
+    is_open = reader.bool_array("actionIsOpen", MAX_ACTIONS)
     start_indices = _read_int_array(reader, "actionStartIndex", MAX_ACTIONS)
     hash_codes = _read_int_array(reader, "actionHashCodes", MAX_ACTIONS)
+    specialized: dict[str, list[dict]] = {}
+    specialized_offsets: dict[str, list[dict[str, int]]] = {}
     for field_name in ACTIONDATA_SPECIAL_ARRAYS:
         count = reader.count("ActionData " + field_name, MAX_PARAMETERS)
-        if count:
+        if field_name == "fsmGameObjectParams":
+            values, offsets = [], []
+            for _ in range(count):
+                item_start = reader.pos
+                values.append(_read_fsm_game_object(reader))
+                offsets.append({"offset": item_start, "size": reader.pos - item_start})
+            specialized[field_name], specialized_offsets[field_name] = values, offsets
+        elif field_name == "fsmOwnerDefaultParams":
+            values, offsets = [], []
+            for _ in range(count):
+                item_start = reader.pos
+                values.append(_read_fsm_owner_default(reader))
+                offsets.append({"offset": item_start, "size": reader.pos - item_start})
+            specialized[field_name], specialized_offsets[field_name] = values, offsets
+        elif field_name == "fsmEventTargetParams":
+            values, offsets = [], []
+            for _ in range(count):
+                item_start = reader.pos
+                values.append(_read_fsm_event_target(reader))
+                offsets.append({"offset": item_start, "size": reader.pos - item_start})
+            specialized[field_name], specialized_offsets[field_name] = values, offsets
+        elif field_name == "fsmStringParams":
+            values, offsets = [], []
+            for _ in range(count):
+                item_start = reader.pos
+                values.append(_read_fsm_string(reader, "ActionData.fsmStringParams"))
+                offsets.append({"offset": item_start, "size": reader.pos - item_start})
+            specialized[field_name], specialized_offsets[field_name] = values, offsets
+        elif count:
             raise ValueError("unsupported nonempty ActionData array: " + field_name)
+        else:
+            specialized[field_name] = []
+            specialized_offsets[field_name] = []
 
     byte_count = reader.count("ActionData byteData", MAX_ACTION_DATA_BYTES)
     byte_data_offset = reader.pos
     byte_data = reader.take(byte_count)
-    reader.pos = (reader.pos + 3) & ~3
-    if reader.pos > len(reader.data):
-        raise ValueError("truncated ActionData byteData padding")
+    raw_padding_size = (-byte_count) % 4
+    raw_padding = reader.take(raw_padding_size)
+    if any(raw_padding):
+        raise ValueError("nonzero ActionData byteData alignment padding")
 
     array_param_sizes = _read_int_array(reader, "arrayParamSizes")
     array_param_types = _read_int_array(reader, "arrayParamTypes")
@@ -272,23 +395,67 @@ def parse_action_data(reader: Reader) -> dict:
     param_count = len(param_names)
     if not (len(param_data_types) == len(param_positions) == len(param_sizes) == param_count):
         raise ValueError("ActionData parameter arrays have inconsistent lengths")
-    if any(position < 0 or size < 0 or position + size > len(byte_data)
-           for position, size in zip(param_positions, param_sizes)):
-        raise ValueError("ActionData parameter slice is outside byteData")
-    spans = sorted((position, position + size) for position, size in zip(param_positions, param_sizes)
-                   if size > 0)
+    if len(array_param_sizes) != len(array_param_types):
+        raise ValueError("ActionData array parameter metadata lengths differ")
+    if len(custom_type_sizes) != len(custom_type_names):
+        raise ValueError("ActionData custom type metadata lengths differ")
+    if any(size < 0 for size in array_param_sizes + custom_type_sizes):
+        raise ValueError("negative ActionData array or custom type size")
+    if any(index < 0 for index in start_indices) or (start_indices and start_indices[0] != 0):
+        raise ValueError("ActionData actionStartIndex has an invalid first index")
+    if any(left > right for left, right in zip(start_indices, start_indices[1:])):
+        raise ValueError("ActionData actionStartIndex is not monotonic")
+    if any(index > param_count for index in start_indices):
+        raise ValueError("ActionData actionStartIndex outside parameter list")
+
+    specialized_type_arrays = {
+        18: "fsmStringParams", 19: "fsmGameObjectParams",
+        20: "fsmOwnerDefaultParams", 31: "fsmEventTargetParams",
+    }
+    spans = []
+    unknown_parameter_types = []
+    for code, position, size in zip(param_data_types, param_positions, param_sizes):
+        type_name = PARAM_DATA_TYPES.get(code)
+        if type_name is None:
+            if not salvage_unknown_parameters:
+                raise ValueError(f"unsupported ActionData serialized type code: {code}")
+            unknown_parameter_types.append(code)
+        array_name = specialized_type_arrays.get(code)
+        if array_name is not None:
+            if size != 0 or not 0 <= position < len(specialized[array_name]):
+                raise ValueError("ActionData specialized parameter reference is invalid")
+            continue
+        if position < 0 or size < 0 or position + size > len(byte_data):
+            raise ValueError("ActionData parameter slice is outside byteData")
+        if size:
+            spans.append((position, position + size))
+    spans.sort()
     if any(left[1] > right[0] for left, right in zip(spans, spans[1:])):
         raise ValueError("ActionData parameter slices overlap")
-    if any(index < 0 or index > param_count for index in start_indices):
-        raise ValueError("ActionData actionStartIndex outside parameter list")
 
     parameters = []
     for name, code, position, size in zip(
             param_names, param_data_types, param_positions, param_sizes):
-        payload = byte_data[position:position + size]
         type_name = PARAM_DATA_TYPES.get(code)
+        array_name = specialized_type_arrays.get(code)
+        if array_name is not None:
+            value = specialized[array_name][position]
+            array_entry = specialized_offsets[array_name][position]
+            parameters.append({
+                "name": name, "serialized_type_code": code, "type": type_name,
+                "byte_data_position": None, "byte_data_offset": None,
+                "byte_data_size": 0, "specialized_array": array_name,
+                "specialized_array_index": position,
+                "specialized_array_offset": array_entry["offset"],
+                "specialized_array_size": array_entry["size"], "value": value,
+            })
+            continue
+        payload = byte_data[position:position + size]
         value = None
-        if type_name == "HutongGames.PlayMaker.FsmColor":
+        if type_name is None:
+            value = {"decoded": False, "serialized_type_code": code,
+                     "payload_size": size}
+        elif type_name == "HutongGames.PlayMaker.FsmColor":
             if size != 17:
                 raise ValueError("unsupported FsmColor ActionData encoding")
             color = struct.unpack("<4f", payload[:16])
@@ -297,18 +464,75 @@ def parse_action_data(reader: Reader) -> dict:
             value = {"rgba": list(color), "use_variable": bool(payload[16])}
         elif type_name == "HutongGames.PlayMaker.FsmFloat":
             if size < 5 or payload[4] not in (0, 1):
+                if salvage_unknown_parameters:
+                    value = {"decoded": False, "serialized_type_code": code,
+                             "payload_size": size}
+                    parameters.append({
+                        "name": name, "serialized_type_code": code, "type": type_name,
+                        "byte_data_position": position,
+                        "byte_data_offset": byte_data_offset + position,
+                        "byte_data_size": size, "value": value,
+                    })
+                    continue
                 raise ValueError("unsupported FsmFloat ActionData encoding")
             variable = payload[5:].decode("ascii") if payload[4] else None
             if payload[4] and not variable:
                 raise ValueError("empty FsmFloat variable link")
             if payload[4] and any(not (32 <= char < 127) for char in payload[5:]):
                 raise ValueError("invalid FsmFloat variable name")
-            value = {"value": struct.unpack("<f", payload[:4])[0],
+            float_value = struct.unpack("<f", payload[:4])[0]
+            if not math.isfinite(float_value):
+                raise ValueError("non-finite FsmFloat ActionData value")
+            value = {"value": float_value,
                      "use_variable": bool(payload[4]), "variable_name": variable}
+        elif type_name == "HutongGames.PlayMaker.FsmBool":
+            if size < 2 or payload[0] not in (0, 1) or payload[1] not in (0, 1):
+                if salvage_unknown_parameters:
+                    value = {"decoded": False, "serialized_type_code": code,
+                             "payload_size": size}
+                    parameters.append({
+                        "name": name, "serialized_type_code": code, "type": type_name,
+                        "byte_data_position": position,
+                        "byte_data_offset": byte_data_offset + position,
+                        "byte_data_size": size, "value": value,
+                    })
+                    continue
+                raise ValueError("invalid FsmBool ActionData payload")
+            variable = payload[2:].decode("ascii") if payload[1] else None
+            if payload[1] and (not variable or any(not (32 <= char < 127) for char in payload[2:])):
+                if salvage_unknown_parameters:
+                    value = {"decoded": False, "serialized_type_code": code,
+                             "payload_size": size}
+                    parameters.append({
+                        "name": name, "serialized_type_code": code, "type": type_name,
+                        "byte_data_position": position,
+                        "byte_data_offset": byte_data_offset + position,
+                        "byte_data_size": size, "value": value,
+                    })
+                    continue
+                raise ValueError("invalid FsmBool variable link")
+            if not payload[1] and size != 2:
+                if salvage_unknown_parameters:
+                    value = {"decoded": False, "serialized_type_code": code,
+                             "payload_size": size}
+                    parameters.append({
+                        "name": name, "serialized_type_code": code, "type": type_name,
+                        "byte_data_position": position,
+                        "byte_data_offset": byte_data_offset + position,
+                        "byte_data_size": size, "value": value,
+                    })
+                    continue
+                raise ValueError("unexpected FsmBool payload after a constant")
+            value = {"value": bool(payload[0]), "use_variable": bool(payload[1]),
+                     "variable_name": variable}
         elif type_name == "HutongGames.PlayMaker.FsmEvent":
-            if size != 0:
-                raise ValueError("unsupported nonempty FsmEvent ActionData payload")
-            value = {"payload": "empty"}
+            try:
+                event_name = payload.decode("ascii")
+            except UnicodeDecodeError as exc:
+                raise ValueError("invalid FsmEvent ActionData payload") from exc
+            if any(not (32 <= char < 127) for char in payload):
+                raise ValueError("non-printable FsmEvent ActionData payload")
+            value = {"event_name": event_name}
         elif type_name == "System.Boolean":
             if size != 1 or payload[0] not in (0, 1):
                 raise ValueError("invalid boolean ActionData payload")
@@ -324,14 +548,345 @@ def parse_action_data(reader: Reader) -> dict:
         "action_names": action_names, "custom_names": custom_names,
         "enabled": enabled, "is_open": is_open, "start_indices": start_indices,
         "hash_codes_u32": [value & 0xFFFFFFFF for value in hash_codes],
-        "specialized_parameter_arrays": {name: 0 for name in ACTIONDATA_SPECIAL_ARRAYS},
+        "unknown_parameter_type_codes": sorted(set(unknown_parameter_types)),
+        "specialized_parameter_arrays": specialized,
+        "specialized_parameter_array_offsets": specialized_offsets,
         "byte_data_offset": byte_data_offset, "byte_data_size": len(byte_data),
+        "_byte_data": byte_data,
         "array_param_sizes": array_param_sizes, "array_param_types": array_param_types,
         "custom_type_sizes": custom_type_sizes, "custom_type_names": custom_type_names,
         "param_data_types": param_data_types, "param_names": param_names,
         "param_data_positions": param_positions, "param_byte_data_sizes": param_sizes,
         "parameters": parameters,
     }
+
+
+def _encode_string_array(values: list[str]) -> bytes:
+    if not isinstance(values, list) or len(values) > MAX_PARAMETERS:
+        raise ValueError("PlayMaker string array count outside bounds")
+    return struct.pack("<i", len(values)) + b"".join(_encode_aligned_string(value) for value in values)
+
+
+def _encode_aligned_string(value: str) -> bytes:
+    if not isinstance(value, str):
+        raise ValueError("invalid PlayMaker string value")
+    raw = value.encode("utf-8")
+    if len(raw) > MAX_STRING_BYTES:
+        raise ValueError("PlayMaker string length outside bounds")
+    result = struct.pack("<i", len(raw)) + raw
+    return result + bytes((-len(result)) % 4)
+
+
+def _encode_pptr(pointer: dict[str, int]) -> bytes:
+    file_id = pointer.get("file_id")
+    path_id = pointer.get("path_id")
+    if (type(file_id) is not int or type(path_id) is not int or
+            not 0 <= file_id < (1 << 31) or not 0 <= path_id < (1 << 63)):
+        raise ValueError("invalid serialized PPtr")
+    return struct.pack("<iq", file_id, path_id)
+
+
+def _encode_bool32(value: object, label: str) -> bytes:
+    if not isinstance(value, bool):
+        raise ValueError("invalid serialized boolean: " + label)
+    return struct.pack("<i", int(value))
+
+
+def _encode_fsm_game_object(value: dict) -> bytes:
+    return (_encode_bool32(value["use_variable"], "FsmGameObject.useVariable") +
+            _encode_aligned_string(value["name"]) +
+            _encode_aligned_string(value["tooltip"]) +
+            _encode_bool32(value["show_in_inspector"], "FsmGameObject.showInInspector") +
+            _encode_bool32(value["network_sync"], "FsmGameObject.networkSync") +
+            _encode_pptr(value["value_pointer"]))
+
+
+def _encode_fsm_owner_default(value: dict) -> bytes:
+    option = value.get("owner_option")
+    if type(option) is not int or option not in (0, 1):
+        raise ValueError("unknown FsmOwnerDefault owner option")
+    return struct.pack("<i", option) + _encode_fsm_game_object(value["game_object"])
+
+
+def _encode_fsm_bool_object(value: dict) -> bytes:
+    return (_encode_bool32(value["use_variable"], "FsmBool.useVariable") +
+            _encode_aligned_string(value["name"]) +
+            _encode_aligned_string(value["tooltip"]) +
+            _encode_bool32(value["show_in_inspector"], "FsmBool.showInInspector") +
+            _encode_bool32(value["network_sync"], "FsmBool.networkSync") +
+            _encode_bool32(value["value"], "FsmBool.value"))
+
+
+def _encode_fsm_string(value: dict) -> bytes:
+    return (_encode_bool32(value["use_variable"], "FsmString.useVariable") +
+            _encode_aligned_string(value["name"]) +
+            _encode_aligned_string(value["tooltip"]) +
+            _encode_bool32(value["show_in_inspector"], "FsmString.showInInspector") +
+            _encode_bool32(value["network_sync"], "FsmString.networkSync") +
+            _encode_aligned_string(value["value"]))
+
+
+def _encode_fsm_event_target(value: dict) -> bytes:
+    target = value.get("target_value")
+    if type(target) is not int or not -(1 << 31) <= target < (1 << 31):
+        raise ValueError("invalid FsmEventTarget target value")
+    return (struct.pack("<i", value["target_value"]) +
+            _encode_fsm_bool_object(value["exclude_self"]) +
+            _encode_fsm_owner_default(value["game_object"]) +
+            _encode_fsm_string(value["fsm_name"]) +
+            _encode_fsm_bool_object(value["send_to_children"]) +
+            _encode_pptr(value["fsm_component"]))
+
+
+def _encode_parameter_payload(parameter: dict) -> bytes | None:
+    """Encode a semantically decoded byteData parameter, or preserve it raw.
+
+    ``None`` means that this parameter is intentionally opaque and its bytes
+    must be retained from the original byteData buffer. The title's native
+    FsmTexture/FsmRect and unknown/custom parameter encodings are not guessed.
+    """
+    code = parameter.get("serialized_type_code")
+    value = parameter.get("value")
+    if isinstance(value, dict) and value.get("decoded") is False:
+        return None
+    if code == 1:  # System.Boolean
+        if not isinstance(value, bool):
+            raise ValueError("invalid System.Boolean ActionData value")
+        return bytes((int(value),))
+    if code == 15:  # FsmFloat
+        if not isinstance(value, dict):
+            raise ValueError("invalid FsmFloat ActionData value")
+        number = value.get("value")
+        variable = value.get("use_variable")
+        variable_name = value.get("variable_name")
+        if (not isinstance(number, (int, float)) or not math.isfinite(number) or
+                not isinstance(variable, bool)):
+            raise ValueError("invalid FsmFloat ActionData fields")
+        raw = struct.pack("<fB", number, int(variable))
+        if variable:
+            if not isinstance(variable_name, str) or not variable_name:
+                raise ValueError("FsmFloat variable link is missing its name")
+            encoded_name = variable_name.encode("ascii")
+            if any(not 32 <= char < 127 for char in encoded_name):
+                raise ValueError("invalid FsmFloat variable name")
+            raw += encoded_name
+        elif variable_name is not None:
+            raise ValueError("constant FsmFloat has an unexpected variable name")
+        return raw
+    if code == 17:  # FsmBool; only emit the variable form when its link decoded.
+        if not isinstance(value, dict):
+            raise ValueError("invalid FsmBool ActionData value")
+        current = value.get("value")
+        variable = value.get("use_variable")
+        variable_name = value.get("variable_name")
+        if not isinstance(current, bool) or not isinstance(variable, bool):
+            raise ValueError("invalid FsmBool ActionData fields")
+        raw = bytes((int(current), int(variable)))
+        if variable:
+            if not isinstance(variable_name, str) or not variable_name:
+                raise ValueError("FsmBool variable link is missing its name")
+            encoded_name = variable_name.encode("ascii")
+            if any(not 32 <= char < 127 for char in encoded_name):
+                raise ValueError("invalid FsmBool variable name")
+            raw += encoded_name
+        elif variable_name is not None:
+            raise ValueError("constant FsmBool has an unexpected variable name")
+        return raw
+    if code == 23:  # FsmEvent is stored as printable ASCII in this title.
+        if not isinstance(value, dict) or not isinstance(value.get("event_name"), str):
+            raise ValueError("invalid FsmEvent ActionData value")
+        try:
+            raw = value["event_name"].encode("ascii")
+        except UnicodeEncodeError as exc:
+            raise ValueError("invalid FsmEvent ActionData value") from exc
+        if any(not 32 <= char < 127 for char in raw):
+            raise ValueError("non-printable FsmEvent ActionData value")
+        return raw
+    if code == 25:  # FsmColor
+        if not isinstance(value, dict):
+            raise ValueError("invalid FsmColor ActionData value")
+        rgba = value.get("rgba")
+        use_variable = value.get("use_variable")
+        if (not isinstance(rgba, list) or len(rgba) != 4 or
+                not isinstance(use_variable, bool) or
+                any(not isinstance(item, (int, float)) or not math.isfinite(item)
+                    for item in rgba)):
+            raise ValueError("invalid FsmColor ActionData fields")
+        return struct.pack("<4fB", *rgba, int(use_variable))
+    # Unknown, unsupported, and specialized-array parameters carry no
+    # independently verified byteData encoder.
+    return None
+
+
+def _encode_action_byte_data(action_data: dict) -> bytes:
+    original = action_data.get("_byte_data")
+    if not isinstance(original, bytes) or len(original) > MAX_ACTION_DATA_BYTES:
+        raise ValueError("missing or oversized raw ActionData byteData")
+    result = bytearray(original)
+    parameters = action_data.get("parameters")
+    if not isinstance(parameters, list) or len(parameters) != len(action_data["param_names"]):
+        raise ValueError("ActionData decoded parameter count is inconsistent")
+    if not (len(action_data["param_data_types"]) ==
+            len(action_data["param_data_positions"]) ==
+            len(action_data["param_byte_data_sizes"]) == len(parameters)):
+        raise ValueError("ActionData parameter metadata lengths differ")
+    spans = []
+    specialized_type_arrays = {
+        18: "fsmStringParams", 19: "fsmGameObjectParams",
+        20: "fsmOwnerDefaultParams", 31: "fsmEventTargetParams",
+    }
+    specialized = action_data.get("specialized_parameter_arrays")
+    if not isinstance(specialized, dict):
+        raise ValueError("ActionData specialized parameter arrays are missing")
+    for parameter, name, code, position, size in zip(
+            parameters, action_data["param_names"], action_data["param_data_types"],
+            action_data["param_data_positions"], action_data["param_byte_data_sizes"]):
+        if (parameter.get("name") != name or
+                parameter.get("serialized_type_code") != code):
+            raise ValueError("ActionData parameter identity disagrees with its metadata")
+        array_name = specialized_type_arrays.get(code)
+        if array_name is not None:
+            index = parameter.get("specialized_array_index")
+            array_values = specialized.get(array_name)
+            if (size != 0 or parameter.get("specialized_array") != array_name or
+                    index != position or type(index) is not int or
+                    not isinstance(array_values, list) or
+                    not 0 <= index < len(array_values)):
+                raise ValueError("ActionData specialized parameter reference is invalid")
+            continue
+        if (type(position) is not int or type(size) is not int or
+                position < 0 or size < 0 or position + size > len(result)):
+            raise ValueError("ActionData parameter slice is outside byteData")
+        if size:
+            spans.append((position, position + size))
+        payload = _encode_parameter_payload(parameter)
+        if payload is None:
+            continue
+        if len(payload) != size:
+            raise ValueError("encoded ActionData parameter size changed")
+        result[position:position + size] = payload
+    spans.sort()
+    if any(left[1] > right[0] for left, right in zip(spans, spans[1:])):
+        raise ValueError("ActionData parameter slices overlap")
+    return bytes(result)
+
+
+def encode_action_data(action_data: dict) -> bytes:
+    """Encode only the verified ActionData wire subset accepted by the parser."""
+    if action_data.get("empty_sentinel_words") == 27:
+        return bytes(27 * 4)
+    names = action_data.get("action_names")
+    if not isinstance(names, list) or not 1 <= len(names) <= MAX_ACTIONS:
+        raise ValueError("ActionData action count outside bounds")
+    custom_names = action_data.get("custom_names")
+    if not isinstance(custom_names, list) or len(custom_names) != len(names):
+        raise ValueError("ActionData custom name count mismatch")
+    for name in names + custom_names:
+        if not isinstance(name, str) or len(name.encode("utf-8")) > MAX_STRING_BYTES:
+            raise ValueError("ActionData action name outside bounds")
+    parameter_names = action_data.get("param_names")
+    parameter_types = action_data.get("param_data_types")
+    parameter_positions = action_data.get("param_data_positions")
+    parameter_sizes = action_data.get("param_byte_data_sizes")
+    if (not all(isinstance(values, list) for values in
+                (parameter_names, parameter_types, parameter_positions, parameter_sizes)) or
+            not (len(parameter_names) == len(parameter_types) ==
+                 len(parameter_positions) == len(parameter_sizes)) or
+            len(parameter_names) > MAX_PARAMETERS):
+        raise ValueError("ActionData parameter metadata lengths differ")
+    if any(type(value) is not int or not -(1 << 31) <= value < (1 << 31)
+           for values in (parameter_types, parameter_positions, parameter_sizes)
+           for value in values):
+        raise ValueError("ActionData parameter metadata integer outside bounds")
+    if any(size < 0 for size in parameter_sizes):
+        raise ValueError("negative ActionData parameter size")
+    start_indices = action_data.get("start_indices")
+    hash_codes = action_data.get("hash_codes_u32")
+    if (not isinstance(start_indices, list) or not isinstance(hash_codes, list) or
+            len(start_indices) != len(names) or len(hash_codes) != len(names) or
+            (start_indices and start_indices[0] != 0) or
+            any(type(value) is not int or value < 0 or value > len(parameter_names)
+                for value in start_indices) or
+            any(left > right for left, right in zip(start_indices, start_indices[1:])) or
+            any(type(value) is not int or not 0 <= value <= 0xFFFFFFFF
+                for value in hash_codes)):
+        raise ValueError("ActionData per-action indices or hashes are invalid")
+    array_param_sizes = action_data.get("array_param_sizes")
+    array_param_types = action_data.get("array_param_types")
+    custom_type_sizes = action_data.get("custom_type_sizes")
+    custom_type_names = action_data.get("custom_type_names")
+    if (not isinstance(array_param_sizes, list) or
+            not isinstance(array_param_types, list) or
+            len(array_param_sizes) != len(array_param_types) or
+            not isinstance(custom_type_sizes, list) or
+            not isinstance(custom_type_names, list) or
+            len(custom_type_sizes) != len(custom_type_names)):
+        raise ValueError("ActionData array/custom type metadata lengths differ")
+    result = struct.pack("<i", len(names)) + b"".join(_encode_aligned_string(x) for x in names)
+    result += _encode_string_array(custom_names)
+    for label in ("enabled", "is_open"):
+        values = action_data[label]
+        if len(values) != len(names):
+            raise ValueError("ActionData per-action boolean length mismatch")
+        if any(not isinstance(value, bool) for value in values):
+            raise ValueError("ActionData per-action boolean value is invalid")
+        raw = bytes(int(value) for value in values)
+        result += struct.pack("<i", len(raw)) + raw
+        result += bytes((-len(raw)) % 4)
+    for values in (start_indices, hash_codes):
+        result += struct.pack("<i", len(values))
+        result += b"".join(struct.pack("<I", value) for value in values)
+
+    specialized = action_data["specialized_parameter_arrays"]
+    for field_name in ACTIONDATA_SPECIAL_ARRAYS:
+        values = specialized.get(field_name, [])
+        if not isinstance(values, list) or len(values) > MAX_PARAMETERS:
+            raise ValueError("ActionData specialized array count outside bounds")
+        result += struct.pack("<i", len(values))
+        if field_name == "fsmGameObjectParams":
+            result += b"".join(_encode_fsm_game_object(value) for value in values)
+        elif field_name == "fsmOwnerDefaultParams":
+            result += b"".join(_encode_fsm_owner_default(value) for value in values)
+        elif field_name == "fsmEventTargetParams":
+            result += b"".join(_encode_fsm_event_target(value) for value in values)
+        elif field_name == "fsmStringParams":
+            result += b"".join(_encode_fsm_string(value) for value in values)
+        elif values:
+            raise ValueError("cannot encode unsupported specialized ActionData array: " + field_name)
+
+    byte_data = _encode_action_byte_data(action_data)
+    result += struct.pack("<i", len(byte_data)) + byte_data
+    result += bytes((-len(byte_data)) % 4)
+    for key in ("array_param_sizes", "array_param_types", "custom_type_sizes"):
+        values = action_data[key]
+        if (not isinstance(values, list) or len(values) > MAX_PARAMETERS or
+                any(type(value) is not int or not -(1 << 31) <= value < (1 << 31)
+                    for value in values)):
+            raise ValueError("ActionData integer array outside bounds: " + key)
+        if key in ("array_param_sizes", "custom_type_sizes") and any(value < 0 for value in values):
+            raise ValueError("negative ActionData size metadata")
+        result += struct.pack("<i", len(values))
+        result += b"".join(struct.pack("<i", value) for value in values)
+    result += _encode_string_array(action_data["custom_type_names"])
+    result += struct.pack("<i", len(parameter_types))
+    result += b"".join(struct.pack("<i", value) for value in parameter_types)
+    result += _encode_string_array(parameter_names)
+    for values in (parameter_positions, parameter_sizes):
+        result += struct.pack("<i", len(values))
+        result += b"".join(struct.pack("<i", value) for value in values)
+    if len(result) > MAX_COMPONENT_BYTES:
+        raise ValueError("encoded ActionData exceeds the byte limit")
+    return result
+
+
+def _public_json(value):
+    """Exclude private round-trip byte buffers from JSON-derived reports."""
+    if isinstance(value, dict):
+        return {key: _public_json(item) for key, item in value.items()
+                if not key.startswith("_")}
+    if isinstance(value, list):
+        return [_public_json(item) for item in value]
+    return value
 
 
 def _parse_transition(reader: Reader) -> dict:
@@ -954,8 +1509,9 @@ def inspect(level2_data: bytes, global_data: bytes, sharedassets2_data: bytes,
         "synthetic_menu_graph": synthetic,
         "synthetic_menu_graph_model": build_synthetic_menu_graph(),
         "limitations": [
-            "the parser supports only the pinned zero-action sentinel and one-action ActionData encoding",
-            "specialized nonempty ActionData reference arrays and Fsm.globalTransitions are rejected",
+            "the parser supports the pinned zero-action sentinel and verified multi-action ActionData subsets",
+            "nonempty animationCurveParams, functionCallParams, fsmTemplateControlParams, fsmPropertyParams, layoutOptionParams, fsmObjectParams, fsmVarParams and unityObjectParams are rejected",
+            "ActionData encoding is limited to the decoded arrays and parameter type codes; it is not a Unity asset writer",
             "cameraFadeFSM floatVariables are decoded narrowly; 40 remaining Fsm bytes are opaque",
             "PlayMakerFSM.fsmTemplate is decoded as a trailing PPtr; it does not prove runtime loading or registration",
             "sharedassets2's 13 prefab PlayMakerFSM components are serialized inline and have null fsmTemplate pointers",
@@ -978,7 +1534,7 @@ def main(argv: list[str] | None = None) -> int:
         report = inspect(args.level2.read_bytes(), args.globalgamemanagers.read_bytes(),
                          args.sharedassets2.read_bytes(), args.module.read_bytes(),
                          args.metadata.read_bytes())
-        rendered = json.dumps(report, indent=2, sort_keys=True) + "\n"
+        rendered = json.dumps(_public_json(report), indent=2, sort_keys=True) + "\n"
         if args.output:
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(rendered, encoding="utf-8")
