@@ -9,7 +9,9 @@ on:
       - "prototype/**"
       - "tests/**"
       - "scripts/**"
+      - "tools/**"
       - "docs/**"
+      - "global.json"
       - "AGENTS.md"
       - ".github/workflows/offline-integration.yml"
   pull_request:
@@ -41,3 +43,40 @@ jobs:
           sudo apt-get install -y --no-install-recommends mono-mcs mono-runtime
       - name: Compile prototype with engine stubs and test menu navigation
         run: sh scripts/test_unity_prototype.sh
+
+  assetstools-format17:
+    name: AssetsTools.NET 3.0.5 synthetic Unity format-17 round-trip
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the pinned .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Fetch and verify the open Unity class database
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/uabea-v8-linux.zip"
+          classdata="$RUNNER_TEMP/classdata.tpk"
+          curl --fail --location --retry 3 --connect-timeout 30 \
+            https://github.com/nesrak1/UABEA/releases/download/v8/uabea-ubuntu.zip \
+            --output "$archive"
+          echo "c542dd3b5b091b34645ee1c7180df7138f9f3fe5253222f151d7185e542402b2  $archive" | sha256sum --check
+          unzip -p "$archive" classdata.tpk > "$classdata"
+          echo "129e1f80f930415db6779fe6089afa75280cb51462bcee812beab6cd81a764c6  $classdata" | sha256sum --check
+          echo "CLASSDATA_TPK=$classdata" >> "$GITHUB_ENV"
+      - name: Generate fixture and read, write, and reread with AssetsTools.NET
+        run: |
+          set -euo pipefail
+          python3 scripts/unity_format17_fixture.py build output/unity-format17/input
+          python3 scripts/unity_format17_fixture.py verify \
+            output/unity-format17/input/synthetic_scene.assets \
+            output/unity-format17/input/synthetic_library.assets
+          dotnet run --project tools/UnityFormat17Validator/UnityFormat17Validator.csproj \
+            --configuration Release -- \
+            "$CLASSDATA_TPK" output/unity-format17/input output/unity-format17/roundtrip
+          python3 scripts/unity_format17_fixture.py verify \
+            output/unity-format17/roundtrip/synthetic_scene.assets \
+            output/unity-format17/roundtrip/synthetic_library.assets \
+            --expected-name "Synthetic Menu Host (AssetsTools.NET rewrite)"
