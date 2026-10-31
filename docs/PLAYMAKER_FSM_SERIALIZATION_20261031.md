@@ -444,3 +444,59 @@ cameraFade component/template inspector, and the 60-asset tail audit passed.
 The local Unity C#4 fixture was skipped because Unity/Mono tools are absent.
 These results validate static byte preservation and synthetic graph rules,
 not Unity import, runtime loading, graphics, DS4 input, or PS4 behavior.
+
+## 2026-10-31 — PlayMaker version evidence and external validation gate
+
+### Version layers
+
+The exact-hash IL2CPP v23 metadata identifies assembly image index 19 as
+`PlayMaker.dll`; its `AssemblyDefinition` version tuple is **1.6.0.0**. The
+same record advertises `AssemblyProductAttribute`,
+`AssemblyInformationalVersionAttribute`, and `AssemblyFileVersionAttribute`.
+The exact AOT user-assemblies ELF also contains the PlayMaker-associated
+version strings `1.7.7.f6` and `1.7.7.6`. These are evidence of the compiled DLL
+or build metadata, but this inspection did not map either string to a specific
+attribute argument or Unity package release.
+
+That distinction matters: Hutong Games support documented that PlayMaker
+**1.7.8** could still report DLL version **1.7.7f6**, because the DLL had not
+been rebuilt for that product release
+([official support thread](https://hutonggames.com/playmakerforum/index.php?topic=9710.45)).
+Therefore the target's assembly version is proven as 1.6.0.0, and the DLL build
+marker is present, but the exact product release is **not** identified. The
+serialized-schema compatibility version is also **not** identified: none of
+these version labels proves the wire layout of this title's PlayMaker data.
+
+### External tool availability
+
+| Tool | Published capability | Result in this environment |
+| --- | --- | --- |
+| Unity Editor 5.6.6f2 | Unity's [official archive](https://unity.com/es/releases/editor/whats-new/5.6.6f2) lists manual Editor installers for Windows and macOS. | Host is Ubuntu 24.04 x86_64. No native Linux Editor is offered on that page; Wine is absent. It cannot be run here. |
+| AssetRipper | The [upstream README](https://github.com/AssetRipper/AssetRipper) advertises Unity 3.5.0–6000.4.X analysis and conversion/export into a Unity project. | Not installed. Exporting a project is not evidence of writing the original serialized file and reimporting it byte- or structurally correctly. |
+| AssetsTools.NET / UABEA | [AssetsTools.NET](https://github.com/nesrak1/AssetsTools.NET) advertises read/write support for Unity assets and bundles; [UABEA releases](https://github.com/nesrak1/UABEA/releases) include Linux builds and require .NET Runtime 6 plus glibc 2.29 or newer. | Host glibc is 2.39, but .NET 6 is absent. The environment status tool and network-policy snapshot are unavailable, so no external runtime/editor binary was installed. No UABEA/AssetsTools.NET format-17 read/write fixture was run. |
+
+The existing Python reader in this repository recognizes the title's Unity
+5.6.6f2 / serialized-file format 17 header and a bounded set of object types.
+It is not an independent serializer and cannot import a complete synthetic
+GameObject/Transform/PlayMakerFSM graph into Unity. AssetRipper and
+AssetsTools.NET remain candidates for separate evaluation; their published
+feature descriptions are not validation of this exact file version, type-tree
+state, or PlayMaker schema.
+
+### Integration decision
+
+No new importable PlayMakerFSM was produced. The existing 1,324-byte graphic
+component is still a parser fixture inside the repository's narrow codec; it
+does not include a complete Unity format-17 asset file and has not been loaded
+by Unity or PlayMaker. Route A, adding a distinct scene/prefab object, remains
+plausible but unvalidated. Runtime registration (route B) has no new evidence
+and remains out of scope.
+
+The next required experiment is a noncommercial Unity 5.6.6f2 project on a
+supported Windows or macOS host, using the exact PlayMaker package available
+to the title owner. It must create one graphic-only FSM, save it, and expose
+the serialized object data. A separate format-17 reader/writer must then
+round-trip a synthetic GameObject/Transform/MonoBehaviour graph before it is
+considered as an integration tool. Until those dependencies are available,
+the 40-byte tail remains opaque and no installable asset, PKG, or PRX should
+be produced.
