@@ -52,7 +52,7 @@ internal static class UnityEditorBundleProbe
 
     private sealed class BundleReport
     {
-        public int formatVersion;
+        public uint formatVersion;
         public string unityVersion = "";
         public bool typeTreeEnabled;
         public string bundleSha256 = "";

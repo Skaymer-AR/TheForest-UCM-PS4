@@ -6,6 +6,7 @@ namespace UnityEngine
 {
     public class Object
     {
+        public string name { get; set; }
     }
 
     public class Component : Object
@@ -57,7 +58,6 @@ namespace UnityEngine
 
     public class GameObject : Object
     {
-        public string name;
         public Transform transform;
 
         public GameObject(string objectName)
