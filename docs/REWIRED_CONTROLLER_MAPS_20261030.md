@@ -47,6 +47,26 @@ field order. Controller map categories (`InputMapCategory`) and joystick
 layouts are a separate table. The report keeps these category namespaces
 separate.
 
+The 44-byte record contains eleven 32-bit words. They align with the first
+eleven instance fields of `Rewired.ActionElementMap` in the verified IL2CPP v23
+metadata (`global-metadata.dat` SHA-256
+`238c400de31e28ed4f7f14e7781ea3b33de0d0bd6964ded680d78fce1d85a6c3`):
+`_actionCategoryId`, `_actionId`, `_elementType`,
+`_elementIdentifierId`, `_axisRange`, `_invert`, `_axisContribution`,
+`_keyboardKeyCode`, and `_modifierKey1` through `_modifierKey3`. The last seven
+words are therefore decoded as AxisRange (`Full=0`, `Positive=1`, `Negative=2`),
+invert (`false/true`), Pole (`Positive=0`, `Negative=1`), and keyboard key plus
+three modifiers. In these joystick maps, the keyboard key is always
+`None=0` and the modifiers are always `None=0`; other values are rejected by
+the pinned decoder. Rewired documents that `axisRange` describes the bound
+axis portion, while `axisContribution` controls the sign contributed by a
+button or split-axis binding when queried as an axis. `invert` applies to a
+full-axis binding. See the official [Axis Range](https://guavaman.com/projects/rewired/docs/api-reference/html/P_Rewired_ActionElementMap_axisRange.htm),
+[Axis Contribution](https://guavaman.com/projects/rewired/docs/api-reference/html/P_Rewired_ActionElementMap_axisContribution.htm),
+and [CreateElementMap](https://guavaman.com/projects/rewired/docs/api-reference/html/M_Rewired_ControllerMapWithAxes_CreateElementMap.htm)
+references. The 44-byte record does not include the later `_enabled` field;
+runtime ActionElementMap enablement remains unknown.
+
 For each ActionElementMap, the JSON includes the stored action-category
 selector and name, the action ID/name, the InputAction catalog category ID/name,
 the element type, and the DS4 hardware element ID/name. The two stored category
@@ -58,8 +78,10 @@ and Action for element assignments; neither category ID is a physical button
 or proof of runtime map activation. See [Actions](https://guavaman.com/projects/rewired/docs/Actions.html),
 [Rewired Editor](https://guavaman.com/projects/rewired/docs/RewiredEditor.html)
 and [ActionElementMap](https://guavaman.com/projects/rewired/docs/api-reference/html/T_Rewired_ActionElementMap.htm).
-The remaining seven words of the 44-byte record are left uninterpreted.
-`ActionElementMap.enabled` is therefore not decoded.
+`ActionElementMap.enabled` is not present in the 44-byte serialized map record,
+so its runtime value is not decoded. The decoded axis range, inversion and
+contribution fields describe the stored binding; they do not prove that its
+ControllerMap is active or that Rewired is currently evaluating it.
 
 The two GUIDs in the generic `SonyDualShock4` profile are
 `83b427e4-086f-47f3-bb06-be266abd1ca5` and
@@ -72,6 +94,16 @@ identifiers; this does not establish which ID a PS4 session will expose.
 | --- | ---: | ---: | --- | --- | --- |
 | VR (prefab 21, component 192) | 13 | 4 / 96 | `0 Default`, `1 Chat`, `2 Menu`, `3 RadialWorld`, `4 Inventory`, `5 Book` | `0 Default` | `startPlaying=true`; Default, Menu, Inventory, RadialWorld, Book enabled on Default layout |
 | XInput (prefab 22, component 193) | 9 | 9 / 195 | `0 Default`, `1 Chat`, `2 Menu`, `3 Inventory`, `4 Book` | `0 Default`, `2 Lefty` | `startPlaying=true`; Default and Menu enabled; Inventory and Book disabled on Default layout |
+
+Across the DS4 ControllerMaps, VR has 95 `Full` and 1 `Positive` axis-range
+bindings; XInput has 191 `Full` and 4 `Positive`. All decoded `invert` fields
+are false. `axisContribution` is `Positive` on 90 VR / 188 XInput entries and
+`Negative` on 6 / 7. All entries have `KeyboardKeyCode.None` and three
+`ModifierKey.None` values. Positive axis-range bindings are `L2`/`R2` for
+`PreviousChapter`/`NextChapter` in the Default map for the second GUID: one
+pair in XInput Default and another in XInput Lefty; VR has `R2` for
+`NextChapter` in Default. These are stored as `Axis` elements with `Positive`
+range. The counts are static map data and do not indicate which map is active.
 
 Both managers have the same eight Action Categories: `0 Default`, `1 Menu`,
 `2 World`, `3 Build`, `4 Inventory`, `5 Book`, `6 Movement`, `7 Multiplayer`.

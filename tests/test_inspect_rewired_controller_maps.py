@@ -23,7 +23,7 @@ def aligned_string(value: str) -> bytes:
 def action_element_map(category: int, action: int, kind: int, element: int,
                        trailing: tuple[int, ...] = (0,) * 7) -> bytes:
     if len(trailing) != 7:
-        raise ValueError("fixture expects seven uninterpreted words")
+        raise ValueError("fixture expects seven trailing ActionElementMap fields")
     return struct.pack("<11I", category, action, kind, element, *trailing)
 
 
@@ -100,7 +100,7 @@ class RewiredControllerMapInspectorTests(unittest.TestCase):
     def test_decodes_action_and_ds4_element_fields(self):
         records = [
             action_element_map(1, 9, 1, 6,
-                               trailing=(0xDEADBEEF,) * 7),
+                               trailing=(2, 1, 1, 0, 0, 0, 0)),
             action_element_map(0, 58, 0, 0),
         ]
         data = collection(
@@ -109,8 +109,8 @@ class RewiredControllerMapInspectorTests(unittest.TestCase):
                            [action_element_map(0, audit.ACTION_ID_UNASSIGNED, 1, 15)],
                            category=4),
         )
-        # The first count and all map bodies form one collection; expected
-        # output uses only the first four words of each 44-byte entry.
+        # The first count and all map bodies form one collection. The eleven
+        # words follow the pinned ActionElementMap metadata field order.
         report = self.parse(data)
         self.assertEqual(report["serialized_map_count"], 2)
         self.assertEqual([(item["id"], item["name"])
@@ -151,6 +151,15 @@ class RewiredControllerMapInspectorTests(unittest.TestCase):
             "element_type": "Button",
             "element_identifier_id": 6,
             "element_identifier_name": "Cross",
+            "axis_range_id": 2,
+            "axis_range": "Negative",
+            "invert": True,
+            "axis_contribution_id": 1,
+            "axis_contribution": "Negative",
+            "keyboard_key_code_id": 0,
+            "keyboard_key_code": "None",
+            "modifier_key_ids": [0, 0, 0],
+            "modifier_keys": ["None", "None", "None"],
         })
         self.assertIsNone(second["action_element_maps"][0]["action_name"])
         self.assertIsNone(second["action_element_maps"][0]["input_action_category_id"])
@@ -198,6 +207,23 @@ class RewiredControllerMapInspectorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "ControllerElementType"):
             self.parse(collection(unknown_type,
                                  controller_map(14, DS4_GUID, [])))
+
+    def test_rejects_invalid_action_element_map_tail_values(self):
+        invalid_tails = [
+            ((3, 0, 0, 0, 0, 0, 0), "AxisRange"),
+            ((0, 2, 0, 0, 0, 0, 0), "invert"),
+            ((0, 0, 2, 0, 0, 0, 0), "axisContribution"),
+            ((0, 0, 0, 1, 0, 0, 0), "keyboard key"),
+            ((0, 0, 0, 0, 5, 0, 0), "keyboard modifier"),
+        ]
+        for tail, message in invalid_tails:
+            with self.subTest(tail=tail):
+                bad_map = controller_map(
+                    2, DS4_GUID,
+                    [action_element_map(0, 9, 1, 6, trailing=tail)])
+                with self.assertRaisesRegex(ValueError, message):
+                    self.parse(collection(
+                        bad_map, controller_map(14, DS4_GUID, [])))
 
     def test_rejects_unknown_ds4_element_and_truncated_record(self):
         unknown_element = controller_map(

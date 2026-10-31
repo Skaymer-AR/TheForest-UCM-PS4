@@ -196,10 +196,13 @@ and its `InputCategory` action-category table using their metadata field
 orders, then resolves the distinct `InputMapCategory`, joystick `InputLayout`,
 and serialized
 `Player_Editor._defaultJoystickMaps` records through the `UserData` field
-order. The IL2CPP v23 metadata field order for `Rewired.ActionElementMap` is
+order. The IL2CPP v23 metadata field order for `Rewired.ActionElementMap`
+matches all eleven 32-bit words of the 44-byte element record:
 `_actionCategoryId`, `_actionId`, `_elementType`, `_elementIdentifierId`,
-followed by the other properties; the inspector reports only those first four
-32-bit values. It deliberately leaves the remaining seven words uninterpreted.
+`_axisRange`, `_invert`, `_axisContribution`, `_keyboardKeyCode`, and three
+modifier keys. The decoder validates and reports these enum/boolean fields.
+The later `_enabled` field is outside this serialized record, so the runtime
+enable state is not decoded.
 The first word is resolved against the separate `InputCategory` table, and
 the selected action's own `InputAction._categoryId` is reported separately.
 Some serialized records carry different values in those fields; the inspector

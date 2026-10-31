@@ -2,10 +2,11 @@
 """Read-only decoder for this title's serialized Rewired joystick maps.
 
 This is deliberately pinned to the verified sharedassets0 input-manager
-asset. It decodes only the ControllerMap_Editor envelope and the first four
-ActionElementMap words (action category, action, element type, element ID).
-The remaining seven words of each 44-byte record are left uninterpreted.
-Serialized defaults do not prove a live Player assignment or active map.
+asset. It decodes the ControllerMap_Editor envelope and all eleven 32-bit
+fields in this title's 44-byte ActionElementMap record, using the verified
+IL2CPP v23 field order and enum values. The runtime _enabled field is outside
+that record and remains unknown. Serialized defaults do not prove a live
+Player assignment or active map.
 """
 from __future__ import annotations
 
@@ -24,8 +25,18 @@ from inspect_unity_rewired_assets import Asset, analyze  # noqa: E402
 
 SHAREDASSETS0_SHA256 = "f2b4c877b11b999ab590d71cb2682a017fb44c21720673487de288ff7c05e321"
 ACTION_ELEMENT_MAP_SIZE = 44
+ACTION_ELEMENT_MAP_FIELDS = (
+    "_actionCategoryId", "_actionId", "_elementType",
+    "_elementIdentifierId", "_axisRange", "_invert",
+    "_axisContribution", "_keyboardKeyCode", "_modifierKey1",
+    "_modifierKey2", "_modifierKey3",
+)
 ACTION_ID_UNASSIGNED = 0xFFFFFFFF
 CONTROLLER_ELEMENT_TYPES = {0: "Axis", 1: "Button"}
+AXIS_RANGES = {0: "Full", 1: "Positive", 2: "Negative"}
+POLES = {0: "Positive", 1: "Negative"}
+KEYBOARD_KEY_CODES = {0: "None"}
+MODIFIER_KEYS = {0: "None", 1: "Control", 2: "Alt", 3: "Shift", 4: "Command"}
 UUID = re.compile(rb"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", re.I)
 DS4_NAME_BY_ID = {element_id: name for name, element_id in EXPECTED_IDS.items()}
 EXPECTED_MANAGER_MAP_COUNTS = {
@@ -425,10 +436,24 @@ def parse_controller_map_collection(
             offset = item["records_at"] + index * ACTION_ELEMENT_MAP_SIZE
             words = struct.unpack_from("<11I", data, offset)
             action_category_id, action_id, element_type, element_id = words[:4]
+            axis_range_id, invert, axis_contribution_id = words[4:7]
+            keyboard_key_code_id, *modifier_key_ids = words[7:]
             if action_category_id not in action_category_names:
                 raise ValueError("ActionElementMap references unknown action category")
             if element_type not in CONTROLLER_ELEMENT_TYPES:
                 raise ValueError(f"unknown ControllerElementType value {element_type}")
+            if axis_range_id not in AXIS_RANGES:
+                raise ValueError(f"unknown AxisRange value {axis_range_id}")
+            if invert not in (0, 1):
+                raise ValueError(f"invalid ActionElementMap invert value {invert}")
+            if axis_contribution_id not in POLES:
+                raise ValueError(
+                    f"unknown ActionElementMap axisContribution value {axis_contribution_id}")
+            if keyboard_key_code_id not in KEYBOARD_KEY_CODES:
+                raise ValueError(
+                    f"unexpected keyboard key in joystick ActionElementMap: {keyboard_key_code_id}")
+            if any(value not in MODIFIER_KEYS for value in modifier_key_ids):
+                raise ValueError("unknown ActionElementMap keyboard modifier")
             if element_id > 0xFFFF:
                 raise ValueError("ActionElementMap element ID outside bounds")
             if action_id != ACTION_ID_UNASSIGNED and action_id not in id_to_name:
@@ -451,6 +476,16 @@ def parse_controller_map_collection(
                     "element_type": CONTROLLER_ELEMENT_TYPES[element_type],
                     "element_identifier_id": element_id,
                     "element_identifier_name": DS4_NAME_BY_ID[element_id],
+                    "axis_range_id": axis_range_id,
+                    "axis_range": AXIS_RANGES[axis_range_id],
+                    "invert": bool(invert),
+                    "axis_contribution_id": axis_contribution_id,
+                    "axis_contribution": POLES[axis_contribution_id],
+                    "keyboard_key_code_id": keyboard_key_code_id,
+                    "keyboard_key_code": KEYBOARD_KEY_CODES[keyboard_key_code_id],
+                    "modifier_key_ids": modifier_key_ids,
+                    "modifier_keys": [MODIFIER_KEYS[value]
+                                      for value in modifier_key_ids],
                 })
         if is_ds4:
             decoded_ds4.append({
@@ -532,6 +567,8 @@ def inspect(root: Path) -> dict:
     return {
         "title": "The Forest PS4 CUSA12398 v1.15",
         "unity_version": graph["unity_version"],
+        "action_element_map_serialized_fields": list(ACTION_ELEMENT_MAP_FIELDS),
+        "action_element_map_record_size_bytes": ACTION_ELEMENT_MAP_SIZE,
         "asset": {
             "file": "sharedassets0.assets",
             "sha256": source["sha256"],
@@ -545,8 +582,9 @@ def inspect(root: Path) -> dict:
         "input_managers": output_managers,
         "interpretation_limits": [
             "ControllerMap_Editor and ActionElementMap data are serialized InputManager configuration",
-            "first four ActionElementMap words are decoded; trailing seven words are not interpreted",
-            "ActionElementMap enabled state is not decoded",
+            "all eleven ActionElementMap words match the verified IL2CPP v23 instance-field order",
+            "the serialized ActionElementMap record does not include its runtime _enabled field",
+            "joystick map ActionElementMaps have KeyboardKeyCode.None and no keyboard modifiers",
             "ActionElementMap action categories, ControllerMap map categories/layouts, and Player defaults are decoded from UserData",
             "ActionElementMap action-category IDs are retained separately from each InputAction catalog category ID",
             "serialized Player defaults do not prove an active Player, connected DualShock 4, selected manager/map, focus, or runtime remap",
