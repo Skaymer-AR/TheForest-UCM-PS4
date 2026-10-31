@@ -18,10 +18,14 @@ META_SHA = '238c400de31e28ed4f7f14e7781ea3b33de0d0bd6964ded680d78fce1d85a6c3'
 METADATA_REGISTRATION = 0x032C4C98
 METHOD_POINTERS = 0x0316F8C0
 FIELDS = {
-    'HutongGames.PlayMaker.Fsm': {'activeStateName': 0xD0, 'activeState': 0xD8, 'handleOnGUI': 0xFF},
+    'HutongGames.PlayMaker.Fsm': {
+        'owner': 0x10, 'usedInTemplate': 0x18,
+        'activeStateName': 0xD0, 'activeState': 0xD8, 'handleOnGUI': 0xFF,
+    },
     'HutongGames.PlayMaker.FsmState': {'actions': 0x60, 'actionData': 0x68, 'activeActions': 0x70},
     'PlayMakerGUI': {'fsmList': 0, 'SortedFsmList': 0x18, 'instance': 0x30},
-    'PlayMakerFSM': {'fsmList': 0, 'fsm': 0x18},
+    'PlayMakerFSM': {'fsmList': 0, 'fsm': 0x18, 'fsmTemplate': 0x20},
+    'FsmTemplate': {'category': 0x18, 'fsm': 0x20},
 }
 METHODS = {
     ('PlayMakerGUI', 'OnGUI'): 0x0113FAF0,
@@ -36,6 +40,19 @@ METHODS = {
     ('HutongGames.PlayMaker.FsmStateAction', 'get_Active'): 0x01127490,
     ('HutongGames.PlayMaker.ActionData', 'LoadActions'): 0x010F2A20,
     ('HutongGames.PlayMaker.ActionData', 'CreateAction'): 0x010F2D80,
+    ('HutongGames.PlayMaker.Fsm', 'Init'): 0x01120E50,
+    ('HutongGames.PlayMaker.Fsm', 'InitData'): 0x01120F80,
+    ('HutongGames.PlayMaker.Fsm', 'Start'): 0x0111B930,
+    ('HutongGames.PlayMaker.Fsm', 'OnEnable'): 0x01122C40,
+    ('HutongGames.PlayMaker.Fsm', 'Stop'): 0x011246A0,
+    ('HutongGames.PlayMaker.Fsm', 'OnDestroy'): 0x01127930,
+    ('FsmTemplate', 'OnEnable'): 0x010EC780,
+    ('PlayMakerFSM', 'Awake'): 0x01139A80,
+    ('PlayMakerFSM', 'Init'): 0x01139A90,
+    ('PlayMakerFSM', 'SetFsmTemplate'): 0x0113ADE0,
+    ('PlayMakerFSM', 'Start'): 0x0113AF50,
+    ('PlayMakerFSM', 'OnEnable'): 0x0113AFD0,
+    ('PlayMakerFSM', 'OnDisable'): 0x0113B130,
     ('PlayMakerFSM', 'OnDestroy'): 0x0113B200,
 }
 # Exact short native instructions: analysis markers, NOT detour recipes.
@@ -59,6 +76,21 @@ SITES = {
     'set_actions_raw_pointer': (0x11305b0, '48897760c3'),
     'singleton_clear': (0x1141637, '48c7403000000000'),
     'fsm_removal_dispatch': (0x113b296, 'ff12'),
+    'playmaker_fsm_awake_tailcalls_init': (0x1139a80, 'e90b000000'),
+    'playmaker_fsm_init_passes_component_to_fsm_init':
+        (0x1139d82, '4889df4c89f6e8c370feff'),
+    'fsm_init_stores_owner_component': (0x1120e7b, '4d897710'),
+    'fsm_init_assigns_states': (0x1120f4d, 'e83e78ffff'),
+    'fsm_init_tailcalls_initdata': (0x1120f6b, 'e910000000'),
+    'fsm_initdata_loads_serialized_actions': (0x1121620, 'e8fb13fdff'),
+    'fsm_template_onenable_sets_used_in_template':
+        (0x10ec780, '488b47204885c0740448897818c3'),
+    'playmaker_fsm_set_template_resets_fsm': (0x113af29, 'e8f277feff'),
+    'playmaker_fsm_set_template_reruns_init': (0x113af39, 'e952ebffff'),
+    'playmaker_fsm_start_calls_fsm_start': (0x113afb9, 'e97209feff'),
+    'playmaker_fsm_onenable_calls_fsm_onenable': (0x113b08f, 'e9ac7bfeff'),
+    'playmaker_fsm_ondisable_stops_fsm': (0x113b1ef, 'e9ac94feff'),
+    'playmaker_fsm_ondestroy_calls_fsm_ondestroy': (0x113b2ab, 'e980c6feff'),
 }
 
 
@@ -125,6 +157,10 @@ def inspect(elf: bytes, metadata: bytes) -> dict:
         'native_methods': method_table,
         'verified_native_instruction_sites': sites,
         'interpretation': [
+            'PlayMakerFSM.Awake enters Init; Init passes its embedded Fsm and component this pointer to Fsm.Init, which writes Fsm.owner at +0x10.',
+            'Fsm.Init assigns the owner to each FsmState and enters InitData; InitData calls ActionData.LoadActions and resolves serialized transition events.',
+            'FsmTemplate.OnEnable stores the template object in Fsm.usedInTemplate at +0x18; this field is distinct from Fsm.owner.',
+            'PlayMakerFSM.SetFsmTemplate resets and reinitializes its Fsm; Start, OnEnable, OnDisable and OnDestroy delegate to Fsm lifecycle methods.',
             'CallOnGUI reads Fsm.activeState and resolves by Fsm.activeStateName if absent.',
             'FsmState.get_Actions lazily materializes FsmState.actions from serialized actionData.',
             'CallOnGUI dispatches virtual OnGUI only for existing FsmStateAction objects whose active byte at +0x1A is nonzero.',

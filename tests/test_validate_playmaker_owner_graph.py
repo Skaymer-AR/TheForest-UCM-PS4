@@ -9,7 +9,7 @@ from validate_playmaker_owner_graph import SITES, verify_sites, inspect
 class PlayMakerOwnershipTests(unittest.TestCase):
     def test_all_exact_native_sites(self):
         data = {va: bytes.fromhex(hexbytes) for va,hexbytes in SITES.values()}
-        self.assertEqual(len(verify_sites(lambda va,n: data[va][:n])), 19)
+        self.assertEqual(len(verify_sites(lambda va,n: data[va][:n])), len(SITES))
 
     def test_distinguishes_enabled_active_and_raw_actions_setter(self):
         self.assertEqual(SITES['action_enabled_filter'][1], '807b1800')
