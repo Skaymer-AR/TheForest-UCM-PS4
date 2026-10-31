@@ -5,51 +5,22 @@ on:
     paths:
       - "validation/unity56-editor-probe.zip"
       - "validation/unity56-editor-probe.zip.sha256"
-      - "scripts/package_unity56_editor_probe.py"
-      - "scripts/compare_unity56_probe_runs.py"
-      - "scripts/validate_unity_editor_probe.py"
-      - "tools/UnityFormat17Validator/**"
-      - ".github/workflows/unity56-editor-output.yml"
   pull_request:
     paths:
       - "validation/unity56-editor-probe.zip"
       - "validation/unity56-editor-probe.zip.sha256"
-      - "scripts/package_unity56_editor_probe.py"
-      - "scripts/compare_unity56_probe_runs.py"
-      - "scripts/validate_unity_editor_probe.py"
-      - "tools/UnityFormat17Validator/**"
-      - ".github/workflows/unity56-editor-output.yml"
 
 permissions:
   contents: read
 
 jobs:
-  detect-output:
-    name: Detect optional transferred synthetic output
-    runs-on: ubuntu-24.04
-    outputs:
-      has_probe: ${{ steps.input.outputs.has_probe }}
-    steps:
-      - uses: actions/checkout@v4
-      - id: input
-        shell: bash
-        run: |
-          if [ -f validation/unity56-editor-probe.zip ] && \
-             [ -f validation/unity56-editor-probe.zip.sha256 ]; then
-            echo "has_probe=true" >> "$GITHUB_OUTPUT"
-            echo "Sanitized synthetic Editor output is present for validation."
-          else
-            echo "has_probe=false" >> "$GITHUB_OUTPUT"
-            echo "Unity Editor output is PENDING; this run makes no Editor execution claim."
-          fi
-
   validate-output:
     name: AssetsTools.NET and Python validation of submitted output
-    needs: detect-output
-    if: needs.detect-output.outputs.has_probe == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Require the submitted archive and its checksum
+        run: test -s validation/unity56-editor-probe.zip && test -s validation/unity56-editor-probe.zip.sha256
       - name: Install the pinned .NET SDK on the hosted runner
         uses: actions/setup-dotnet@v4
         with:
