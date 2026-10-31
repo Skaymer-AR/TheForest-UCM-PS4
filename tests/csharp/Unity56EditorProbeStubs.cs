@@ -167,6 +167,7 @@ namespace UnityEditor
 
     public class AssetBundleManifest : Object
     {
+        public string[] GetAllDependencies(string assetBundleName) { return new string[0]; }
     }
 
     public static class EditorUserBuildSettings

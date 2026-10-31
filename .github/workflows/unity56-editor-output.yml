@@ -1,0 +1,111 @@
+name: Validate submitted Unity 5.6.6f2 synthetic output
+
+on:
+  push:
+    paths:
+      - "validation/unity56-editor-probe.zip"
+      - "validation/unity56-editor-probe.zip.sha256"
+      - "scripts/package_unity56_editor_probe.py"
+      - "scripts/compare_unity56_probe_runs.py"
+      - "scripts/validate_unity_editor_probe.py"
+      - "tools/UnityFormat17Validator/**"
+      - ".github/workflows/unity56-editor-output.yml"
+  pull_request:
+    paths:
+      - "validation/unity56-editor-probe.zip"
+      - "validation/unity56-editor-probe.zip.sha256"
+      - "scripts/package_unity56_editor_probe.py"
+      - "scripts/compare_unity56_probe_runs.py"
+      - "scripts/validate_unity_editor_probe.py"
+      - "tools/UnityFormat17Validator/**"
+      - ".github/workflows/unity56-editor-output.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  detect-output:
+    name: Detect optional transferred synthetic output
+    runs-on: ubuntu-24.04
+    outputs:
+      has_probe: ${{ steps.input.outputs.has_probe }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: input
+        shell: bash
+        run: |
+          if [ -f validation/unity56-editor-probe.zip ] && \
+             [ -f validation/unity56-editor-probe.zip.sha256 ]; then
+            echo "has_probe=true" >> "$GITHUB_OUTPUT"
+            echo "Sanitized synthetic Editor output is present for validation."
+          else
+            echo "has_probe=false" >> "$GITHUB_OUTPUT"
+            echo "Unity Editor output is PENDING; this run makes no Editor execution claim."
+          fi
+
+  validate-output:
+    name: AssetsTools.NET and Python validation of submitted output
+    needs: detect-output
+    if: needs.detect-output.outputs.has_probe == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the pinned .NET SDK on the hosted runner
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Fetch and verify the public UABEA v8 class database
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/uabea-v8-linux.zip"
+          classdata="$RUNNER_TEMP/classdata.tpk"
+          curl --fail --location --retry 3 --connect-timeout 30 \
+            https://github.com/nesrak1/UABEA/releases/download/v8/uabea-ubuntu.zip \
+            --output "$archive"
+          echo "c542dd3b5b091b34645ee1c7180df7138f9f3fe5253222f151d7185e542402b2  $archive" | sha256sum --check
+          unzip -p "$archive" classdata.tpk > "$classdata"
+          echo "129e1f80f930415db6779fe6089afa75280cb51462bcee812beab6cd81a764c6  $classdata" | sha256sum --check
+          echo "CLASSDATA_TPK=$classdata" >> "$GITHUB_ENV"
+      - name: Verify archive checksum and safely extract only allowlisted synthetic files
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd validation && sha256sum --check unity56-editor-probe.zip.sha256)
+          digest="$(cut -d ' ' -f1 validation/unity56-editor-probe.zip.sha256)"
+          python3 scripts/package_unity56_editor_probe.py extract \
+            validation/unity56-editor-probe.zip "$RUNNER_TEMP/unity56-probe" \
+            --sha256 "$digest"
+      - name: Build the AssetsTools.NET validator
+        run: dotnet build tools/UnityFormat17Validator/UnityFormat17Validator.csproj --configuration Release
+      - name: Validate each submitted Editor run and compare repeatability
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="$RUNNER_TEMP/unity56-probe"
+          validator="$(pwd)/tools/UnityFormat17Validator/bin/Release/net10.0/UnityFormat17Validator.dll"
+          python3 scripts/validate_unity_editor_probe.py "$base/run-a" \
+            --classdata-tpk "$CLASSDATA_TPK" --validator-dll "$validator" --dotnet dotnet
+          if [ -d "$base/run-b" ]; then
+            python3 scripts/validate_unity_editor_probe.py "$base/run-b" \
+              --classdata-tpk "$CLASSDATA_TPK" --validator-dll "$validator" --dotnet dotnet
+            python3 scripts/compare_unity56_probe_runs.py "$base/run-a" "$base/run-b" \
+              --report "$base/comparison.json"
+          else
+            echo "::warning::Only one Editor run was submitted; repeatability is NOT_CHECKED."
+            printf '{"reproducibility":"NOT_CHECKED","reason":"one Editor run only"}\n' \
+              > "$base/comparison.json"
+          fi
+      - name: Upload validation summaries only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity56-editor-validation-report
+          path: |
+            ${{ runner.temp }}/unity56-probe/run-a/unity-editor-report.json
+            ${{ runner.temp }}/unity56-probe/run-a/assets-tools/*.json
+            ${{ runner.temp }}/unity56-probe/run-b/unity-editor-report.json
+            ${{ runner.temp }}/unity56-probe/run-b/assets-tools/*.json
+            ${{ runner.temp }}/unity56-probe/comparison.json
+          if-no-files-found: ignore
+          retention-days: 14

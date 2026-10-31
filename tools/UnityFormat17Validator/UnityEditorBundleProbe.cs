@@ -58,6 +58,7 @@ internal static class UnityEditorBundleProbe
         public string bundleSha256 = "";
         public string assetFileName = "";
         public long assetFileBytes;
+        public List<string> externalFiles = new();
         public List<ObjectRow> objects = new();
         public List<GameObjectRow> gameObjects = new();
         public List<TransformRow> transforms = new();
@@ -131,6 +132,8 @@ internal static class UnityEditorBundleProbe
             summary.bundleSha256 = Sha256(File.ReadAllBytes(bundlePath));
             summary.assetFileName = Path.GetFileName(assetName);
             summary.assetFileBytes = assetBytes.LongLength;
+            foreach (var external in assets.file.Metadata.Externals)
+                summary.externalFiles.Add(external.PathName.Replace('\\', '/'));
 
             stage = "AssetsTools.NET object and PPtr decode";
             foreach (AssetFileInfo info in assets.file.Metadata.AssetInfos)

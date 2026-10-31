@@ -4,6 +4,7 @@ from pathlib import Path
 backend = Path("source/ps4_backend.c").read_text()
 build = Path("scripts/build-prx.sh").read_text()
 workflow = Path(".github/workflows/offline-integration.yml").read_text()
+unity_probe_workflow = Path(".github/workflows/unity56-editor-output.yml").read_text()
 plugin_main = Path("source/plugin_main.c").read_text()
 adapter = Path("src/unity_host_adapter.c").read_text()
 assert "Detour_" not in backend, "A detour was reintroduced into safe backend"
@@ -41,6 +42,13 @@ assert "scripts/build-prx.sh" not in workflow, "This workflow must not emit a no
 assert "upload-artifact" not in workflow, "Offline analysis workflow must not publish PRX artifacts"
 assert "theforest-ucm-safe-baseline-only" not in workflow
 assert "compile-prx:" not in workflow
+assert "validation/unity56-editor-probe.zip" in unity_probe_workflow
+assert "assets-tools/*.json" in unity_probe_workflow
+assert "contents: read" in unity_probe_workflow
+for forbidden in ("scripts/build-prx.sh", "UNITY_LICENSE", "UNITY_SERIAL",
+                  "GOLDHEN_SDK", "theforest_ucm_safe_baseline.prx"):
+    assert forbidden not in unity_probe_workflow, \
+        f"Synthetic Editor output validation must not activate Unity secrets or build PRX: {forbidden}"
 assert "NO HOOKS" in plugin_main
 assert "sceKernelGetAppInfo" in plugin_main
 assert "sys_sdk_proc_info" not in plugin_main

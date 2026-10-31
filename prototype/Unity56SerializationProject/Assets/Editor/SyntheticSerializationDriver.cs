@@ -61,6 +61,7 @@ namespace UcmUnitySerializationProbe
         public string bundlePath;
         public string bundleSha256;
         public long bundleBytes;
+        public string[] bundleDependencies;
         public ProbeSnapshot snapshot;
     }
 
@@ -256,6 +257,7 @@ namespace UcmUnitySerializationProbe
                 variants[index].bundlePath = Relative(outputRoot, bundleFile);
                 variants[index].bundleSha256 = Sha256(bundleFile);
                 variants[index].bundleBytes = new FileInfo(bundleFile).Length;
+                variants[index].bundleDependencies = manifest.GetAllDependencies(bundleName);
             }
 
             ProbeReport report = new ProbeReport();

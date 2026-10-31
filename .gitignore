@@ -10,6 +10,7 @@ build/
 __pycache__/
 *.pyc
 *.zip
+!validation/unity56-editor-probe.zip
 global-metadata.dat
 eboot.bin
 dump.cs
