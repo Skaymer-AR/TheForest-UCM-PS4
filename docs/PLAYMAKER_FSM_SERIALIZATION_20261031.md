@@ -296,28 +296,52 @@ container encoder now covers the observed `Fsm` graph subset, component
 wrapper, and `FsmTemplate` wrapper. It deliberately does **not** claim a
 complete semantic map of every field in Unity's serialized `Fsm` object.
 
-### The 40-byte tail: exact boundary, semantics still unknown
+### The 40-byte tail: `resources.assets` adds six distinct values, semantics still unknown
 
 The new `scripts/audit_playmaker_fsm_tails.py` rechecks the pinned SHA-256 of
-each input before scanning. Across all 30 `level0`–`level29` files and all 30
-`sharedassets0.assets`–`sharedassets29.assets` files, the scan found 19 relevant
-objects:
+each input before scanning. The earlier scan covered the 60 level/sharedassets
+files and found only 19 PlayMaker objects. This pass also recovered
+`resources.assets` from the previously supplied private file, verified its
+registered size (380,657,240 bytes) and expected SHA-256
+`9b28d330969eaf9f6ae5dc0fa5e83b022174720744c272f80ee887a46e063536`, then
+scanned it read-only:
 
 | Asset | `PlayMakerFSM` | `FsmTemplate` |
 | --- | ---: | ---: |
 | `level2` | 2 | 0 |
 | `level7` | 2 | 0 |
 | `sharedassets2.assets` | 13 | 2 |
+| `resources.assets` | 27 | 11 |
+| **Total** | **44** | **13** |
+
+The complete audit used 62 hash-pinned inputs: those 61 serialized Unity
+assets plus `globalgamemanagers.assets`, which supplies the MonoScript map.
 
 For a `PlayMakerFSM`, the 40 bytes are the interval immediately before its
 trailing 12-byte `fsmTemplate` PPtr. For an embedded `Fsm` in `FsmTemplate`,
-they are the final 40 bytes. All 19 sample values were byte-identical; the
-derived SHA-256 is `fd31410c401d1624d966bd279d6e3aa6f8ba288610811d85d428772aa9ef7345`.
-The report records only that digest, counts, and asset names; it emits no
-source bytes. `resources.assets` was in the prior source manifest but is not
-available to this runtime scan, so this pass covers 60/60 scene/sharedassets
-files plus `globalgamemanagers.assets` for MonoScript lookup, not the full
-62-file source inventory.
+they are the final 40 bytes. There are 57 tails. Fifty-one retain the prior
+digest `fd31410c401d1624d966bd279d6e3aa6f8ba288610811d85d428772aa9ef7345`;
+the remaining six are six distinct values, each on a `PlayMakerFSM` component
+of the `player_BASE` GameObject in `resources.assets`:
+
+| FSM | States | Tail SHA-256 prefix |
+| --- | ---: | --- |
+| `controlFSM` | 75 | `0aa9c4f5` |
+| `damageFSM` | 6 | `143eec48` |
+| `tempBlockManagerFSM` | 3 | `3876e307` |
+| `noiseDetectFSM` | 7 | `480581b1` |
+| `rotatePlayerFSM` | 12 | `d3e22db8` |
+| `staminaFSM` | 8 | `f6246371` |
+
+Across all 57 samples, byte offsets 4, 12, 16, 24, and 28–39 vary (offsets are
+zero-based); the other offsets are constant. The complete derived report,
+including each sample's type, asset, path ID, decoded identity where supported,
+digest group, and per-offset distinct-value counts, is
+`docs/PLAYMAKER_FSM_TAIL_AUDIT_20261031.json`. The tool never writes tail
+bytes or commercial objects to the report. It resolves 10 of the 13 template
+headers; three `resources.assets` template wrappers remain outside the bounded
+header parser, although their object type and final 40-byte interval are still
+identified and hashed.
 
 IL2CPP v23 metadata yields 18 public-instance or `[SerializeField]` Fsm field
 candidates, in metadata declaration order:
@@ -330,15 +354,20 @@ candidates, in metadata declaration order:
 
 The bounded type resolver cannot resolve `ExposedEvents`' generic-instantiated
 type (`IL2CPP_TYPE_GENERICINST`, kind `0x15`). Metadata declaration order is
-not evidence of Unity's binary field order. No candidate has been assigned to
-an individual tail byte. The type tree is disabled in these assets, every
-available tail sample has the same value, and the title's AOT metadata exposes
-no `Fsm.Save`/`Fsm.Serialize` writer that would map these fields. The exact
-missing evidence is a Unity 5.6.6f2-compatible deserialization/type-tree view
-of this `Fsm`, or a matching Unity/PlayMaker serializer output where these
-candidate fields are varied one at a time. Until then, the tail must be
-preserved byte-for-byte from a source object; arbitrary synthetic bytes are
-only a parser fixture, not a valid Unity value.
+not evidence of Unity's binary field order. The six distinct samples correlate
+with six FSMs on `player_BASE`, but their different state counts and object
+identity do not identify any tail field. No candidate has been assigned to an
+individual byte. The title's AOT metadata and existing native analysis expose
+no verified `Fsm.Save`/`Fsm.Serialize` writer that maps these offsets to the
+candidate fields. The Unity assets have type trees disabled. The exact missing
+evidence is a compatible Unity 5.6.6f2
+deserialization/type-tree view of these serialized objects, or controlled
+serializer outputs where candidate fields are varied one at a time. The
+current environment has no Unity Editor, Mono, .NET runtime, Wine, UABEA, or
+AssetStudio CLI installed, and this pass did not verify a third-party format-17
+read/write tool. No tool was used to claim a successful Unity import. Until
+field mapping and a compatible writer are demonstrated, a new tail must not be
+fabricated; existing source tails remain opaque preservation data.
 
 ### Round-trip and synthetic object-graph results
 
